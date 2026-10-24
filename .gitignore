@@ -1,0 +1,25 @@
+# Response-2000 itself is never committed (folder may be Response/ or response/)
+/[Rr]esponse/
+
+# r2x output
+*_r2x/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+build/
+dist/
+.pytest_cache/
+
+# Local settings and secrets
+.env
+*.local.toml
+
+# Editors / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

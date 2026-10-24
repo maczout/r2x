@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+# Not published to PyPI ("r2x" there is an unrelated NREL project); install from GitHub.
+name = "r2x"
+version = "0.0.1"
+description = "Run Response-2000 from the command line"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.10"
+dependencies = []
+
+[project.optional-dependencies]
+# Server and worker dependencies; the CLI stays light.
+server = []
+dev = ["pytest"]
+
+[project.scripts]
+r2x = "r2x.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/r2x"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

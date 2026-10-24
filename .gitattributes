@@ -1,0 +1,5 @@
+* text=auto eol=lf
+
+# Reference exports and inputs are compared byte for byte: git must not touch them.
+tests/reference/** -text
+*.r2t -text
