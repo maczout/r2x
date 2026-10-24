@@ -17,7 +17,7 @@ matching curvature to the Moment–φ curve, so the charts are filed under `stag
 
 | Captured | Notes |
 |---|---|
-| Date | |
-| Windows version | |
-| Response version (Help → About) | |
-| By | |
+| Date | October 24 2026 |
+| Windows version | Windows 11 Pro |
+| Response version (Help → About) | 1.9.7 |
+| By | Jamie McIntyre |

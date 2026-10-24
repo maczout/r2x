@@ -7,7 +7,7 @@ in a Linux container under Wine and returns its exported data as raw text. It do
 filter or interpret anything.
 
 **Scope:** sectional moment-curvature response with no shear; results from the **No Shear** view.
-Tested with Response-2000 1.9.6 (beta). Early development.
+Tested with Response-2000 1.9.7. Early development.
 
 ```
 PS> r2x solve .\Newbeam.r2t

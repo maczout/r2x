@@ -7,7 +7,7 @@ as it does on Windows? **Answer: yes.** Throwaway code is in `spike/wine-2026-10
 
 - Ubuntu 24.04, Wine `9.0~repack-4build3` (Ubuntu package), 32-bit prefix (`WINEARCH=win32`),
   `Xvfb :99 -screen 0 1920x1080x24`, no window manager.
-- Response-2000 1.9.6 beta, `r2k.exe` SHA-256
+- Response-2000 1.9.7, `r2k.exe` SHA-256
   `bbf4bc595ee80167ea73a76d597b2223cbc5e9c47d97d452025cde4bb85e4e74`, with the DLLs from its program
   folder (OWL 6.42, MSVC 14 runtime). No winetricks or native DLL overrides were needed.
 - Input: `Newbeam.r2t` (same file as `tests/reference/newbeam/input.r2t`).
@@ -22,6 +22,8 @@ as it does on Windows? **Answer: yes.** Throwaway code is in `spike/wine-2026-10
 | PgUp / PgDn (`WM_KEYDOWN` posted to the main window) | Same stage sequence as on Windows; clamps at 0 and 59 |
 
 Windows reference for the comparison was the earlier pywinauto probe output, not hand copies.
+Hand copies made later (`tests/reference/newbeam/`) are byte-identical to the Wine exports,
+including CRLF line endings.
 
 ## Findings that shape the worker
 

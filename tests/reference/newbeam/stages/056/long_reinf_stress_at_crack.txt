@@ -1,0 +1,20 @@
+  Data from Graph
+  ==============
+
+  Title		: Long. Reinf Stress at Crack
+
+  X Axis Title	: f_s_c_r_a_c_k (MPa)
+  Y Axis Title	: Beam Depth (mm)
+
+   f_s_c_r_a_c_k (MPa)		Beam Depth (mm)
+Line type : 0
+   0.000   	   300.000
+   0.000   	   -248.700
+   463.897   	   -248.700
+   463.897   	   -223.500
+   0.000   	   -223.500
+   0.000   	   229.200
+   0.000   	   229.200
+   0.000   	   248.700
+   0.000   	   248.700
+   0.000   	   -300.000
