@@ -38,19 +38,29 @@ def ensure_helper(cache: Path) -> Path:
     return exe
 
 
-def start_xvfb() -> tuple[subprocess.Popen, str]:
-    """Start Xvfb on a free display number; return the process and DISPLAY value."""
-    r, w = os.pipe()
-    proc = subprocess.Popen(["Xvfb", "-displayfd", str(w), "-screen", "0", "1920x1080x24",
-                             "-nolisten", "tcp"], pass_fds=(w,), stdout=subprocess.DEVNULL,
-                            stderr=subprocess.DEVNULL)
-    os.close(w)
-    with os.fdopen(r) as f:
-        number = f.readline().strip()
-    if not number:
-        proc.kill()
-        raise R2xError("Xvfb did not start")
-    return proc, f":{number}"
+def start_xvfb(first: int = 99, tries: int = 20) -> tuple[subprocess.Popen, str]:
+    """Start Xvfb on a free display number from :99 up; return the process and DISPLAY value.
+
+    Numbers are chosen here rather than with Xvfb's own search, which starts at :0 and can trip
+    over a display server it cannot use (WSLg holds :0 under WSL).
+    """
+    errors = []
+    for n in range(first, first + tries):
+        if os.path.exists(f"/tmp/.X{n}-lock") or os.path.exists(f"/tmp/.X11-unix/X{n}"):
+            continue
+        r, w = os.pipe()  # Xvfb writes the display number here once it accepts connections
+        proc = subprocess.Popen(["Xvfb", f":{n}", "-displayfd", str(w), "-screen", "0",
+                                 "1920x1080x24", "-nolisten", "tcp"], pass_fds=(w,),
+                                stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        os.close(w)
+        with os.fdopen(r) as f:
+            ready = f.readline().strip()
+        if ready:
+            proc.stderr.close()
+            return proc, f":{n}"
+        proc.wait(10)
+        errors.append(f":{n}: " + proc.stderr.read().decode(errors="replace").strip()[-300:])
+    raise R2xError("Xvfb did not start. " + " | ".join(errors[-2:]))
 
 
 def wine_path(p: Path) -> str:
