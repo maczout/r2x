@@ -1,11 +1,16 @@
 """Throwaway Wine spike: export both control curves + 5 No Shear charts, then test stage stepping."""
 import os, re, subprocess, sys, time
 
-ENV = dict(os.environ, DISPLAY=":99", WINEPREFIX="/home/claude/spike/prefix", WINEDEBUG="-all")
+# Defaults are the original cloud paths; smoke.sh overrides them through the environment.
+ENV = dict(os.environ)
+ENV.setdefault("DISPLAY", ":99")
+ENV.setdefault("WINEPREFIX", "/home/claude/spike/prefix")
+ENV["WINEDEBUG"] = "-all"
+W32 = os.environ.get("W32_EXE", "/home/claude/spike/w32.exe")
 
 
 def w(*args):
-    r = subprocess.run(["wine", "/home/claude/spike/w32.exe", *args], env=ENV,
+    r = subprocess.run(["wine", W32, *args], env=ENV,
                        capture_output=True, text=True)
     return r.stdout.replace("\r", "")
 
@@ -56,10 +61,11 @@ def copy_chart(hwnd, base, downs=2):
 
 
 if __name__ == "__main__":
-    os.makedirs("out", exist_ok=True)
+    out = sys.argv[1] if len(sys.argv) > 1 else "out"
+    os.makedirs(out, exist_ok=True)
     names = charts()
     print(names)
     for name in ["control_1", "control_2", "grid_r1c2", "grid_r1c3", "grid_r2c2", "grid_r2c3", "grid_r3c1"]:
         t0 = time.time()
-        copy_chart(names[name], f"out/{name}")
+        copy_chart(names[name], f"{out}/{name}")
         print(f"{name}: {time.time() - t0:.2f} s")
