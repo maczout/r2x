@@ -36,3 +36,22 @@ Each job runs Response from a fresh temporary copy of its program folder.
 Known heuristic: Wine gives no readable "solve finished" signal, so the solve counts as finished
 once the Moment–φ curve has not changed for 1 s (Response extends it about every 0.2 s while
 solving). Background in `docs/wine-spike.md`.
+
+## Container image
+
+`Dockerfile` builds the server image: Ubuntu 24.04, Wine pinned to `9.0~repack-4build3`, the
+helper compiled in a build stage, and the 32-bit Wine prefix created at build time. The build
+fails unless `Response/r2k.exe` has the verified SHA-256 (build args `WINE_VERSION`,
+`R2K_SHA256` and `RESPONSE_DIR` override the defaults).
+
+```bash
+docker build -t r2x-server .
+mkdir -p out && chmod 777 out        # the container runs as uid 1000
+docker run --rm -v "$PWD/tests/reference/newbeam/input.r2t:/in/Newbeam.r2t:ro" \
+    -v "$PWD/out:/out" r2x-server python -m r2x.worker /in/Newbeam.r2t /out/Newbeam_r2x
+```
+
+Image size is about 1.3 GB compressed (Wine with its 32-bit libraries is most of it).
+
+Inputs outside the scope fail with a reason rather than writing files: an analysis whose control
+charts are Shear–γxy (Response's shear examples) stops at the first export-title check.

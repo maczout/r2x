@@ -3,3 +3,7 @@
 **/__pycache__
 **/*_r2x
 tests/reference
+_archive
+spike
+docs
+.pytest_cache

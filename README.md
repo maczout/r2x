@@ -7,6 +7,7 @@ in a Linux container under Wine and returns its exported data as raw text. It do
 filter or interpret anything.
 
 **Scope:** sectional moment-curvature response with no shear; results from the **No Shear** view.
+Input is any file Response-2000 opens (`.r2t`, `.rsp`).
 Tested with Response-2000 1.9.7. Early development.
 
 ```
@@ -44,7 +45,7 @@ One folder per input. Files are Response's clipboard text, unedited.
 
 ```
 Newbeam_r2x/
-  input.r2t
+  input.r2t                the input as given (or input.rsp)
   manifest.json            r2x version, Response exe SHA-256, Wine version, input SHA-256,
                            stage count, file list
   control/
@@ -66,7 +67,7 @@ have no data export and are not included.
 
 ## Running the server
 
-Response-2000 is not included. Put its program folder in `./response/` and build:
+Response-2000 is not included. Put its program folder in `./Response/` and build:
 
 ```bash
 docker build -t r2x-server .

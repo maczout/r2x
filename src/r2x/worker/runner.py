@@ -67,12 +67,12 @@ def wine_path(p: Path) -> str:
     return "Z:" + str(p.resolve()).replace("/", "\\")
 
 
-def run_job(input_r2t: Path, out: Path, response_dir: Path, prefix: Path,
+def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
             display: str | None = None, cache: Path | None = None,
             progress: Callable[[str], None] = print,
             on_stage: Callable[[int, int], None] = lambda i, n: None) -> dict:
-    """Solve input_r2t in Response-2000 and write the full export to out. Returns the manifest."""
-    input_r2t, out = Path(input_r2t), Path(out)
+    """Solve input_file in Response-2000 and write the full export to out. Returns the manifest."""
+    input_file, out = Path(input_file), Path(out)
     response_dir = Path(response_dir)
     exe = response_dir / "r2k.exe"
     if not exe.is_file():
@@ -98,8 +98,8 @@ def run_job(input_r2t: Path, out: Path, response_dir: Path, prefix: Path,
         job = Path(tempfile.mkdtemp(prefix="r2x-job-"))
         stack.callback(shutil.rmtree, job, ignore_errors=True)
         shutil.copytree(response_dir, job / "Response")
-        job_input = job / input_r2t.name
-        shutil.copyfile(input_r2t, job_input)
+        job_input = job / input_file.name
+        shutil.copyfile(input_file, job_input)
 
         r2k = subprocess.Popen(["wine", "r2k.exe", wine_path(job_input)], cwd=job / "Response",
                                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -110,12 +110,12 @@ def run_job(input_r2t: Path, out: Path, response_dir: Path, prefix: Path,
         helper = Helper(str(helper_exe), env)
         stack.callback(helper.close)
         session = Session(helper)
-        session.wait_for_file(input_r2t.stem)
+        session.wait_for_file(input_file.stem)
         time.sleep(0.2)
         session.check_no_dialog()
 
         out.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(input_r2t, out / "input.r2t")
+        shutil.copyfile(input_file, out / ("input" + input_file.suffix.lower()))
         n = export_all(session, out, progress, on_stage)
 
     wine_version = subprocess.run(["wine", "--version"], capture_output=True, text=True).stdout.strip()
@@ -125,7 +125,7 @@ def run_job(input_r2t: Path, out: Path, response_dir: Path, prefix: Path,
         "r2x_version": __version__,
         "response_exe_sha256": sha256(exe),
         "wine_version": wine_version,
-        "input_sha256": sha256(input_r2t),
+        "input_sha256": sha256(input_file),
         "stage_count": n,
         "files": files,
     }
