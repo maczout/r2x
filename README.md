@@ -13,32 +13,52 @@ Tested with Response-2000 1.9.7. Early development.
 ```
 PS> r2x solve .\Newbeam.r2t
 [Newbeam] solved: 60 load stages
-[Newbeam] exporting stages ........................ 60/60
-[Newbeam] done → .\Newbeam_r2x\
+[Newbeam] exported stage 10/60
+...
+[Newbeam] exported stage 60/60
+[Newbeam] done in 9.1 s -> Newbeam_r2x
 ```
 
 ## How it works
 
 ```
-r2x CLI (Windows/any)  ──HTTPS+token──▶  r2x server  ──▶  worker: Xvfb + Wine + Response-2000
+r2x CLI (Windows)  ──docker run──▶  container (in WSL): Xvfb + Wine + Response-2000
 ```
 
-A worker opens the input in Response, runs **Solve → Sectional Response**, steps through every load
-stage, and uses each chart's **Copy Chart Data** command to read its data from the clipboard of a
-virtual display. Each worker runs one Response instance with its own virtual display and Wine
-prefix, so several run side by side in one container without sharing a clipboard.
+`r2x solve` runs the container once per input file, with the input mounted read-only and the result
+folder written straight to disk. Inside, Response opens the input, runs **Solve → Sectional
+Response**, steps through every load stage, and each chart's **Copy Chart Data** is read from the
+clipboard of a virtual display. Every container has its own display and Wine prefix, so several
+can run at once (`-j`).
+
+## Setup (Windows)
+
+Needs WSL 2 with Ubuntu 24.04 and Docker Engine inside it (`sudo apt-get install docker.io
+docker-buildx`, then add yourself to the `docker` group). Response-2000 is not included: put its
+program folder in `./Response/` and build the image once, in Ubuntu from the repo folder:
+
+```bash
+docker build -t r2x .
+```
+
+The image pins the Wine version and refuses to build unless `r2k.exe` has the verified SHA-256.
+Then install the command line tool in Windows (Python 3.10+, no other dependencies):
+
+```powershell
+py -m pip install https://github.com/maczout/r2x/archive/main.zip
+```
 
 ## Usage
 
 ```powershell
-py -m pip install git+https://github.com/maczout/r2x
-r2x config set server https://your-host
-r2x config set token <token>
-
 r2x solve .\Newbeam.r2t                  # one or more files, or a glob
-r2x solve .\cases\*.r2t --out .\results
-r2x health                               # server, Wine and Response-2000 versions
+r2x solve .\cases\*.r2t --out .\results -j 2
+r2x health                               # the image's r2x, Wine and Response-2000 versions
 ```
+
+Results go next to each input unless `--out` is given; an existing result folder is only replaced
+with `--force`. The exit code is non-zero if any input failed. On Linux `r2x` calls `docker`
+directly; `R2X_IMAGE`, `R2X_DOCKER` and `R2X_WSL_DISTRO` override the defaults.
 
 ## Output
 
@@ -64,25 +84,14 @@ Newbeam_r2x/
 ```
 
 Panels that Response shows only as pictures (cross section, crack diagram, internal forces, N+M)
-have no data export and are not included.
+have no data export and are not included. Inputs outside the scope (for example an analysis with
+shear-controlled charts) fail with a reason instead of producing output.
 
-## Running the server
+## Server (optional, not used by the CLI)
 
-Response-2000 is not included. Put its program folder in `./Response/` and build:
-
-```bash
-docker build -t r2x-server .
-docker run -d --name r2x --restart unless-stopped -p 8000:8000 \
-    -e R2X_TOKEN=<token> -e R2X_WORKERS=2 r2x-server
-```
-
-The image pins the Wine version and the SHA-256 of `r2k.exe`. Run it on a private network or behind
-HTTPS. `R2X_VNC=1` exposes a worker's virtual display in a browser for debugging.
-
-API (bearer token): `POST /jobs` (multipart field `file`), `GET /jobs/{id}` (status and stage
-progress), `GET /jobs/{id}/result` (zip), `GET /health`. Finished jobs are kept for 24 hours
-(`R2X_RETENTION_HOURS`); jobs do not survive a server restart. All settings are listed in
-`src/r2x/server/__main__.py`.
+The repo also contains an HTTP server (`python -m r2x.server`) for running jobs on another
+machine: a token-protected API with a job queue and parallel workers. The CLI does not use it.
+See `docs/development.md`.
 
 ## Verification
 
@@ -97,7 +106,7 @@ endings). Rerun on any change to Wine, the image or r2x.
 
 Free software by Evan C. Bentz and Michael P. Collins, available from its authors <!-- TODO: link -->.
 This project is not affiliated with or endorsed by them or the University of Toronto. Check the
-authors' terms before running a service that others use.
+authors' terms before running it as a service for others.
 
 ## Disclaimer
 

@@ -1,6 +1,6 @@
-# r2x server image: Response-2000 under Wine on a virtual display.
+# r2x image: Response-2000 under Wine on a virtual display.
 #
-#   docker build -t r2x-server .
+#   docker build -t r2x .
 #
 # Response-2000 is not included: put its program folder in ./Response before building.
 
@@ -60,5 +60,4 @@ RUN WINEPREFIX=$R2X_WINEPREFIX WINEDLLOVERRIDES="mscoree,mshtml=" xvfb-run -a wi
  && WINEPREFIX=$R2X_WINEPREFIX wineserver -w
 
 WORKDIR /home/r2x
-EXPOSE 8000
-CMD ["python", "-m", "r2x.server"]
+CMD ["python", "-m", "r2x.worker", "--help"]

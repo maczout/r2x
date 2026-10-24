@@ -45,22 +45,23 @@ fails unless `Response/r2k.exe` has the verified SHA-256 (build args `WINE_VERSI
 `R2K_SHA256` and `RESPONSE_DIR` override the defaults).
 
 ```bash
-docker build -t r2x-server .
+docker build -t r2x .
 mkdir -p out                         # the container runs as uid 1000
 docker run --rm -v "$PWD/tests/reference/newbeam/input.r2t:/in/Newbeam.r2t:ro" \
-    -v "$PWD/out:/out" r2x-server python -m r2x.worker /in/Newbeam.r2t /out/Newbeam_r2x
+    -v "$PWD/out:/out" r2x python -m r2x.worker /in/Newbeam.r2t /out/Newbeam_r2x
 ```
 
-The image's default command is the server (`python -m r2x.server`).
+The `r2x` command line tool runs exactly this, once per input. To run the optional
+server instead: `docker run -d -p 8000:8000 -e R2X_TOKEN=<token> -e R2X_WORKERS=2 r2x python -m r2x.server`.
 
 Image size is about 1.3 GB compressed (Wine with its 32-bit libraries is most of it).
 
 Inputs outside the scope fail with a reason rather than writing files: an analysis whose control
 charts are Shear–γxy (Response's shear examples) stops at the first export-title check.
 
-## Server
+## Server (optional)
 
-`python -m r2x.server` (settings in `src/r2x/server/__main__.py`) runs a FastAPI app and
+Not used by the command line tool. `python -m r2x.server` (settings in `src/r2x/server/__main__.py`) runs a FastAPI app and
 `R2X_WORKERS` worker threads. At startup each worker gets its own Xvfb display and its own copy of
 the prepared Wine prefix (in `R2X_DATA/prefixes/`): Response's exports travel through the
 clipboard, which belongs to one wineserver and one X display, so workers must share neither.

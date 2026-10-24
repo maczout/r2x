@@ -114,7 +114,10 @@ def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
         time.sleep(0.2)
         session.check_no_dialog()
 
-        out.mkdir(parents=True, exist_ok=True)
+        try:
+            out.mkdir(parents=True, exist_ok=True)
+        except PermissionError:
+            raise R2xError(f"cannot write to {out.parent} (uid {os.getuid()} needs write access)")
         shutil.copyfile(input_file, out / ("input" + input_file.suffix.lower()))
         n = export_all(session, out, progress, on_stage)
 
