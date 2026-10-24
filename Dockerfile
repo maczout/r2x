@@ -45,7 +45,8 @@ RUN python3 -m venv /opt/r2x/venv \
  && /opt/r2x/venv/bin/pip install --no-cache-dir /opt/r2x/src \
  && rm -rf /opt/r2x/src
 
-RUN useradd --create-home --uid 1000 r2x
+# The official ubuntu image ships a user 'ubuntu' with UID 1000; r2x takes that UID instead.
+RUN (userdel --remove ubuntu 2>/dev/null || true) && useradd --create-home --uid 1000 r2x
 USER r2x
 ENV PATH=/opt/r2x/venv/bin:$PATH \
     R2X_RESPONSE_DIR=/opt/response \
