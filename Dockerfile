@@ -42,7 +42,7 @@ COPY --from=helper /build/helper.exe /opt/r2x/helper.exe
 COPY pyproject.toml README.md LICENSE /opt/r2x/src/
 COPY src /opt/r2x/src/src
 RUN python3 -m venv /opt/r2x/venv \
- && /opt/r2x/venv/bin/pip install --no-cache-dir /opt/r2x/src \
+ && /opt/r2x/venv/bin/pip install --no-cache-dir "/opt/r2x/src[server]" \
  && rm -rf /opt/r2x/src
 
 # The official ubuntu image ships a user 'ubuntu' with UID 1000; r2x takes that UID instead.
@@ -52,6 +52,7 @@ ENV PATH=/opt/r2x/venv/bin:$PATH \
     R2X_RESPONSE_DIR=/opt/response \
     R2X_HELPER=/opt/r2x/helper.exe \
     R2X_WINEPREFIX=/home/r2x/prefix \
+    R2X_DATA=/home/r2x/data \
     WINEARCH=win32 WINEDEBUG=-all
 
 # Create the 32-bit Wine prefix now so jobs don't wait for it. Mono and Gecko are not needed.
@@ -59,4 +60,5 @@ RUN WINEPREFIX=$R2X_WINEPREFIX WINEDLLOVERRIDES="mscoree,mshtml=" xvfb-run -a wi
  && WINEPREFIX=$R2X_WINEPREFIX wineserver -w
 
 WORKDIR /home/r2x
-CMD ["python", "-m", "r2x.worker", "--help"]
+EXPOSE 8000
+CMD ["python", "-m", "r2x.server"]

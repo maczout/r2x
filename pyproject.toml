@@ -15,8 +15,8 @@ dependencies = []
 
 [project.optional-dependencies]
 # Server and worker dependencies; the CLI stays light.
-server = []
-dev = ["pytest"]
+server = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]
+dev = ["pytest", "httpx"]
 
 [project.scripts]
 r2x = "r2x.cli:main"

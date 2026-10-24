@@ -46,12 +46,29 @@ fails unless `Response/r2k.exe` has the verified SHA-256 (build args `WINE_VERSI
 
 ```bash
 docker build -t r2x-server .
-mkdir -p out && chmod 777 out        # the container runs as uid 1000
+mkdir -p out                         # the container runs as uid 1000
 docker run --rm -v "$PWD/tests/reference/newbeam/input.r2t:/in/Newbeam.r2t:ro" \
     -v "$PWD/out:/out" r2x-server python -m r2x.worker /in/Newbeam.r2t /out/Newbeam_r2x
 ```
+
+The image's default command is the server (`python -m r2x.server`).
 
 Image size is about 1.3 GB compressed (Wine with its 32-bit libraries is most of it).
 
 Inputs outside the scope fail with a reason rather than writing files: an analysis whose control
 charts are Shear–γxy (Response's shear examples) stops at the first export-title check.
+
+## Server
+
+`python -m r2x.server` (settings in `src/r2x/server/__main__.py`) runs a FastAPI app and
+`R2X_WORKERS` worker threads. At startup each worker gets its own Xvfb display and its own copy of
+the prepared Wine prefix (in `R2X_DATA/prefixes/`): Response's exports travel through the
+clipboard, which belongs to one wineserver and one X display, so workers must share neither.
+Each job zips its output into `R2X_DATA/jobs/<id>/result.zip`.
+
+Checked in a container with two workers: six simultaneous jobs (4 × Newbeam, Cm4.rsp, an invalid
+file) all finished; every result was byte-identical to a single run on the host, and the invalid
+file failed with Response's own message. About 9 s per Newbeam job; startup takes ~10 s while the
+prefix is copied for each worker.
+
+`tests/test_server.py` covers the API with a stand-in for Response (no Wine needed).

@@ -25,7 +25,8 @@ r2x CLI (Windows/any)  ──HTTPS+token──▶  r2x server  ──▶  worker
 
 A worker opens the input in Response, runs **Solve → Sectional Response**, steps through every load
 stage, and uses each chart's **Copy Chart Data** command to read its data from the clipboard of a
-virtual display. Each worker runs one Response instance in its own container.
+virtual display. Each worker runs one Response instance with its own virtual display and Wine
+prefix, so several run side by side in one container without sharing a clipboard.
 
 ## Usage
 
@@ -71,14 +72,17 @@ Response-2000 is not included. Put its program folder in `./Response/` and build
 
 ```bash
 docker build -t r2x-server .
-docker run -d -p 8000:8000 -e R2X_TOKEN=<token> -e R2X_WORKERS=2 r2x-server
+docker run -d --name r2x --restart unless-stopped -p 8000:8000 \
+    -e R2X_TOKEN=<token> -e R2X_WORKERS=2 r2x-server
 ```
 
 The image pins the Wine version and the SHA-256 of `r2k.exe`. Run it on a private network or behind
 HTTPS. `R2X_VNC=1` exposes a worker's virtual display in a browser for debugging.
 
-API (bearer token): `POST /jobs` (upload `.r2t`), `GET /jobs/{id}`, `GET /jobs/{id}/result` (zip),
-`GET /health`.
+API (bearer token): `POST /jobs` (multipart field `file`), `GET /jobs/{id}` (status and stage
+progress), `GET /jobs/{id}/result` (zip), `GET /health`. Finished jobs are kept for 24 hours
+(`R2X_RETENTION_HOURS`); jobs do not survive a server restart. All settings are listed in
+`src/r2x/server/__main__.py`.
 
 ## Verification
 
