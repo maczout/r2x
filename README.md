@@ -50,6 +50,9 @@ py -m pip install https://github.com/maczout/r2x/archive/main.zip
 
 ## Usage
 
+The next version of the command line is specified in `docs/cli.md`; this section describes the
+current one.
+
 ```powershell
 r2x solve .\Newbeam.r2t                  # one or more files, or a glob
 r2x solve .\cases\*.r2t --out .\results -j 2
