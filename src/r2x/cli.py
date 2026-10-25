@@ -15,7 +15,6 @@ import argparse
 import glob
 import os
 import shlex
-import shutil
 import subprocess
 import sys
 import threading
@@ -79,7 +78,8 @@ def expand_inputs(patterns: list[str]) -> list[Path]:
 
 
 def output_dir(inp: Path, out: Path | None) -> Path:
-    return (out if out else inp.parent) / f"{inp.stem}_r2x"
+    """The raw record's path (docs/raw-format.md)."""
+    return (out if out else inp.parent) / f"{inp.stem}.r2x.txt"
 
 
 # -- commands -----------------------------------------------------------------------------------
@@ -101,8 +101,8 @@ def solve_one(inp: Path, dest: Path, image: str) -> bool:
     for line in proc.stderr:
         line = line.rstrip()
         if line:
-            say(line.replace(f"/out/{dest.name}", str(dest)) if line.startswith("[")
-                else f"[{inp.stem}] {line}")
+            line = line.removeprefix("r2x: ").replace(f"/out/{dest.name}", str(dest))
+            say(f"[{inp.stem}] {line}")
     return proc.wait() == 0
 
 
@@ -116,7 +116,7 @@ def cmd_solve(a) -> int:
         if d.exists():
             if not a.force:
                 raise SystemExit(f"r2x: {d} exists (use --force to replace it)")
-            shutil.rmtree(d)
+            d.unlink()
     with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
         ok = list(pool.map(lambda pair: solve_one(*pair, a.image), zip(inputs, dests)))
     failed = ok.count(False)

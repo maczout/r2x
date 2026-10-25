@@ -10,10 +10,11 @@ from __future__ import annotations
 import subprocess
 import time
 from dataclasses import dataclass
+from typing import Callable
 
 # Response-2000 main-menu command IDs (RT_MENU resource of r2k.exe 1.9.7).
 CMD_SECTIONAL_RESPONSE = 5092
-VK_PRIOR, VK_NEXT, VK_DOWN, VK_RETURN = 0x21, 0x22, 0x28, 0x0D
+VK_PRIOR, VK_NEXT, VK_DOWN, VK_RETURN, VK_ESCAPE = 0x21, 0x22, 0x28, 0x0D, 0x1B
 
 # Position of "Copy Chart Data" in every chart's context menu (after "Copy Chart Picture").
 COPY_CHART_DATA_DOWNS = 2
@@ -42,7 +43,19 @@ NO_SHEAR_CHARTS = (
 
 
 class R2xError(RuntimeError):
-    pass
+    """The job failed (exit status 1)."""
+
+
+class WaitTimeout(R2xError):
+    """Response did not react in time: an input to it may have been lost, so retrying can help."""
+
+
+class OutOfScope(R2xError):
+    """The input asks for an analysis r2x does not cover, such as shear (exit status 3)."""
+
+
+# Control-chart titles of analyses outside r2x's scope, and why.
+OUT_OF_SCOPE_TITLES = {"Control : Shear": "the loading includes shear"}
 
 
 @dataclass
@@ -110,7 +123,7 @@ def wait_until(predicate, timeout: float, what: str, interval: float = 0.01):
         if result:
             return result
         if time.monotonic() - t0 > timeout:
-            raise R2xError(f"timed out after {timeout:.0f} s waiting for {what}")
+            raise WaitTimeout(f"timed out after {timeout:.0f} s waiting for {what}")
         time.sleep(interval)
 
 
@@ -148,11 +161,38 @@ def strain_curvature(data: bytes) -> float:
     return (e_bot - e_top) / (y_top - y_bot) * 1000.0
 
 
+# Curvature check tolerance (mrad/m): the control curve prints 3 decimals and the strain export
+# 4 decimals over the section depth, so a correct match is within about 0.001.
+CURVATURE_TOL = 0.002
+
+
+def curvature_matches(phi: float, expected: float) -> bool:
+    return abs(phi - expected) <= CURVATURE_TOL + 1e-4 * abs(expected)
+
+
+def identify_stage(strain: bytes, curve: list[tuple[float, float]]) -> int:
+    """The stage whose Moment-phi point has the curvature of this Longitudinal Strain export.
+
+    Raises unless exactly one stage matches: Response shows no stage number, so a stage that
+    cannot be told apart from its neighbours is an error, not a guess.
+    """
+    phi = strain_curvature(strain)
+    matches = [i for i, (c, _) in enumerate(curve) if curvature_matches(phi, c)]
+    if len(matches) == 1:
+        return matches[0]
+    if not matches:
+        raise R2xError(f"the stage on screen (curvature {phi:.4f} mrad/m) is not on the "
+                       "Moment-phi curve")
+    raise R2xError(f"cannot tell which stage is on screen: stages {matches[0]} to {matches[-1]} "
+                   f"all have curvature {phi:.3f} mrad/m")
+
+
 class Session:
     """A solved or solvable Response-2000 window, reached through a Helper."""
 
-    def __init__(self, helper: Helper):
+    def __init__(self, helper: Helper, note: Callable[[str], None] = lambda s: None):
         self.h = helper
+        self.note = note
         self._charts: dict[str, str] | None = None
 
     # -- windows ------------------------------------------------------------------------------
@@ -198,8 +238,32 @@ class Session:
         return charts
 
     # -- clipboard ----------------------------------------------------------------------------
-    def copy_chart(self, chart: Chart, timeout: float = 5) -> bytes:
-        """Right-click the chart, choose Copy Chart Data, return the clipboard's CF_TEXT bytes."""
+    def copy_chart(self, chart: Chart, timeout: float = 5, attempts: int = 3) -> bytes:
+        """Right-click the chart, choose Copy Chart Data, return the clipboard's CF_TEXT bytes.
+
+        About one copy in several thousand gets no reply (seen once in about 6,500 under
+        Wine 9.0; the menu keys seem to be lost). Such a copy is dismissed and tried again. A
+        retry cannot pass off the wrong data: every export's title is checked, and the stage
+        checks in export.py compare its contents with the control curve.
+        """
+        for attempt in range(1, attempts + 1):
+            try:
+                data = self._copy_once(chart, timeout)
+                break
+            except WaitTimeout as e:
+                self._dismiss_popup()
+                if attempt == attempts:
+                    raise R2xError(f"Copy Chart Data of {chart.key} failed {attempts} times: {e}")
+                self.note(f"Copy Chart Data of {chart.key} got no reply ({e}); trying again")
+        title = export_title(data)
+        if title != chart.title:
+            for start, why in OUT_OF_SCOPE_TITLES.items():
+                if chart.control is not None and title and title.startswith(start):
+                    raise OutOfScope(f"{why} (Response's control chart is {title!r})")
+            raise R2xError(f"{chart.key}: export title {title!r}, expected {chart.title!r}")
+        return data
+
+    def _copy_once(self, chart: Chart, timeout: float) -> bytes:
         hwnd = (self._charts or self.find_charts())[chart.key]
         self.h.ask("clipclear")
         seq = self.h.ask("clipseq")
@@ -211,11 +275,16 @@ class Session:
         wait_until(lambda: self.h.ask("clipseq") != seq, timeout, f"chart data of {chart.key}", 0.005)
         reply = wait_until(lambda: self.h.try_ask("clip"), timeout, f"clipboard text of {chart.key}",
                            0.01)
-        data = bytes.fromhex(reply)
-        title = export_title(data)
-        if title != chart.title:
-            raise R2xError(f"{chart.key}: export title {title!r}, expected {chart.title!r}")
-        return data
+        return bytes.fromhex(reply)
+
+    def _dismiss_popup(self, timeout: float = 2):
+        """Close a context menu left open by a copy that got no reply."""
+        t0 = time.monotonic()
+        while self.h.ask("popup") == "1":
+            if time.monotonic() - t0 > timeout:
+                raise R2xError("a chart's context menu does not close")
+            self.h.try_ask(f"menukey {VK_ESCAPE:#x}")
+            time.sleep(0.1)
 
     # -- solving ------------------------------------------------------------------------------
     def solve(self, quiet: float = 1.0, timeout: float = 300) -> tuple[bytes, bytes]:
@@ -234,6 +303,9 @@ class Session:
                 self.check_no_dialog()
                 return None
         wait_until(charts_ready, 60, "the solution view's charts", 0.05)
+        # The top control chart's title tells an analysis with shear from one without; check it
+        # now rather than after the solve.
+        self.copy_chart(CONTROL_CHARTS[0])
         last, since = None, time.monotonic()
         while True:
             self.check_no_dialog()

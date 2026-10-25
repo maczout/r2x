@@ -39,5 +39,5 @@ def test_expand_inputs(tmp_path, monkeypatch):
 
 
 def test_output_dir():
-    assert output_dir(Path("cases/Newbeam.r2t"), None) == Path("cases/Newbeam_r2x")
-    assert output_dir(Path("cases/Newbeam.r2t"), Path("res")) == Path("res/Newbeam_r2x")
+    assert output_dir(Path("cases/Newbeam.r2t"), None) == Path("cases/Newbeam.r2x.txt")
+    assert output_dir(Path("cases/Newbeam.r2t"), Path("res")) == Path("res/Newbeam.r2x.txt")

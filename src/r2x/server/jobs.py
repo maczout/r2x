@@ -14,10 +14,11 @@ import secrets
 import shutil
 import threading
 import time
-import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from r2x.progress import Event
+from r2x.stages import PEAK, StageSpec
 from r2x.worker.runner import run_job, start_xvfb
 
 log = logging.getLogger("r2x.server")
@@ -29,9 +30,11 @@ class Job:
     name: str          # input file stem, as uploaded
     filename: str      # safe file name the input is stored under
     dir: Path
+    stages: StageSpec = PEAK
     status: str = "queued"           # queued | running | done | failed
-    stage: int = 0
-    stage_count: int | None = None
+    stage: int = 0                   # detail-view stages exported so far
+    stage_total: int | None = None   # detail-view stages to export
+    stage_count: int | None = None   # load stages in the solve
     message: str = ""
     error: str | None = None
     created: float = field(default_factory=time.time)
@@ -40,10 +43,11 @@ class Job:
 
     @property
     def result(self) -> Path:
-        return self.dir / "result.zip"
+        return self.dir / f"{self.name}.r2x.txt"
 
     def public(self) -> dict:
-        return {"id": self.id, "name": self.name, "status": self.status, "stage": self.stage,
+        return {"id": self.id, "name": self.name, "stages": str(self.stages),
+                "status": self.status, "stage": self.stage, "stage_total": self.stage_total,
                 "stage_count": self.stage_count, "message": self.message, "error": self.error,
                 "created": self.created, "started": self.started, "finished": self.finished}
 
@@ -88,10 +92,10 @@ class JobManager:
         self.ready.set()
 
     # -- jobs ---------------------------------------------------------------------------------
-    def submit(self, filename: str, content: bytes) -> Job:
+    def submit(self, filename: str, content: bytes, stages: StageSpec = PEAK) -> Job:
         job_id = secrets.token_hex(8)
         safe = safe_filename(filename)
-        job = Job(job_id, Path(safe).stem, safe, self.data / "jobs" / job_id)
+        job = Job(job_id, Path(safe).stem, safe, self.data / "jobs" / job_id, stages)
         job.dir.mkdir(parents=True)
         (job.dir / safe).write_bytes(content)
         with self.lock:
@@ -116,29 +120,21 @@ class JobManager:
                 continue
             job.status, job.started = "running", time.time()
 
-            def progress(msg, job=job):
-                job.message = msg
-                m = re.match(r"solved: (\d+) load stages", msg)
-                if m:
-                    job.stage_count = int(m.group(1))
+            def on_event(e: Event, job=job):
+                job.message = e.line()
+                if e.kind == "solved":
+                    job.stage_count = e.count
+                elif e.kind == "stage":
+                    job.stage, job.stage_total = e.done, e.total
 
-            def on_stage(k, n, job=job):
-                job.stage, job.stage_count = k, n
-
-            out = job.dir / "out"
             try:
-                self.run(job.dir / job.filename, out, self.response_dir, prefix, display,
-                         progress=progress, on_stage=on_stage)
-                with zipfile.ZipFile(job.result, "w", zipfile.ZIP_DEFLATED) as z:
-                    for p in sorted(out.rglob("*")):
-                        if p.is_file():
-                            z.write(p, p.relative_to(out).as_posix())
+                self.run(job.dir / job.filename, job.result, self.response_dir, prefix, display,
+                         stages=job.stages, on_event=on_event)
                 job.status = "done"
             except Exception as e:  # noqa: BLE001 - report every failure to the client
                 log.exception("job %s failed", job.id)
                 job.status, job.error = "failed", str(e) or type(e).__name__
             finally:
-                shutil.rmtree(out, ignore_errors=True)
                 job.finished = time.time()
                 log.info("job %s (%s) %s in %.1f s on worker %d", job.id, job.name, job.status,
                          job.finished - job.started, i)

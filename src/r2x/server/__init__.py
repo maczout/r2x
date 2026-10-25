@@ -1,1 +1,1 @@
-"""HTTP API: accepts .r2t uploads, queues jobs, serves result zips. Runs inside the container."""
+"""HTTP API: accepts input uploads, queues jobs, serves raw records. Runs inside the container."""

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 import os
 import shutil
 import subprocess
@@ -13,8 +12,10 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Callable
 
-from r2x import __version__
-from r2x.worker.export import export_all
+from r2x import __version__, record
+from r2x.progress import Event, note
+from r2x.stages import PEAK, StageSpec, format_ranges
+from r2x.worker.export import export
 from r2x.worker.session import Helper, R2xError, Session
 
 HELPER_SOURCE = Path(__file__).with_name("helper.c")
@@ -68,15 +69,20 @@ def wine_path(p: Path) -> str:
 
 
 def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
-            display: str | None = None, cache: Path | None = None,
-            progress: Callable[[str], None] = print,
-            on_stage: Callable[[int, int], None] = lambda i, n: None) -> dict:
-    """Solve input_file in Response-2000 and write the full export to out. Returns the manifest."""
+            display: str | None = None, stages: StageSpec = PEAK, cache: Path | None = None,
+            on_event: Callable[[Event], None] = lambda e: None) -> dict[str, str]:
+    """Solve input_file in Response-2000 and write its raw record to the file out.
+
+    The record is written only once the export is complete, under a temporary name first, so a
+    failed job leaves no file behind. Returns the record header.
+    """
     input_file, out = Path(input_file), Path(out)
     response_dir = Path(response_dir)
     exe = response_dir / "r2k.exe"
     if not exe.is_file():
         raise R2xError(f"no r2k.exe in {response_dir}")
+    if not out.parent.is_dir():
+        raise R2xError(f"no folder {out.parent} to write the record in")
     cache = cache or Path.home() / ".cache" / "r2x"
     helper_exe = ensure_helper(cache)
 
@@ -88,7 +94,7 @@ def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
             xvfb, env["DISPLAY"] = start_xvfb()
             stack.callback(lambda: (xvfb.terminate(), xvfb.wait(10)))
         if not (prefix / "system.reg").exists():
-            progress("creating Wine prefix (first run only)")
+            on_event(note("creating Wine prefix (first run only)"))
             subprocess.run(["wineboot", "-i"], env=env, check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         stack.callback(lambda: subprocess.run(["wineserver", "-k"], env=env,
@@ -109,28 +115,32 @@ def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
         stack.callback(stop_response)
         helper = Helper(str(helper_exe), env)
         stack.callback(helper.close)
-        session = Session(helper)
+        session = Session(helper, note=lambda text: on_event(note(text)))
         session.wait_for_file(input_file.stem)
         time.sleep(0.2)
         session.check_no_dialog()
-
-        try:
-            out.mkdir(parents=True, exist_ok=True)
-        except PermissionError:
-            raise R2xError(f"cannot write to {out.parent} (uid {os.getuid()} needs write access)")
-        shutil.copyfile(input_file, out / ("input" + input_file.suffix.lower()))
-        n = export_all(session, out, progress, on_stage)
+        result = export(session, stages, on_event)
 
     wine_version = subprocess.run(["wine", "--version"], capture_output=True, text=True).stdout.strip()
-    files = sorted(str(p.relative_to(out)).replace(os.sep, "/") for p in out.rglob("*")
-                   if p.is_file() and p.name != "manifest.json")
-    manifest = {
-        "r2x_version": __version__,
-        "response_exe_sha256": sha256(exe),
-        "wine_version": wine_version,
-        "input_sha256": sha256(input_file),
-        "stage_count": n,
-        "files": files,
+    header = {
+        "r2x-version": __version__,
+        "response-exe-sha256": sha256(exe),
+        "wine-version": wine_version,
+        "input-name": input_file.name,
+        "input-sha256": sha256(input_file),
+        "stage-count": str(result.stage_count),
+        "peak-stage": str(result.peak),
+        "detail-stages": format_ranges(result.stages),
     }
-    (out / "manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
-    return manifest
+    data = record.encode(header, result.sections)
+    tmp = out.with_name(f".{out.name}.{os.getpid()}.tmp")
+    try:
+        tmp.write_bytes(data)
+        os.replace(tmp, out)
+    except PermissionError:
+        tmp.unlink(missing_ok=True)
+        raise R2xError(f"cannot write to {out.parent} (uid {os.getuid()} needs write access)")
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
+    return header

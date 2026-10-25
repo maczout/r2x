@@ -65,30 +65,15 @@ directly; `R2X_IMAGE`, `R2X_DOCKER` and `R2X_WSL_DISTRO` override the defaults.
 
 ## Output
 
-One folder per input. Files are Response's clipboard text, unedited.
-
-```
-Newbeam_r2x/
-  input.r2t                the input as given (or input.rsp)
-  manifest.json            r2x version, Response exe SHA-256, Wine version, input SHA-256,
-                           stage count, file list
-  control/
-    moment_ex.txt          Control : Moment - εx  (all stages)
-    moment_phi.txt         Control : Moment - φ   (all stages)
-  stages/
-    000/                   one folder per load stage, in Response's order
-      longitudinal_strain.txt
-      shrinkage_thermal_strain.txt
-      long_reinforcement_stress.txt
-      long_reinf_stress_at_crack.txt
-      longitudinal_concrete_stress.txt
-    001/
-    ...
-```
+One text file per input, `NAME.r2x.txt`: the raw record. It holds Response's Copy Chart Data
+text, byte for byte, for both control charts (every stage) and the five No Shear charts that have
+a data export, at the peak stage by default. A short header gives the r2x, Wine and Response
+versions, the input's SHA-256, the stage count and the peak stage. Layout and a Python reader:
+`docs/raw-format.md`.
 
 Panels that Response shows only as pictures (cross section, crack diagram, internal forces, N+M)
 have no data export and are not included. Inputs outside the scope (for example an analysis with
-shear-controlled charts) fail with a reason instead of producing output.
+shear) fail with a reason instead of producing output.
 
 ## Server (optional, not used by the CLI)
 

@@ -15,8 +15,9 @@ From the repo (Response-2000 in `./Response`):
 ```bash
 python3 -m venv ~/.venvs/r2x && . ~/.venvs/r2x/bin/activate
 pip install -e '.[dev]'
-python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/Newbeam_r2x --response-dir Response
-R2X_RESPONSE_DIR=Response pytest        # includes the end-to-end Newbeam test
+python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/Newbeam.r2x.txt --response-dir Response
+python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/all.r2x.txt --stage all --response-dir Response
+R2X_RESPONSE_DIR=Response pytest        # includes the end-to-end Newbeam tests
 ```
 
 The first run creates a Wine prefix in `~/.cache/r2x/prefix` and builds the helper there.
@@ -29,9 +30,18 @@ Each job runs Response from a fresh temporary copy of its program folder.
   clipboard as raw CF_TEXT bytes. It is compiled with mingw-w64 on first use.
 - `session.py` uses it to solve (posted `WM_COMMAND` 5092), find the charts, and run
   **Copy Chart Data** by right-clicking a chart and choosing the second menu item. Every export's
-  `Title :` line is checked against the expected chart.
-- `export.py` pages down to stage 0, then up through every stage. Each stage is checked by
-  comparing the curvature of its Longitudinal Strain export with the Moment–φ curve.
+  `Title :` line is checked against the expected chart. A copy that gets no reply (about one in
+  several thousand under Wine) is dismissed and tried again, up to three times.
+- `export.py` identifies the stage on screen after the solve, the peak, by matching the
+  curvature of its Longitudinal Strain export to the Moment–φ curve, and stops rather than guess
+  if several stages match. `--stage peak` (the default) needs no paging. Stages above the peak
+  are reached by paging up from it; for any stage below, it pages down until Response stops at
+  stage 0, then up. Every step is checked the same way.
+- `runner.py` writes the result as one raw record (`docs/raw-format.md`; reader and writer in
+  `r2x/record.py`), under a temporary name until it is complete.
+- The worker reports progress on stderr in the fixed form of `r2x/progress.py`, which the command
+  line parses. Exit status: 0 solved, 1 failed, 2 usage error (e.g. a stage past the last
+  stage), 3 out of scope.
 
 Known heuristic: Wine gives no readable "solve finished" signal, so the solve counts as finished
 once the Moment–φ curve has not changed for 1 s (Response extends it about every 0.2 s while
@@ -48,7 +58,7 @@ fails unless `Response/r2k.exe` has the verified SHA-256 (build args `WINE_VERSI
 docker build -t r2x .
 mkdir -p out                         # the container runs as uid 1000
 docker run --rm -v "$PWD/tests/reference/newbeam/input.r2t:/in/Newbeam.r2t:ro" \
-    -v "$PWD/out:/out" r2x python -m r2x.worker /in/Newbeam.r2t /out/Newbeam_r2x
+    -v "$PWD/out:/out" r2x python -m r2x.worker /in/Newbeam.r2t /out/Newbeam.r2x.txt
 ```
 
 The `r2x` command line tool runs exactly this, once per input. To run the optional
@@ -56,8 +66,9 @@ server instead: `docker run -d -p 8000:8000 -e R2X_TOKEN=<token> -e R2X_WORKERS=
 
 Image size is about 1.3 GB compressed (Wine with its 32-bit libraries is most of it).
 
-Inputs outside the scope fail with a reason rather than writing files: an analysis whose control
-charts are Shear–γxy (Response's shear examples) stops at the first export-title check.
+Inputs outside the scope stop with a reason and exit status 3 rather than writing a record: an
+analysis with shear (Response's shear examples) is recognised as soon as the solve starts, from
+the top control chart's title, Shear–γxy.
 
 ## Server (optional)
 
@@ -65,7 +76,8 @@ Not used by the command line tool. `python -m r2x.server` (settings in `src/r2x/
 `R2X_WORKERS` worker threads. At startup each worker gets its own Xvfb display and its own copy of
 the prepared Wine prefix (in `R2X_DATA/prefixes/`): Response's exports travel through the
 clipboard, which belongs to one wineserver and one X display, so workers must share neither.
-Each job zips its output into `R2X_DATA/jobs/<id>/result.zip`.
+Each job writes its raw record to `R2X_DATA/jobs/<id>/NAME.r2x.txt`; the upload takes an
+optional `stage` field, as for `--stage`.
 
 Checked in a container with two workers: six simultaneous jobs (4 × Newbeam, Cm4.rsp, an invalid
 file) all finished; every result was byte-identical to a single run on the host, and the invalid

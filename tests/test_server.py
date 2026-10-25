@@ -1,7 +1,5 @@
 """HTTP API and job queue, with a stand-in for Response (no Wine needed)."""
-import io
 import time
-import zipfile
 from pathlib import Path
 
 import pytest
@@ -9,6 +7,8 @@ import pytest
 pytest.importorskip("fastapi")
 from fastapi.testclient import TestClient  # noqa: E402
 
+from r2x import record  # noqa: E402
+from r2x.progress import Event  # noqa: E402
 from r2x.server.app import create_app  # noqa: E402
 from r2x.server.jobs import JobManager, safe_filename  # noqa: E402
 from r2x.worker.session import R2xError  # noqa: E402
@@ -17,19 +17,17 @@ TOKEN = "s3cret"
 AUTH = {"Authorization": f"Bearer {TOKEN}"}
 
 
-def fake_run(input_file, out, response_dir, prefix, display, progress, on_stage):
+def fake_run(input_file, out, response_dir, prefix, display, stages, on_event):
     text = Path(input_file).read_bytes()
     if b"bad" in text:
         raise R2xError("Response shows a dialog 'Invalid File': Not a valid file format")
-    progress("solved: 3 load stages")
-    out.mkdir(parents=True)
-    (out / "input.r2t").write_bytes(text)
-    for i in range(3):
-        d = out / "stages" / f"{i:03d}"
-        d.mkdir(parents=True)
-        (d / "longitudinal_strain.txt").write_bytes(b"stage %d\r\n" % i)
-        on_stage(i + 1, 3)
-    (out / "manifest.json").write_text("{}")
+    on_event(Event("solved", count=3, stage=2))
+    targets = stages.resolve(3, 2)
+    sections = []
+    for k, i in enumerate(targets):
+        sections.append((f"stage/{i}/longitudinal_strain", b"stage %d\r\n" % i))
+        on_event(Event("stage", stage=i, done=k + 1, total=len(targets)))
+    out.write_bytes(record.encode({"input-name": Path(input_file).name}, sections))
 
 
 @pytest.fixture
@@ -59,14 +57,23 @@ def test_requires_token(client):
 
 
 def test_job_round_trip(client):
-    r = client.post("/jobs", headers=AUTH, files={"file": ("Newbeam.r2t", b"section data")})
-    assert r.status_code == 201 and r.json()["name"] == "Newbeam"
+    r = client.post("/jobs", headers=AUTH, files={"file": ("Newbeam.r2t", b"section data")},
+                    data={"stage": "all"})
+    assert r.status_code == 201 and r.json()["name"] == "Newbeam" and r.json()["stages"] == "all"
     j = wait_done(client, r.json()["id"])
-    assert j["status"] == "done" and j["stage"] == 3 and j["stage_count"] == 3
-    z = client.get(f"/jobs/{j['id']}/result", headers=AUTH)
-    assert z.status_code == 200
-    names = zipfile.ZipFile(io.BytesIO(z.content)).namelist()
-    assert "stages/002/longitudinal_strain.txt" in names and "manifest.json" in names
+    assert j["status"] == "done" and j["stage"] == 3 and j["stage_total"] == 3
+    assert j["stage_count"] == 3
+    res = client.get(f"/jobs/{j['id']}/result", headers=AUTH)
+    assert res.status_code == 200
+    rec = record.decode(res.content)
+    assert rec.header["input-name"] == "Newbeam.r2t" and rec.stages() == [0, 1, 2]
+
+
+def test_default_stage_is_peak(client):
+    r = client.post("/jobs", headers=AUTH, files={"file": ("a.r2t", b"x")})
+    j = wait_done(client, r.json()["id"])
+    rec = record.decode(client.get(f"/jobs/{j['id']}/result", headers=AUTH).content)
+    assert rec.stages() == [2]
 
 
 def test_failed_job_reports_reason(client):
@@ -81,6 +88,8 @@ def test_limits(client):
                        files={"file": ("big.r2t", b"x" * 1001)}).status_code == 413
     assert client.post("/jobs", headers=AUTH, files={"file": ("e.r2t", b"")}).status_code == 400
     assert client.get("/jobs/nope", headers=AUTH).status_code == 404
+    assert client.post("/jobs", headers=AUTH, files={"file": ("a.r2t", b"x")},
+                       data={"stage": "5-1"}).status_code == 400
 
 
 def test_safe_filename():
