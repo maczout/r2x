@@ -56,7 +56,10 @@ ENV PATH=/opt/r2x/venv/bin:$PATH \
     WINEARCH=win32 WINEDEBUG=-all
 
 # Create the 32-bit Wine prefix now so jobs don't wait for it. Mono and Gecko are not needed.
+# Windows are unmanaged: with no window manager, Wine would wait 2 s whenever a dialog closes.
 RUN WINEPREFIX=$R2X_WINEPREFIX WINEDLLOVERRIDES="mscoree,mshtml=" xvfb-run -a wineboot -i \
+ && WINEPREFIX=$R2X_WINEPREFIX xvfb-run -a wine reg add 'HKCU\Software\Wine\X11 Driver' \
+      /v Managed /d N /f \
  && WINEPREFIX=$R2X_WINEPREFIX wineserver -w
 
 WORKDIR /home/r2x

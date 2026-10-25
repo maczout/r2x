@@ -1,0 +1,632 @@
+# Dialog templates (RT_DIALOG) of r2k.exe, SHA-256 bbf4bc59…4e74, from python tools/dialogs.py.
+# Columns: control ID (-1: none), class/kind, text, position and size in dialog units.
+
+=== DIALOG 2 'Full Member Properties'
+     101  Button/groupbox        'Geometry and loading'                   @8,4 297x100
+     104  Button/groupbox        'Left Side Properties (Minimum moment side)' @8,108 297x52
+     116  Button/groupbox        'Right Side Properties (Maximum moment side)' @8,164 297x68
+     102  Edit                   ''                                       @152,16 48x12
+     108  Edit                   ''                                       @152,32 48x12
+     110  Button/auto-radio      'Constant Shear Analysis (Point Loads)'  @24,48 192x12
+     111  Button/auto-radio      'Uniform distributed load, beam type (Max V at Min M)' @24,60 196x12
+     105  Button/auto-radio      'Uniform distributed load, footing type (Max V and Max M)' @24,72 196x12
+     103  Edit                   ''                                       @128,88 48x12
+     113  Button/auto-radio      'Load Plate on Bottom'                   @20,120 115x12
+     114  Button/auto-radio      'Beam hanging from support at top of beam' @20,132 150x12
+     115  Button/auto-radio      'Fixed Support (Column top)'             @20,144 128x12
+     117  Button/auto-radio      'Continuous beam, plate on top of beam'  @16,176 139x12
+     118  Button/auto-radio      'Continuous beam, load hanging from bottom' @16,188 144x12
+     119  Button/auto-radio      'Fixed Support (Column base)'            @16,200 224x12
+     106  Edit                   ''                                       @152,216 48x12
+       1  Button/push            'OK'                                     @68,236 50x14
+       2  Button/push            'Cancel'                                 @128,236 50x14
+       9  Button/push            'Help'                                   @188,236 50x14
+      -1  Static                 'Length subjected to Shear'              @16,16 128x8
+     130  Static                 'mm'                                     @204,16 60x8
+      -1  Static                 'Moment at left as %age of right'        @16,88 108x8
+      -1  Static                 'x steel stress x db'                    @208,216 92x10
+      -1  Static                 'Yield Penetration Distance'             @40,216 108x8
+      -1  Static                 'Percent'                                @180,88 40x8
+    5872  Static                 'Constant moment zone on right'          @16,30 120x8
+     131  Static                 'mm'                                     @204,32 60x8
+     107  Button/groupbox        'Moment Diagram'                         @225,45 75x56
+    5060  Edit                   ''                                       @175,120 35x14
+      -1  Static                 'x 300 mm load plate'                    @215,120 85x8
+    5061  Edit                   ''                                       @175,175 35x14
+      -1  Static                 'x 300 mm load plate'                    @215,175 85x8
+=== DIALOG 5 'Define Loading'
+     101  Edit                   ''                                       @50,25 45x12
+    5052  Edit                   ''                                       @50,40 45x12
+    5053  Edit                   ''                                       @50,55 45x12
+    5054  Edit                   ''                                       @110,25 45x12
+    5055  Edit                   ''                                       @110,40 45x12
+    5056  Edit                   ''                                       @110,55 45x12
+       1  Button/default         'OK'                                     @10,100 50x14
+       2  Button/push            'Cancel'                                 @70,100 50x14
+       9  Button/push            'Help'                                   @130,100 50x14
+      -1  Static                 'Axial Load'                             @5,25 40x8
+      -1  Static                 'Moment'                                 @5,40 40x8
+      -1  Static                 'Shear'                                  @5,55 35x8
+    5059  Static                 'kN '                                    @160,25 25x8
+    5058  Static                 'kN*m '                                  @160,40 25x8
+    5057  Static                 'kN'                                     @160,55 25x8
+      -1  Static                 'Constant'                               @50,10 45x8
+      -1  Static                 'Increment '                             @110,10 45x8
+      -1  Static                 '+'                                      @100,10 5x8
+      -1  Static                 '+'                                      @100,25 5x8
+      -1  Static                 '+'                                      @100,40 5x8
+      -1  Static                 '+'                                      @100,55 5x8
+      -1  Static                 'For a "One Load" analysis, only use the left side' @5,75 180x20
+=== DIALOG 7 'Define Data'
+     322  ComboBox               ''                                       @12,9 160x63
+     113  Button/push            'Paste'                                  @180,8 50x14
+    5060  Edit                   ''                                       @12,30 216x108
+       1  Button/default         'OK'                                     @40,165 50x14
+       2  Button/push            'Cancel'                                 @100,165 50x14
+       9  Button/push            'Help'                                   @160,165 50x14
+      -1  Static                 'To add a new line in the box, use <control-enter> rather than <enter>' @15,145 215x15
+=== DIALOG 13 'Details'
+    5079  Button/groupbox        'Type List'                              @5,5 110x150
+    5080  Button/groupbox        'Type Definition'                        @120,5 216x150
+    5072  ListBox                ''                                       @50,55 60x97
+    5081  Edit                   ''                                       @50,20 60x12
+    5060  Edit                   ''                                       @195,20 41x12
+    5061  Edit                   ''                                       @195,35 41x12
+    5084  Button/auto-checkbox   'CheckBox1'                              @228,36 84x10
+    5062  Edit                   ''                                       @195,50 41x12
+    5063  Edit                   ''                                       @195,65 41x12
+    5064  Edit                   ''                                       @195,80 41x12
+    5065  Edit                   ''                                       @195,95 41x12
+     322  ComboBox               ''                                       @195,95 129x90
+    5070  ComboBox               ''                                       @195,115 129x90
+    5071  ComboBox               ''                                       @195,135 129x90
+    5075  Button/push            'Add'                                    @10,55 35x14
+    5076  Button/push            'Modify '                                @10,75 35x14
+    5077  Button/push            'Delete'                                 @10,95 35x14
+     113  Button/push            'Explode'                                @10,115 35x14
+     215  Static                 'MPa'                                    @243,36 33x8
+     218  Static                 'Cylinder Strength'                      @125,20 65x8
+     216  Static                 'Tension Strength'                       @125,35 65x8
+     213  Static                 'Peak Strain'                            @125,50 65x8
+     210  Static                 'Aggregate size'                         @125,65 65x8
+     207  Static                 'Tension Stiff Factor'                   @125,80 65x8
+     219  Static                 'MPa '                                   @243,20 47x8
+     212  Static                 'mm/m'                                   @243,50 49x8
+     209  Static                 'mm'                                     @243,65 48x8
+     206  Static                 'jimmy!'                                 @243,80 46x8
+     200  Static                 'jimmy!'                                 @243,95 49x8
+     204  Static                 'Base Curve'                             @125,95 65x10
+     203  Static                 'Comp. Softening'                        @125,115 65x8
+     202  Static                 'Tension Stiffening'                     @125,135 65x8
+     217  Static                 '(eg: 35.0)'                             @276,20 56x8
+     214  Static                 '(eg: 2.1 or -1)'                        @276,35 56x8
+     211  Static                 '(eg: 2.00)'                             @276,50 56x8
+     208  Static                 '(eg: 19)'                               @276,65 56x8
+     205  Static                 '(0.0 to 1.0)'                           @276,80 56x8
+      -1  Static                 'Defined Types'                          @50,42 60x8
+      -1  Static                 'Name'                                   @10,20 35x8
+=== DIALOG 14 'Basic Properties'
+    5022  Button/groupbox        'Concrete'                               @4,4 320x44
+     108  Button/groupbox        'Non Prestressed Reinforcement'          @4,56 320x44
+     109  Button/groupbox        'Prestressed Reinforcement'              @4,108 320x44
+     104  Edit                   ''                                       @148,24 35x12
+    5009  Button/push            "Detailed f'c"                           @232,24 75x14
+     105  Edit                   ''                                       @148,72 35x12
+    5010  Button/push            'Detailed fy'                            @232,72 75x14
+     322  Edit                   ''                                       @148,124 35x12
+     103  Button/push            'Detailed fpu'                           @232,124 75x14
+      -1  Static                 'Concrete Cylinder Strength'             @8,24 132x8
+      -1  Static                 'Reinforcement Yield Strength'           @8,72 132x8
+      -1  Static                 'Prestressed Reinforcement Strength'     @8,124 132x8
+    5019  Static                 'Text'                                   @188,24 35x8
+    5020  Static                 'Text'                                   @188,72 35x8
+    5030  Static                 'Text'                                   @188,124 35x8
+=== DIALOG 120 'General  Definitions'
+    5032  Edit                   ''                                       @12,16 220x30
+    5870  Edit                   ''                                       @67,52 45x12
+    5050  Edit                   ''                                       @168,52 64x12
+     101  Button/auto-checkbox   'Automatic Longitudinal Spacing or:'     @16,88 140x12
+    5042  Edit                   ''                                       @160,88 51x12
+     103  Button/auto-checkbox   'Automatic Transverse Spacing or:'       @16,104 140x12
+    5043  Edit                   ''                                       @160,104 51x12
+    5871  Button/auto-checkbox   'Centroidal Moment axis or:'             @16,144 100x10
+    5044  Edit                   ''                                       @120,144 55x12
+       1  Button/push            'OK'                                     @40,172 50x14
+       2  Button/push            'Cancel'                                 @100,172 50x14
+       9  Button/push            'Help'                                   @160,172 50x14
+    5039  Button/groupbox        'Title and General Comments'             @8,5 232x67
+     102  Button/groupbox        'Crack Spacing'                          @8,76 232x48
+    5063  Button/groupbox        'Moment Axis'                            @8,132 232x32
+    5450  Static                 'mm'                                     @216,88 20x8
+    5451  Static                 'mm'                                     @216,104 20x8
+    5452  Static                 'mm from bottom'                         @180,144 55x10
+      -1  Static                 'Date:'                                  @120,52 40x8
+      -1  Static                 'Analysis By:'                           @14,52 50x8
+=== DIALOG 135 'Post-fire analysis parameters'
+    1002  Button/auto-radio      'ISO 834 Standard Fire'                  @15,17 187x10
+    1003  Button/auto-radio      'Norwegian Petroleum Directorate (NPD) Petroleum Fire' @15,33 195x10
+    1004  Button/auto-radio      'Constant Temperature of'                @15,50 95x10
+    5061  Edit                   ''                                       @113,48 40x14
+    1005  Button/auto-checkbox   'Bottom Exposed'                         @15,95 66x10
+    1006  Button/auto-checkbox   'Sides Exposed'                          @85,95 60x10
+    1007  Button/auto-checkbox   'Top Exposed'                            @150,95 60x10
+      -1  Static                 'Length of exposure'                     @15,130 60x8
+    5060  Edit                   ''                                       @80,130 40x14
+    1008  ComboBox               ''                                       @15,165 180x50
+      -1  Button/groupbox        'Type of Fire Loading'                   @5,7 210x64
+      -1  Button/groupbox        'Fire Exposure Conditions'               @5,78 210x32
+      -1  Button/groupbox        'Time of Exposure'                       @5,120 210x30
+      -1  Static                 'minutes'                                @125,130 74x8
+      -1  Button/groupbox        'Fire Performance of Reinforcement'      @5,155 210x30
+     130  Static                 'degrees F'                              @159,50 35x8
+      -1  Static                 'The new beam that will result from this will represent post-fire conditions, so no thermal straining.  User must validate that analysis is accurate and results are appropriate.' @17,189 195x35
+       1  Button/default         'Create Fire Damaged Beam'               @18,223 126x14
+       2  Button/push            'Cancel'                                 @155,223 50x14
+=== DIALOG 137 'Please Wait, Performing Fire Analysis'
+       2  Button/push            'Cancel'                                 @65,40 50x14
+    1009  msctls_progress32      'Progress1'                              @5,20 170x15
+      -1  Static                 'Fire Analysis in Progress'              @45,5 89x8
+=== DIALOG 300 'Quick Define - Step 1 of 4'
+    5033  Button/groupbox        'Material Properties'                    @0,64 284x84
+    5063  Button/groupbox        'General Information'                    @0,4 284x48
+    5060  Edit                   ''                                       @76,16 196x12
+    5061  Edit                   ''                                       @76,32 48x12
+    5064  Edit                   ''                                       @120,76 48x12
+    5031  Edit                   ''                                       @120,92 48x12
+    5065  Edit                   ''                                       @120,108 48x12
+    5070  ComboBox               ''                                       @120,124 148x60
+      -1  Static                 'Analysis By:'                           @12,32 60x8
+      -1  Static                 'Title '                                 @12,16 60x8
+      -1  Static                 'Concrete Cylinder Strength'             @12,76 100x12
+      -1  Static                 'Long. Steel Yield Strength'             @12,92 104x12
+    5059  Static                 'MPa'                                    @176,76 60x8
+    5058  Static                 'MPa'                                    @176,92 60x8
+      -1  Static                 'Prestressed Steel Type'                 @12,124 104x8
+      -1  Static                 'Transverse Steel Yield'                 @12,108 104x8
+    5057  Static                 'MPa'                                    @176,108 60x8
+=== DIALOG 302 'Quick Define - Step 2 of 4'
+    5026  msctls_statusbar32     'No Current Selection'                   @1,139 284x11
+    5025  SysListView32          'ListView1'                              @8,4 160x128
+    5060  Edit                   ''                                       @204,8 40x12
+    5061  Edit                   ''                                       @204,28 40x12
+    5062  Edit                   ''                                       @204,48 40x12
+    5123  Edit                   ''                                       @204,68 40x12
+    5064  Edit                   ''                                       @204,88 40x12
+     101  Edit                   ''                                       @204,108 40x12
+     130  Static                 ''                                       @248,8 32x8
+     131  Static                 ''                                       @248,28 32x8
+     132  Static                 ''                                       @248,48 32x8
+     133  Static                 ''                                       @248,68 32x8
+     134  Static                 ''                                       @248,88 32x8
+     235  Static                 ''                                       @248,108 32x8
+     230  Static                 ''                                       @172,8 28x8
+     239  Static                 ''                                       @172,28 28x8
+     238  Static                 ''                                       @172,48 28x8
+     237  Static                 ''                                       @172,68 28x8
+     236  Static                 ''                                       @172,88 28x8
+     231  Static                 ''                                       @172,108 28x8
+=== DIALOG 303 'Quick Define - Step 3 of 4'
+    5039  Button/groupbox        'Top Reinforcing Longitudinal Steel '    @4,0 276x68
+    5040  Button/groupbox        'Bottom Reinforcing Longitudinal Steel'  @4,76 276x68
+    5060  Edit                   ''                                       @128,12 44x12
+     107  Button/auto-checkbox   'Select bar by area'                     @24,28 108x12
+    5061  Edit                   ''                                       @128,44 44x12
+    5062  Edit                   ''                                       @128,88 44x12
+    5014  Button/auto-checkbox   'Select bar by area'                     @24,104 108x12
+    5123  Edit                   ''                                       @128,120 44x12
+      -1  Static                 'Number of Bars'                         @24,12 96x8
+     130  Static                 'Bar Designation'                        @24,44 100x8
+      -1  Static                 'Number of Bars '                        @24,88 96x8
+     230  Static                 'Bar Designation'                        @24,120 96x8
+      -1  Static                 '(e.g.  4)'                              @180,12 60x8
+     131  Static                 '(e.g. #3 or 25M)'                       @216,44 60x8
+      -1  Static                 '(e.g. 4)'                               @180,88 60x8
+     239  Static                 '(e.g. #3 or 25M)'                       @216,120 60x8
+     132  Static                 'Text9'                                  @180,44 32x8
+     238  Static                 'Text10'                                 @180,120 28x8
+=== DIALOG 304 'Quick Define - Step 4 of 4'
+    5033  Button/groupbox        'Transverse Steel'                       @4,0 276x88
+    5004  ComboBox               ''                                       @120,12 112x76
+    5067  Button/auto-checkbox   'Select bar by area'                     @20,24 96x12
+    5061  Edit                   ''                                       @120,40 56x12
+    5062  Edit                   ''                                       @120,56 56x12
+    5065  Edit                   ''                                       @120,72 56x12
+    5040  Button/groupbox        'Bottom Tendons'                         @4,92 276x52
+    5041  Edit                   ''                                       @120,108 56x12
+    5044  Edit                   ''                                       @120,124 56x12
+      -1  Static                 'Stirrup Type'                           @20,12 56x9
+     130  Static                 'Bar Designation '                       @20,40 88x8
+      -1  Static                 'Spacing '                               @20,56 92x8
+     131  Static                 '(e.g. #3 or 25 M)'                      @216,40 60x8
+     230  Static                 'Text5'                                  @180,56 92x8
+     237  Static                 'Number of strands'                      @20,108 96x8
+      -1  Static                 'Delta-Epsilon P'                        @20,124 88x8
+     239  Static                 'mm/m'                                   @180,124 60x8
+     238  Static                 'Text9'                                  @180,73 60x8
+      -1  Static                 'Clear Cover'                            @20,73 92x8
+     132  Static                 'Text11'                                 @180,40 36x8
+=== DIALOG 306 'Shrinkage and Initial Strains (time dependent not included)'
+    5033  Button/groupbox        'Reinforcement Strains'                  @188,4 144x56
+    5074  Button/groupbox        'Graph'                                  @188,64 144x100
+    5027  Button/groupbox        'Concrete Strains'                       @4,4 180x160
+    5061  Edit                   ''                                       @72,16 44x12
+    5062  Edit                   ''                                       @72,32 44x12
+    5035  Button/push            'Add'                                    @12,52 50x14
+    5037  Button/push            'Modify'                                 @68,52 50x14
+    5038  Button/push            'Delete'                                 @124,52 50x14
+    5034  ComboBox               ''                                       @196,16 132x124
+      -1  Static                 'Strain'                                 @192,40 28x8
+    5073  Edit                   ''                                       @224,40 44x12
+     230  Static                 'mm/m'                                   @272,40 28x8
+       1  Button/push            'OK'                                     @76,172 50x14
+       2  Button/push            'Cancel'                                 @140,172 50x14
+       9  Button/push            'Help'                                   @200,172 50x14
+    5072  ListBox                ''                                       @12,92 164x68
+      -1  Static                 'Elevation'                              @12,17 48x8
+      -1  Static                 'Strain'                                 @12,34 52x8
+     130  Static                 'mm'                                     @120,17 52x8
+     131  Static                 'mm/m'                                   @120,34 52x8
+      -1  Static                 'Elevation'                              @12,80 60x8
+      -1  Static                 'Strain'                                 @92,80 60x8
+    5023  Button/push            'Set'                                    @300,40 28x14
+=== DIALOG 307 'Longitudinal Strain Discontinuity'
+       1  Button/push            'OK'                                     @80,172 50x14
+       2  Button/push            'Cancel'                                 @144,172 50x14
+       9  Button/push            'Help'                                   @208,172 50x14
+    5074  Button/groupbox        'Graph'                                  @188,4 144x160
+    5027  Button/groupbox        'Strains'                                @4,4 180x160
+    5061  Edit                   ''                                       @72,16 44x12
+    5062  Edit                   ''                                       @72,32 44x12
+    5035  Button/push            'Add'                                    @12,52 50x14
+    5037  Button/push            'Modify'                                 @68,52 50x14
+    5038  Button/push            'Delete'                                 @124,52 50x14
+    5072  ListBox                ''                                       @12,92 164x68
+      -1  Static                 'Elevation'                              @12,17 48x8
+      -1  Static                 'Strain'                                 @12,34 52x8
+     130  Static                 'mm'                                     @120,17 52x8
+     131  Static                 'mm/m'                                   @120,34 52x8
+      -1  Static                 'Elevation'                              @12,80 60x8
+      -1  Static                 'Strain'                                 @108,80 60x8
+=== DIALOG 310 'Basic Shapes'
+    5025  SysListView32          'ListView1'                              @8,8 160x136
+    5026  msctls_statusbar32     'StatusWindow1'                          @0,163 300x12
+    5060  Edit                   ''                                       @212,8 40x12
+    5061  Edit                   ''                                       @212,28 40x12
+    5062  Edit                   ''                                       @212,48 40x12
+    5123  Edit                   ''                                       @212,68 40x12
+    5064  Edit                   ''                                       @212,88 40x12
+     101  Edit                   ''                                       @212,108 40x12
+     130  Static                 ''                                       @256,8 28x8
+     131  Static                 ''                                       @256,28 28x8
+     132  Static                 ''                                       @256,48 24x8
+     133  Static                 ''                                       @256,68 28x8
+     134  Static                 ''                                       @256,88 28x8
+     230  Static                 ''                                       @180,8 28x8
+     239  Static                 ''                                       @180,28 28x8
+     238  Static                 ''                                       @180,48 28x8
+     237  Static                 ''                                       @180,68 28x8
+     236  Static                 ''                                       @176,88 32x8
+     231  Static                 ''                                       @176,108 32x8
+     235  Static                 ''                                       @256,108 32x8
+=== DIALOG 311 'User Defined'
+    5022  Button/groupbox        'Concrete Type Definition'               @164,4 132x160
+    5027  Button/groupbox        'Cross Section Definition'               @4,4 156x160
+    5032  Edit                   ''                                       @64,16 44x12
+    5011  Edit                   ''                                       @64,32 44x12
+    5068  Button/push            'Add'                                    @12,52 44x14
+    5078  Button/push            'Modify'                                 @60,52 44x14
+    5035  Button/push            'Delete'                                 @108,52 44x14
+      -1  Static                 'Elevation'                              @12,17 40x8
+      -1  Static                 'Width'                                  @12,34 40x8
+     130  Static                 'mm'                                     @112,17 44x8
+     131  Static                 'mm'                                     @112,32 40x8
+      -1  Static                 'Click on drawing to change type'        @172,16 112x10
+     230  Static                 'Text8'                                  @172,28 116x8
+      -1  Static                 'Elevation'                              @12,76 60x8
+      -1  Static                 'Width'                                  @88,76 60x8
+    5072  ListBox                ''                                       @12,86 140x78
+=== DIALOG 312 'Standard Shapes'
+    5700  SysTreeView32          'TreeView1'                              @8,8 152x152
+     102  Button/auto-checkbox   'Include Slab'                           @172,12 116x12
+    5123  Edit                   ''                                       @220,28 36x12
+    5064  Edit                   ''                                       @220,44 36x12
+    5063  Button/groupbox        'Add Slab'                               @164,4 132x56
+     230  Static                 'Slab Depth'                             @172,28 48x8
+     239  Static                 'Slab Width'                             @172,44 44x8
+     130  Static                 'Text4'                                  @260,28 32x8
+     131  Static                 'Text5'                                  @260,44 32x8
+    5040  Button/groupbox        'Section Sketch'                         @164,64 132x96
+=== DIALOG 313 'Continuity Selector'
+       1  Button/push            'OK'                                     @114,148 50x14
+       9  Button/push            'Help'                                   @176,148 50x14
+     101  Button/groupbox        'Downwards Continuity'                   @176,16 156x120
+     102  Button/groupbox        'Upwards Continuity'                     @8,16 156x120
+      -1  Static                 'Select which is correct by clicking on diagram' @8,4 164x8
+     230  Static                 'Full Beam Shown'                        @224,4 108x8
+=== DIALOG 314 'Time Dependent Effects'
+    5873  Button/auto-checkbox   'Consider Time Dependent Effects'        @8,24 140x12
+     101  Edit                   ''                                       @91,45 56x12
+     103  Edit                   ''                                       @91,63 56x12
+     108  Edit                   ''                                       @91,82 56x12
+       1  Button/push            'OK'                                     @19,109 50x14
+       2  Button/push            'Cancel'                                 @95,109 50x14
+       9  Button/push            'Help'                                   @159,109 50x14
+      -1  Static                 'This allows automatic consideration of creep, shrinkage and relaxation based on AASHTO' @8,4 216x20
+      -1  Static                 'Age for analysis'                       @11,45 76x8
+      -1  Static                 'years'                                  @151,45 60x8
+      -1  Static                 'Sustained Moment '                      @11,65 80x8
+     230  Static                 'Text5'                                  @151,65 60x8
+      -1  Static                 'Sustained Axial Load'                   @11,82 80x8
+     231  Static                 'Text5'                                  @151,85 60x8
+=== DIALOG 320 'General'
+    5027  Button/groupbox        'Units'                                  @4,4 116x84
+    5028  Button/auto-radio      'SI Metric'                              @20,16 80x12
+    5029  Button/auto-radio      'US Customary'                           @20,28 80x12
+    5030  Button/auto-radio      'kg/cm Metric'                           @20,40 80x12
+    5067  Button/auto-checkbox   'File Override'                          @20,64 92x12
+    5041  Edit                   ''                                       @200,16 44x12
+    5044  Edit                   ''                                       @200,32 44x12
+    5045  Edit                   ''                                       @200,48 44x12
+    5040  Button/groupbox        'Material Factors'                       @124,4 140x84
+      -1  Static                 'Concrete'                               @136,16 60x8
+      -1  Static                 'Steel'                                  @136,32 60x8
+      -1  Static                 'Prestress'                              @136,48 60x8
+    5046  Button/push            'CSA'                                    @132,68 56x14
+    5023  Button/push            'None'                                   @200,68 56x14
+=== DIALOG 406 'Quick Define'
+    5060  Edit                   ''                                       @129,15 40x14
+    5061  Edit                   ''                                       @129,33 40x14
+    1003  Button/auto-radio      'Constant shear analysis (Point loads)'  @27,54 135x10
+    1004  Button/auto-radio      'Uniformly distributed loading beam type (Max V at min M)' @27,68 198x10
+    1022  Button/auto-radio      'Uniformly distributed loading footing type (Max V at max M)' @27,82 206x10
+    5062  Edit                   ''                                       @131,101 40x14
+    5064  Edit                   ''                                       @296,15 40x14
+    1002  Button/auto-radio      'Support on bottom'                      @17,143 76x10
+    1023  Button/auto-radio      'Beam hanging from support at top of beam' @17,158 153x10
+    1024  Button/auto-radio      'Fixed Support (Column top)'             @17,173 104x10
+    1025  Button/auto-radio      'Load on continuous beam, load on top'   @197,143 138x10
+    1026  Button/auto-radio      'Load on continuous beam, load on bottom' @197,158 150x10
+    1027  Button/auto-radio      'Fixed support (Column base)'            @197,173 108x10
+    5123  Edit                   ''                                       @274,190 40x14
+      -1  Static                 'Length subjected to shear'              @16,19 101x8
+     130  Static                 'Units'                                  @179,18 42x8
+      -1  Static                 'Constant moment zone on right'          @16,36 102x8
+     131  Static                 'Units'                                  @179,35 40x8
+      -1  Button/groupbox        'Geometry and Loading'                   @8,6 359x118
+      -1  Static                 'Moment at left as %age of right'        @16,103 104x8
+      -1  Static                 'Percent'                                @175,102 26x8
+    1021  Button/groupbox        'Moment Diagram'                         @245,50 114x66
+      -1  Button/groupbox        'Left side properties'                   @8,129 175x83
+      -1  Button/groupbox        'Right side properties'                  @187,129 175x83
+      -1  Static                 'Yield Penetration'                      @200,193 70x8
+      -1  Static                 'x sigma x db'                           @317,191 41x8
+      -1  Static                 'Constant axial load'                    @225,18 69x8
+     132  Static                 'Units'                                  @341,18 17x8
+=== DIALOG 409 'Dialog'
+    5060  Edit                   ''                                       @72,10 40x14
+    5061  Edit                   ''                                       @72,32 40x14
+    1001  Button/auto-checkbox   ''                                       @73,51 16x10
+    5035  Button/push            'Add'                                    @11,69 50x14
+    5037  Button/push            'Modify'                                 @68,69 50x14
+    5038  Button/push            'Delete'                                 @123,68 50x14
+    1013  ListBox                ''                                       @13,102 159x79
+    5062  Edit                   ''                                       @61,187 40x14
+    5023  Button/push            'Delete Full Listing'                    @186,6 82x14
+    5068  Button/push            'Generate Self Weight'                   @285,6 78x14
+    5079  Button/groupbox        'Bending Moment Diagram'                 @185,26 180x88
+    5080  Button/groupbox        'Shear Force Diagram'                    @185,119 180x88
+      -1  Static                 'Location '                              @10,13 51x8
+     130  Static                 'Units'                                  @121,12 58x8
+      -1  Static                 'Bending Moment'                         @9,32 60x8
+     230  Static                 'Units'                                  @121,33 57x8
+      -1  Static                 'Location              Moment         Parabolic Flag' @13,90 163x8
+      -1  Static                 'Is parabolic'                           @9,51 38x8
+      -1  Static                 'Axial Load'                             @15,190 34x8
+     131  Static                 'Units'                                  @106,190 72x8
+=== DIALOG 4000 'Edit Chart'
+    4024  Button/groupbox        'Line'                                   @5,175 250x30
+    4014  Button/groupbox        'Scale'                                  @5,85 250x85
+    4015  Button/groupbox        'Titles'                                 @5,0 250x80
+       1  Button/default         'OK'                                     @45,215 50x14
+       2  Button/push            'Cancel'                                 @105,215 50x14
+       9  Button/push            'Help'                                   @165,215 50x14
+    4002  Edit                   ''                                       @65,10 185x12
+    4003  Edit                   ''                                       @65,25 185x12
+    4004  Edit                   ''                                       @65,40 185x12
+      -1  Static                 'X Axis Min'                             @57,105 65x8
+      -1  Static                 'X Axis Max'                             @57,120 70x8
+      -1  Static                 'X Tick Distance'                        @57,135 65x8
+      -1  Static                 'X Decimal Points'                       @57,150 70x8
+      -1  Static                 'Y Axis Min'                             @180,105 70x8
+      -1  Static                 'Y Axis Max'                             @180,120 70x8
+      -1  Static                 'Y Tick Distance'                        @180,135 70x8
+      -1  Static                 'Y Decimal points'                       @180,150 70x8
+    4005  Edit                   ''                                       @50,185 25x12
+    4008  Button/push            'Select'                                 @130,185 30x14
+    4009  Button/push            'Select'                                 @205,185 40x14
+    4006  Button/push            'Select Title Font'                      @120,60 60x14
+    4007  Button/push            'Select Axes Font'                       @185,60 65x14
+    4010  Button/auto-checkbox   ''                                       @15,105 10x12
+    4011  Button/auto-checkbox   ''                                       @15,119 10x12
+    4013  Button/auto-checkbox   ''                                       @135,105 10x12
+    4012  Button/auto-checkbox   ''                                       @135,120 10x12
+      -1  Static                 'Chart Title'                            @10,12 50x8
+      -1  Static                 'X-Axis Title'                           @10,25 50x8
+      -1  Static                 'Y-Axis Title'                           @10,40 50x8
+      -1  Static                 'Title Font:'                            @10,60 35x8
+      -1  Static                 'Axes font:'                             @10,70 35x8
+    4017  Static                 'Text'                                   @60,60 55x8
+    4016  Static                 'Text'                                   @60,70 55x8
+      -1  Static                 'Auto'                                   @10,95 15x8
+    4018  Edit                   ''                                       @27,105 25x12
+    4019  Edit                   ''                                       @27,120 25x12
+    4021  Edit                   ''                                       @27,135 25x12
+    4022  Edit                   ''                                       @27,150 25x12
+      -1  Static                 'Auto'                                   @130,95 15x8
+    4026  Edit                   ''                                       @150,105 25x12
+    4020  Edit                   ''                                       @150,120 25x12
+    4025  Edit                   ''                                       @150,135 25x12
+    4023  Edit                   ''                                       @150,150 25x12
+      -1  Static                 'Thickness'                              @10,188 35x8
+      -1  Static                 'Colour'                                 @100,187 25x8
+      -1  Static                 'Style'                                  @175,187 20x8
+=== DIALOG 4001 'View Data'
+       1  Button/push            'Close'                                  @122,289 50x14
+    4027  Button/push            'Copy'                                   @323,4 50x14
+    4028  Edit                   ''                                       @8,22 364x259
+       2  Button/push            'Cancel'                                 @197,290 50x14
+      -1  Static                 'Click on button to Copy data to Windows Clipboard' @155,9 160x8
+=== DIALOG 4002 'Select Linetype'
+    5072  ListBox                ''                                       @12,20 208x100
+       1  Button/push            'OK'                                     @60,128 50x14
+       2  Button/push            'Cancel'                                 @124,128 50x14
+    4080  Static                 'Select a linetype from the following list' @12,4 156x8
+=== DIALOG 5878 'Catalog of Elements'
+    5700  SysTreeView32          'TreeView1'                              @16,8 188x160
+    5037  Button/push            'New'                                    @216,12 50x14
+    5038  Button/push            'Copy'                                   @216,32 50x14
+    5035  Button/push            'Delete'                                 @216,52 50x14
+       1  Button/push            'OK'                                     @60,212 50x14
+       2  Button/push            'Cancel'                                 @120,212 50x14
+       9  Button/push            'Help'                                   @180,212 50x14
+      -1  Static                 'Curent Selection'                       @16,172 60x8
+    5450  Static                 'Text2'                                  @84,172 180x8
+    5451  Static                 'Text3'                                  @84,184 188x8
+    5452  Static                 'Text4'                                  @84,196 188x8
+=== DIALOG 22000 'About Response-2010'
+   22001  Static                 'Version'                                @35,20 200x8
+      -1  Static                 'RESPONSE-2010 Reinforced Concrete Sectional Analysis' @35,5 200x8
+   22002  Static                 ''                                       @35,35 200x17
+   22003  Static                 ''                                       @180,85 66x8
+       3  Static                 3                                        @2,2 20x20
+       1  Button/default         'OK'                                     @126,85 40x14
+      -1  Static                 'Photograph on main page courtesy of Keith Stanley.  www.kestan.com' @30,60 210x15
+=== DIALOG 32514 ''
+    4091  Static                 ''                                       @10,8 160x10
+    4090  Edit                   ''                                       @10,20 160x12
+       1  Button/default         '&OK'                                    @47,42 40x14
+       2  Button/push            '&Cancel'                                @93,42 40x14
+=== DIALOG 32599 'Printing'
+       2  Button/push            'Cancel'                                 @46,40 40x14
+     104  Static                 'Now printing Page %d of'                @0,8 130x8
+      -1  Static                 'Now printing'                           @0,8 130x8
+     101  Static                 "'%s' on the"                            @0,16 130x8
+     103  Static                 ''                                       @0,24 130x8
+     102  Static                 '%s on %s'                               @0,24 130x8
+=== DIALOG 32600 'Full Member Properties'
+    5062  Edit                   ''                                       @126,10 32x14
+    5064  Edit                   ''                                       @126,28 32x14
+    1008  ComboBox               ''                                       @278,10 88x47
+    1009  ComboBox               ''                                       @278,25 88x44
+    5123  Edit                   ''                                       @278,40 41x14
+    5065  Edit                   ''                                       @127,69 32x14
+    5052  Edit                   ''                                       @127,85 32x14
+    1011  ComboBox               ''                                       @98,102 72x49
+    1001  Button/auto-checkbox   'Direct Support (support below beam)'    @12,117 151x10
+    5066  Edit                   ''                                       @311,69 32x14
+    5053  Edit                   ''                                       @311,85 32x14
+    1012  ComboBox               ''                                       @286,102 71x54
+    1002  Button/auto-checkbox   'Direct Support (support below beam)'    @201,118 140x10
+    5032  Edit                   ''                                       @259,157 33x14
+    5035  Button/push            'Add Divider'                            @215,174 50x14
+    5037  Button/push            'Delete Divider'                         @270,174 50x14
+    1013  ListBox                ''                                       @326,143 39x43
+    1014  ComboBox               ''                                       @11,208 139x41
+    5011  Edit                   ''                                       @55,223 53x14
+    1003  Button/auto-checkbox   'Constant Loading'                       @159,210 71x10
+    5013  Edit                   ''                                       @282,206 31x14
+    5012  Edit                   ''                                       @282,222 32x14
+    1005  Button/auto-checkbox   'Is Parabolic'                           @249,242 64x10
+    5038  Button/push            'Add'                                    @337,204 34x14
+    5023  Button/push            'Modify'                                 @337,222 34x14
+    5068  Button/push            'Delete'                                 @338,241 33x14
+    1015  ListBox                ''                                       @249,267 122x58
+       1  Button/push            'OK'                                     @266,336 50x14
+       2  Button/push            'Cancel'                                 @323,336 50x14
+      -1  Button/groupbox        'Concrete Geometry'                      @3,1 370x56
+      -1  Static                 'Overall length of concrete section'     @11,13 107x8
+     240  Static                 'mm'                                     @161,12 21x8
+      -1  Static                 'Anchorage at left end'                  @191,13 69x8
+      -1  Static                 'Anchorage at right end'                 @191,29 73x8
+      -1  Static                 'Yield penetration constant'             @191,43 83x8
+      -1  Static                 'x stress x db'                          @323,42 40x8
+      -1  Static                 'Top plate/column size'                  @11,29 71x8
+     130  Static                 'mm'                                     @162,30 20x8
+      -1  Button/groupbox        'Bottom support columns/plates'          @3,61 370x71
+      -1  Static                 'Left bottom plate/column size'          @11,72 115x8
+     230  Static                 'mm'                                     @163,71 12x8
+      -1  Static                 'Distance to midpoint of support'        @11,87 98x8
+     131  Static                 'mm'                                     @164,87 16x8
+      -1  Static                 'Type of support on left'                @11,103 82x8
+      -1  Static                 'Right bottom plate/column size'         @192,71 98x8
+     238  Static                 'mm'                                     @346,71 12x8
+      -1  Static                 'Distance to midpoint of support'        @192,87 98x8
+     237  Static                 'mm'                                     @346,87 12x8
+      -1  Static                 'Type of support on right'               @192,104 84x8
+     101  Button/groupbox        'Material type assignment'               @3,136 370x57
+      -1  Static                 'Define material division locations'     @216,142 110x8
+    1019  Static                 'mm'                                     @297,159 15x8
+      -1  Static                 'Dist. from left'                        @215,159 42x8
+      -1  Static                 'N.T.S.      Click on drawing to change beam type' @10,179 154x8
+      -1  Static                 'All distances are from left end of beam.' @7,340 182x8
+      -1  Button/groupbox        'Define moment diagrams'                 @3,197 372x135
+      -1  Static                 'Axial load'                             @9,226 31x8
+    1016  Static                 'kN'                                     @122,225 10x8
+      -1  Static                 'Location                  Moment             IsParabolic' @249,258 121x8
+    1018  Static                 'mm'                                     @317,209 12x8
+    1017  Static                 'Distance'                               @249,208 29x8
+      -1  Static                 'Moment'                                 @249,225 31x8
+    1021  Button/groupbox        'Scale drawing'                          @7,240 237x86
+    1020  Static                 'kNm'                                    @316,225 16x8
+    5078  Button/push            'Make Self Weight'                       @164,225 77x14
+    1004  Button/auto-checkbox   'Direct Loads (applied from above beam)' @11,43 151x10
+=== DIALOG 32601 'Material Define'
+    5060  Edit                   ''                                       @83,124 40x14
+    5037  Button/push            'Add Boundary'                           @12,150 60x14
+    5035  Button/push            'Delete Boundary'                        @149,151 66x14
+    1013  ListBox                ''                                       @231,100 68x67
+      -1  Static                 'Distance from left'                     @12,126 58x8
+     213  Static                 'Units'                                  @132,126 17x8
+      -1  Static                 'Not to Scale'                           @15,76 40x8
+      -1  Static                 'Click on picture to change material types' @222,75 130x8
+      -1  Static                 'Define locations where cross section changes' @11,100 146x8
+    5079  Button/groupbox        'Beam Material Types'                    @10,7 348x81
+    5036  Button/push            'Modify Boundary'                        @80,150 66x14
+=== DIALOG 32602 'Geometry Definition'
+    5060  Edit                   ''                                       @131,18 40x14
+    5061  Edit                   ''                                       @131,39 40x14
+    1001  Button/auto-checkbox   'Direct loads (loaded from top of member)' @207,39 151x10
+    1008  ComboBox               ''                                       @91,63 88x53
+    1009  ComboBox               ''                                       @272,63 87x57
+    5062  Edit                   ''                                       @92,81 40x14
+    5123  Edit                   ''                                       @272,81 40x14
+    5064  Edit                   ''                                       @121,119 40x14
+    5065  Edit                   ''                                       @121,139 40x14
+    1011  ComboBox               ''                                       @109,159 72x62
+    1005  Button/auto-checkbox   'Direct support (supported from below)'  @19,178 139x10
+    5066  Edit                   ''                                       @298,118 40x14
+     102  Edit                   ''                                       @298,139 40x14
+    1012  ComboBox               ''                                       @289,159 69x63
+    1006  Button/auto-checkbox   'Direct support (supported from below)'  @196,178 139x10
+    5079  Button/groupbox        'Geometry and Loading'                   @10,7 354x96
+      -1  Static                 'Overall length of concrete section'     @18,20 109x8
+     130  Static                 'Units'                                  @176,20 17x8
+      -1  Static                 'Top loading plate/column size'          @18,40 94x8
+     131  Static                 'Units'                                  @176,40 17x8
+      -1  Static                 'Anchorage of left end'                  @17,65 71x8
+      -1  Static                 'Anchorage of right end'                 @191,64 75x8
+      -1  Static                 'Yield penetration factor'               @191,85 76x8
+     239  Static                 'Units'                                  @141,83 17x8
+      -1  Static                 'Location for Disp Calc'                 @17,83 70x8
+      -1  Button/groupbox        'Supports'                               @9,106 355x100
+      -1  Static                 'Left bottom plate/column size'          @18,121 95x8
+     238  Static                 'Units'                                  @163,121 19x8
+      -1  Static                 'Distance to midpoint of support'        @18,141 101x8
+     237  Static                 'Units'                                  @163,142 21x8
+      -1  Static                 'Type of support on left'                @18,161 75x8
+      -1  Static                 'Right bottom plate/column size'         @195,121 99x8
+     236  Static                 'Units'                                  @340,121 19x8
+      -1  Static                 'Distance to midpoint of support'        @195,141 101x8
+     231  Static                 'Units'                                  @340,142 21x8
+      -1  Static                 'Type of support on right'               @195,160 79x8
+      -1  Static                 'x Sig x db'                             @319,84 32x8

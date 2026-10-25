@@ -51,7 +51,7 @@ def host_path(mounts: dict[str, str], p: str) -> Path:
     return Path(mounts[folder]) / name
 
 
-def fake_worker(inp: Path, out: Path, stage: str) -> int:
+def fake_worker(inp: Path, out: Path, stage: str, settings: dict[str, str]) -> int:
     from r2x import record
     from r2x.progress import Event
     from r2x.stages import StageError, parse_stages
@@ -83,21 +83,22 @@ def fake_worker(inp: Path, out: Path, stage: str) -> int:
         sections.append((f"stage/{i}/longitudinal_strain", b"stage %d\r\n" % i))
         say(Event("stage", stage=i, done=k + 1, total=len(targets)))
     if "noout" not in text:
-        out.write_bytes(record.encode({"input-name": inp.name, "stage-count": "10",
+        out.write_bytes(record.encode({"input-name": inp.name, **settings, "stage-count": "10",
                                        "peak-stage": "7"}, sections))
         say(Event("wrote", str(out), seconds=0.1))
     return 0
 
 
-def wine_worker(inp: Path, out: Path, stage: str) -> int:
+def wine_worker(inp: Path, out: Path, stage: str, settings: dict[str, str]) -> int:
     template = Path(os.environ.get("R2X_WINEPREFIX", Path.home() / ".cache/r2x/prefix"))
     with tempfile.TemporaryDirectory(prefix="fake-docker-") as tmp:
         prefix = Path(tmp) / "prefix"
         if (template / "system.reg").exists():
             shutil.copytree(template, prefix, symlinks=True)
         env = dict(os.environ, R2X_WINEPREFIX=str(prefix))
+        options = [f"--{k}={v}" for k, v in settings.items()]
         return subprocess.run([sys.executable, "-m", "r2x.worker", str(inp), str(out),
-                               "--stage", stage], env=env).returncode
+                               "--stage", stage, *options], env=env).returncode
 
 
 def main(argv: list[str]) -> int:
@@ -111,8 +112,16 @@ def main(argv: list[str]) -> int:
         raise SystemExit(f"fake docker: unexpected command {command}")
     inp, out = host_path(mounts, command[3]), host_path(mounts, command[4])
     stage = command[command.index("--stage") + 1] if "--stage" in command else "peak"
+    settings = {}                       # --units us, --initial=-2000,0 ... as the worker gets them
+    rest = command[5:]
+    for i, arg in enumerate(rest):
+        for key in ("units", "factors", "initial", "increment"):
+            if arg == f"--{key}":
+                settings[key] = rest[i + 1]
+            elif arg.startswith(f"--{key}="):
+                settings[key] = arg.split("=", 1)[1]
     worker = wine_worker if os.environ.get("FAKE_DOCKER_MODE") == "wine" else fake_worker
-    return worker(inp, out, stage)
+    return worker(inp, out, stage, settings)
 
 
 if __name__ == "__main__":

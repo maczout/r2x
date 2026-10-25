@@ -9,7 +9,7 @@ them.
 |---|---|---|---|
 | `newbeam` | none (moment only) | 56 of 0–59 | (no `saved.r2t`; `input.r2t` does) |
 | `newbeam-axial` | constant N −2000 kN, moment increment | 37 of 0–45 | yes |
-| `newbeam-axial-only` | axial increment only | 22 of 0–34 | not yet (no Moment–φ chart) |
+| `newbeam-axial-only` | axial increment only | 22 of 0–34 | yes |
 | `newbeam-csa` | CSA material factors | 46 of 0–56 | yes |
 | `newbeam-us` | US Customary units | 56 of 0–59 | no: values rounded on save |
 

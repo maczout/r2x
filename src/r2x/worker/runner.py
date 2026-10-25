@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -14,7 +15,9 @@ from typing import Callable
 
 from r2x import __version__, record
 from r2x.progress import Event, note
+from r2x.settings import Settings
 from r2x.stages import PEAK, StageSpec, format_ranges
+from r2x.worker import dialogs
 from r2x.worker.export import export
 from r2x.worker.session import Helper, R2xError, Session
 
@@ -64,15 +67,36 @@ def start_xvfb(first: int = 99, tries: int = 20) -> tuple[subprocess.Popen, str]
     raise R2xError("Xvfb did not start. " + " | ".join(errors[-2:]))
 
 
+# Without a window manager (Xvfb has none), Wine waits 2 s for one each time a managed window
+# such as a dialog closes. Unmanaged windows skip the wait; the exports are unchanged.
+X11_DRIVER_KEY = r"HKCU\Software\Wine\X11 Driver"
+_UNMANAGED = re.compile(r'\[Software\\\\Wine\\\\X11 Driver\][^\[]*"Managed"="N"')
+
+
+def prepare_prefix(prefix: Path, env: dict, on_event: Callable[[Event], None]):
+    """Create the Wine prefix if needed, and make sure it does not use window management."""
+    if not (prefix / "system.reg").exists():
+        on_event(note("creating Wine prefix (first run only)"))
+        subprocess.run(["wineboot", "-i"], env=env, check=True,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    user_reg = prefix / "user.reg"
+    if not (user_reg.exists() and _UNMANAGED.search(user_reg.read_text(errors="replace"))):
+        subprocess.run(["wine", "reg", "add", X11_DRIVER_KEY, "/v", "Managed", "/d", "N", "/f"],
+                       env=env, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
 def wine_path(p: Path) -> str:
     return "Z:" + str(p.resolve()).replace("/", "\\")
 
 
 def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
-            display: str | None = None, stages: StageSpec = PEAK, cache: Path | None = None,
+            display: str | None = None, stages: StageSpec = PEAK,
+            settings: Settings = Settings(), cache: Path | None = None,
             on_event: Callable[[Event], None] = lambda e: None) -> dict[str, str]:
     """Solve input_file in Response-2000 and write its raw record to the file out.
 
+    Settings are applied through Response's dialogs before solving, and the settings in effect
+    are read back into the header. An input whose loading includes shear stops here (OutOfScope).
     The record is written only once the export is complete, under a temporary name first, so a
     failed job leaves no file behind. Returns the record header.
     """
@@ -93,10 +117,7 @@ def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
         else:
             xvfb, env["DISPLAY"] = start_xvfb()
             stack.callback(lambda: (xvfb.terminate(), xvfb.wait(10)))
-        if not (prefix / "system.reg").exists():
-            on_event(note("creating Wine prefix (first run only)"))
-            subprocess.run(["wineboot", "-i"], env=env, check=True,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        prepare_prefix(prefix, env, on_event)
         stack.callback(lambda: subprocess.run(["wineserver", "-k"], env=env,
                                               stderr=subprocess.DEVNULL))
 
@@ -119,6 +140,9 @@ def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
         session.wait_for_file(input_file.stem)
         time.sleep(0.2)
         session.check_no_dialog()
+        dialogs.apply(session, settings)
+        effective = dialogs.read(session)
+        dialogs.check_scope(effective)
         result = export(session, stages, on_event)
 
     wine_version = subprocess.run(["wine", "--version"], capture_output=True, text=True).stdout.strip()
@@ -128,6 +152,7 @@ def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
         "wine-version": wine_version,
         "input-name": input_file.name,
         "input-sha256": sha256(input_file),
+        **effective,
         "stage-count": str(result.stage_count),
         "peak-stage": str(result.peak),
         "detail-stages": format_ranges(result.stages),

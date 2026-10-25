@@ -71,8 +71,7 @@ def test_help_matches_spec(capsys):
     with pytest.raises(SystemExit):
         build_parser().parse_args(["solve", "--help"])
     text = capsys.readouterr().out
-    for note in ("\nNot available yet: --units, --factors, --initial, --increment, --report,\n"
-                 "and solving without an input.\n",
+    for note in ("\nNot available yet: --report, and solving without an input.\n",
                  "With several inputs, the most serious: 1, then 2, then 3.\n"):
         assert note in text
         text = text.replace(note, "")
@@ -207,8 +206,7 @@ def test_stdout(cases):
 @pytest.mark.parametrize("argv, message", [
     (["slow*.r2t", "--stdout"], "--stdout takes one input; 2 given"),
     (["beam.r2t", "--stdout", "--out", "x"], "--out does not apply"),
-    (["beam.r2t", "--units", "si"], "--units: not available yet"),
-    (["beam.r2t", "--report", "--initial", "1,0"], "--initial, --report: not available yet"),
+    (["beam.r2t", "--report", "--initial", "1,0"], "--report: not available yet"),
     ([], "without an input (File > New) is not available yet"),
     (["nothing*.r2t"], "no files match"),
     (["beam.r2t", str(Path(".") / "beam.r2t"), "be*.r2t"], ""),  # same file thrice: once
@@ -226,6 +224,17 @@ def test_main_in_process(cases, capsys):
     assert main(["solve", str(cases / "beam.r2t"), "-q"]) == 0
     assert main(["solve", str(cases / "beam.r2t")]) == 2
     assert "exists" in capsys.readouterr().err
+
+
+def test_settings_reach_the_worker(cases):
+    code, out, err = r2x("solve", str(cases / "beam.r2t"), "--stdout", "--units", "US",
+                         "--factors", "csa", "--initial", "-2000,0", "--increment", "0,-1.5")
+    assert code == 0, err
+    h = record.decode(out).header
+    assert (h["units"], h["factors"], h["initial"], h["increment"]) == (
+        "us", "csa", "-2000,0", "0,-1.5")
+    code, out, _ = r2x("solve", str(cases / "beam.r2t"), "--stdout")
+    assert "units" not in record.decode(out).header      # nothing given, nothing passed
 
 
 def test_health(cases):

@@ -30,7 +30,8 @@ the −2.5 kNm is a numerical artifact of Response's solution. The curvature is 
 ## `saved.r2t`
 
 Response's own **Save As** after applying the loads: `<sectloading MN="-1.000" MM="0.000"/>`.
-r2x 0.0.1 cannot solve this case yet: it expects a Moment–φ control chart.
+Solving `saved.r2t` reproduces these exports byte for byte, as does `--increment -1,0` on
+`input.r2t` (r2x under Wine 9.0, 2026-10-25).
 
 ## Capture
 

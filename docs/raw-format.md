@@ -32,6 +32,8 @@ r2x-raw 1                                    format name and version
 r2x-version: 0.0.1                           header: one "key: value" per line
 response-exe-sha256: bbf4bc59…
 …
+units: si
+…
 detail-stages: 56
                                              empty line: end of header
 section control/moment_ex 1635               section NAME LENGTH
@@ -62,12 +64,17 @@ end                                          end of record
 | `wine-version` | `wine-9.0 (Ubuntu 9.0~repack-4build3)` | output of `wine --version` |
 | `input-name` | `Newbeam.r2t` | input file name |
 | `input-sha256` | `036440c7…` | SHA-256 of the input file's bytes |
+| `units` | `si` | units in effect: `si`, `us` or `kgcm` |
+| `factors` | `0.65,0.85,0.90` | material factors in effect: concrete, steel, prestress |
+| `initial` | `-2000.00,0.00,0.00` | initial load in effect: N, M, V in the units in effect |
+| `increment` | `0.00,1.00,0.00` | load increment in effect: N, M, V |
 | `stage-count` | `60` | load stages in the solve, numbered 0 to `stage-count` − 1; 0 is the initial load |
 | `peak-stage` | `56` | the stage Response shows when the solve finishes |
 | `detail-stages` | `0-5,56` | stages with detail-view sections, as numbers and ranges |
 
-The settings in effect (units, material factors, initial load, load increment) will be added as
-header keys once r2x applies them through Response's dialogs.
+The four settings keys are read back from Response's Preferences and Define Loading dialogs
+after r2x has applied its options, as the dialogs show them: two decimals, so a load of 0.738
+kip-ft reads `0.74`. V is always 0, since an input with shear is out of scope.
 
 ## Sections
 
@@ -75,20 +82,24 @@ header keys once r2x applies them through Response's dialogs.
 |---|---|---|
 | `control/moment_ex` | `Control : Moment - \|e_x` | every stage, one point each |
 | `control/moment_phi` | `Control : Moment - \|f` | every stage, one point each |
+| `control/axial_ex` | `Control : Axial Load - \|e_x` | every stage, one point each |
 | `stage/N/longitudinal_strain` | `Longitudinal Strain` | stage N |
 | `stage/N/shrinkage_thermal_strain` | `Shrinkage & Thermal Strain` | stage N |
 | `stage/N/long_reinforcement_stress` | `Long. Reinforcement Stress` | stage N |
 | `stage/N/long_reinf_stress_at_crack` | `Long. Reinf Stress at Crack` | stage N |
 | `stage/N/longitudinal_concrete_stress` | `Longitudinal Concrete Stress` | stage N |
 
-The detail views are the five No Shear charts that have a data export. N is the stage number
-without leading zeros. Order: the two control charts, then each stage in `detail-stages`
-ascending, with its charts in the order of the table.
+Which control charts there are depends on the loading: `moment_ex` and `moment_phi` when the
+increment includes a moment; `axial_ex` alone for an axial-only increment, where Response shows
+the same chart in both control positions. The detail views are the five No Shear charts that
+have a data export. N is the stage number without leading zeros. Order: the control charts as
+Response places them (top first), then each stage in `detail-stages` ascending, with its charts
+in the order of the table.
 
 Each body is exactly what Response put on the clipboard (CF_TEXT) for Copy Chart Data: ASCII
 with CRLF line endings, Greek letters spelled as Response spells them (`|e_x` for εx, `|f` for φ).
-r2x checks each export's `Title :` line, and each stage's curvature against the Moment–φ curve,
-before it writes anything.
+r2x checks each export's `Title :` line, and matches each stage's strain profile to the control
+curves (εx, and curvature where there is a Moment–φ curve), before it writes anything.
 
 ## Guarantees
 

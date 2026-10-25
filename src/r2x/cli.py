@@ -25,6 +25,7 @@ from pathlib import Path, PureWindowsPath
 from r2x import __version__, progress
 from r2x.display import Display, Job
 from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE
+from r2x.settings import FACTORS, UNITS, Settings, parse_pair
 from r2x.stages import StageError, StageSpec, parse_stages
 
 DEFAULT_IMAGE = "r2x"
@@ -94,20 +95,21 @@ def overall_status(statuses: list[int]) -> int:
 
 
 # -- one input ----------------------------------------------------------------------------------
-def container_command(inp: Path, record: Path, stages: StageSpec, image: str) -> list[str]:
+def container_command(inp: Path, record: Path, stages: StageSpec, settings: Settings,
+                      image: str) -> list[str]:
     return docker_command() + [
         "run", "--rm", "--pull", "never", "--network", "none",
         "-v", f"{docker_path(inp)}:/in/{inp.name}:ro",
         "-v", f"{docker_path(record.parent)}:/out",
         image, "python", "-m", "r2x.worker", f"/in/{inp.name}", f"/out/{record.name}",
-        "--stage", str(stages),
+        "--stage", str(stages), *settings.args(),
     ]
 
 
-def run_container(inp: Path, record: Path, stages: StageSpec, image: str, display: Display,
-                  job: Job) -> tuple[int, str]:
+def run_container(inp: Path, record: Path, stages: StageSpec, settings: Settings, image: str,
+                  display: Display, job: Job) -> tuple[int, str]:
     """Solve one input in its own container; return its exit status and, if it failed, why."""
-    cmd = container_command(inp, record, stages, image)
+    cmd = container_command(inp, record, stages, settings, image)
     display.start(job)
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -138,8 +140,11 @@ def run_container(inp: Path, record: Path, stages: StageSpec, image: str, displa
 
 
 # -- commands -----------------------------------------------------------------------------------
-NOT_YET = {"units": "--units", "factors": "--factors", "initial": "--initial",
-           "increment": "--increment", "report": "--report"}
+NOT_YET = {"report": "--report"}
+
+
+def settings_from(a) -> Settings:
+    return Settings(a.units, a.factors, a.initial, a.increment)
 
 
 def check_solve_args(a) -> None:
@@ -179,8 +184,8 @@ def cmd_solve(a) -> int:
         jobs = [display.add(i.stem) for i in inputs]
 
         def solve(k: int) -> int:
-            status, reason = run_container(inputs[k], records[k], a.stage, a.image, display,
-                                           jobs[k])
+            status, reason = run_container(inputs[k], records[k], a.stage, settings_from(a),
+                                           a.image, display, jobs[k])
             display.finish(jobs[k], status, reason, str(records[k]))
             return status
 
@@ -196,7 +201,8 @@ def solve_to_stdout(inp: Path, a, live: bool) -> int:
         record = Path(tmp) / f"{inp.stem}{RECORD_SUFFIX}"
         with Display(sys.stderr, live, a.quiet) as display:
             job = display.add(inp.stem)
-            status, reason = run_container(inp, record, a.stage, a.image, display, job)
+            status, reason = run_container(inp, record, a.stage, settings_from(a), a.image,
+                                           display, job)
             display.finish(job, status, reason, "stdout")
         if status == SOLVED:
             # The binary buffer, so that Windows cannot rewrite the record's line endings.
@@ -231,8 +237,7 @@ r2x never edits the input file. Options override the input. Options you
 leave out keep the input's value, or Response's start-up default if the
 input has none.
 
-Not available yet: --units, --factors, --initial, --increment, --report,
-and solving without an input."""
+Not available yet: --report, and solving without an input."""
 
 SOLVE_EPILOG = """\
 Results (NAME is the input file name):
@@ -275,13 +280,10 @@ def stage_spec(text: str) -> StageSpec:
 
 
 def load_pair(text: str) -> tuple[float, float]:
-    parts = text.split(",")
     try:
-        if len(parts) != 2:
-            raise ValueError
-        return float(parts[0]), float(parts[1])
-    except ValueError:
-        raise argparse.ArgumentTypeError(f"{text!r}: expected N,M, e.g. -2000,0")
+        return parse_pair(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
 
 
 def increment_pair(text: str) -> tuple[float, float]:
@@ -332,17 +334,18 @@ def build_parser() -> argparse.ArgumentParser:
                         "Default: a new Quick Define section (Newbeam).")
 
     g = s.add_argument_group("Analysis")
-    g.add_argument("--units", choices=("si", "us", "kgcm"), type=str.lower,
+    g.add_argument("--units", choices=UNITS, type=str.lower,
                    help="Units for loads and results.\n"
                         "Default: input's, else si.\n"
                         "  si     kN    kN·m    mm   MPa\n"
                         "  us     kip   kip·ft  in   psi, ksi\n"
                         "  kgcm   ton   ton·m   cm   kg/cm2, t/cm2")
-    g.add_argument("--factors", choices=("none", "csa"), type=str.lower,
+    g.add_argument("--factors", choices=FACTORS, type=str.lower,
                    help="Material reduction factors.\n"
                         "Default: input's, else none.")
     g.add_argument("--initial", type=load_pair, metavar="N,M",
-                   help="Initial load. Default: input's, else 0,0.")
+                   help="Initial load, in the units in effect.\n"
+                        "Default: input's, else 0,0.")
     g.add_argument("--increment", type=increment_pair, metavar="N,M",
                    help="Load increment; only signs and ratio matter.\n"
                         "Default: input's, else 0,1.\n"

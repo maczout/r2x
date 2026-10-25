@@ -1,10 +1,10 @@
 # Command line
 
 **Status:** agreed 2026-10-25. Implemented: the raw record (`docs/raw-format.md`), `--stage`,
-`--out`, `--stdout`, `--overwrite`, `--parallel`, `--quiet` and the exit statuses. Not yet:
-`--units`, `--factors`, `--initial`, `--increment`, `--report`, and solving without an input;
-r2x accepts these options but stops with a usage error. `r2x solve --help` matches the text below
-plus two notes, and `tests/test_cli.py` keeps them in step.
+`--out`, `--stdout`, `--overwrite`, `--parallel`, `--quiet`, the exit statuses, and `--units`,
+`--factors`, `--initial` and `--increment` through Response's dialogs. Not yet: `--report`, and
+solving without an input; r2x accepts these but stops with a usage error. `r2x solve --help`
+matches the text below plus two notes, and `tests/test_cli.py` keeps them in step.
 
 A stage number past the last stage is a usage error (exit status 2), found once the solve has
 given the stage count. With several inputs, the exit status is the most serious outcome: 1, then
@@ -64,7 +64,8 @@ Analysis:
                           kgcm   ton   ton·m   cm   kg/cm2, t/cm2
   --factors {none,csa}  Material reduction factors.
                         Default: input's, else none.
-  --initial N,M         Initial load. Default: input's, else 0,0.
+  --initial N,M         Initial load, in the units in effect.
+                        Default: input's, else 0,0.
   --increment N,M       Load increment; only signs and ratio matter.
                         Default: input's, else 0,1.
                         N: tension positive. M: compression on top positive.
@@ -149,11 +150,14 @@ reference cases are in `tests/reference/`.
 - **Version.** The splash screen says 1.9.6 (beta); Help > About said 1.9.7. r2x identifies the
   program by `r2k.exe`'s SHA-256 rather than by either name.
 
-What this means for the implementation:
+How the implementation follows from this (Phase 3):
 
-- The control charts depend on the loading. r2x has to recognise the pair it gets (Moment–εx and
-  Moment–φ, or Axial Load–εx twice) instead of expecting one pair. Today it fails on an
-  axial-only increment.
-- Stage identification has to read units from the axis titles (curvature in mrad/m or
-  rad/10³ in) and use εx as a second key: the Longitudinal Strain export's value at mid-depth
-  equals the control chart's εx in every case so far. Today r2x fails on any input in US units.
+- Settings go through the Preferences page (dialog 320) and Define Loading (dialog 5), with
+  control IDs from `r2k.exe`'s own resources (`tools/dialogs.py`, output in
+  `docs/r2k-dialogs.txt`): units before loads, then every setting read back for the record
+  header. Shear in Define Loading stops the job before solving (exit status 3).
+- The control charts depend on the loading, so r2x reads their titles instead of expecting one
+  pair (Moment–εx and Moment–φ, or Axial Load–εx in both places).
+- Stage identification matches εx, the strain profile's value at y = 0, against the εx curve, and
+  the curvature against the Moment–φ curve when there is one, with units from the axis titles
+  (mrad/m with mm or cm, rad/10³ in with in). Both checks must agree.

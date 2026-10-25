@@ -1,4 +1,4 @@
-"""python -m r2x.worker INPUT RECORD [--stage STAGES]  — solve one input and write its raw record.
+"""python -m r2x.worker INPUT RECORD [options]  — solve one input and write its raw record.
 
 Needs Wine, Xvfb and mingw-w64 (see docs/development.md). Progress goes to stderr in the fixed
 form of r2x.progress. Exit status: 0 solved, 1 failed, 2 usage error, 3 out of scope.
@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 
 from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE, Event
+from r2x.settings import FACTORS, UNITS, Settings, parse_pair
 from r2x.stages import StageError, parse_stages
 from r2x.worker.runner import run_job
 from r2x.worker.session import OutOfScope, R2xError
@@ -30,6 +31,10 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--stage", default="peak", metavar="STAGES",
                    help="stages for the detail views: peak, all, or numbers and ranges "
                         "(default: peak)")
+    p.add_argument("--units", choices=UNITS, help="override the input's units")
+    p.add_argument("--factors", choices=FACTORS, help="override the input's material factors")
+    p.add_argument("--initial", metavar="N,M", help="override the initial load (units in effect)")
+    p.add_argument("--increment", metavar="N,M", help="override the load increment")
     p.add_argument("--response-dir", type=Path, default=os.environ.get("R2X_RESPONSE_DIR"),
                    help="Response-2000 program folder (default: $R2X_RESPONSE_DIR)")
     p.add_argument("--prefix", type=Path,
@@ -43,11 +48,17 @@ def main(argv: list[str] | None = None) -> int:
         stages = parse_stages(a.stage)
     except StageError as e:
         p.error(f"--stage: {e}")
+    try:
+        settings = Settings(a.units, a.factors,
+                            parse_pair(a.initial) if a.initial is not None else None,
+                            parse_pair(a.increment) if a.increment is not None else None)
+    except ValueError as e:
+        p.error(str(e))
 
     t0 = time.monotonic()
     try:
         run_job(a.input, a.record, a.response_dir, Path(a.prefix), a.display, stages=stages,
-                on_event=report)
+                settings=settings, on_event=report)
     except OutOfScope as e:
         report(Event("out-of-scope", str(e)))
         return OUT_OF_SCOPE

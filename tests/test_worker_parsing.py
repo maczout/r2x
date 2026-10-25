@@ -1,23 +1,35 @@
-"""Parsing, stage checks and Copy Chart Data mechanics, against the Newbeam reference exports
+"""Parsing, stage identification and Copy Chart Data mechanics, against the reference exports
 and a stand-in for the helper (no Wine needed)."""
 from pathlib import Path
 
 import pytest
 
-from r2x.worker.export import check_stage
-from r2x.worker.session import (CONTROL_CHARTS, NO_SHEAR_CHARTS, OutOfScope, R2xError, Session,
-                                export_points, export_title, identify_stage, strain_curvature)
+from r2x.worker.export import control_exports
+from r2x.worker.identify import StageKeys, axis_unit, strain_at_axis, strain_curvature
+from r2x.worker.session import (CONTROL_CHARTS, CONTROL_KEYS, NO_SHEAR_CHARTS, OutOfScope,
+                                R2xError, Session, export_points, export_title)
 
-REF = Path(__file__).parent / "reference" / "newbeam"
+REFS = Path(__file__).parent / "reference"
+REF = REFS / "newbeam"
 
 
 def read(rel):
     return (REF / rel).read_bytes()
 
 
+def case(name):
+    """(control exports by record key, peak stage number, Longitudinal Strain export at it)."""
+    d = REFS / name
+    controls = control_exports(*[f.read_bytes() for f in sorted((d / "control").glob("*.txt"))])
+    stage = next((d / "stages").iterdir())
+    return controls, int(stage.name), (stage / "longitudinal_strain.txt").read_bytes()
+
+
 def test_titles_match_chart_table():
-    assert export_title(read("control/moment_ex.txt")) == CONTROL_CHARTS[0].title
-    assert export_title(read("control/moment_phi.txt")) == CONTROL_CHARTS[1].title
+    assert CONTROL_KEYS[export_title(read("control/moment_ex.txt"))] == "moment_ex"
+    assert CONTROL_KEYS[export_title(read("control/moment_phi.txt"))] == "moment_phi"
+    axial = (REFS / "newbeam-axial-only/control/axial_ex.txt").read_bytes()
+    assert CONTROL_KEYS[export_title(axial)] == "axial_ex"
     for chart in NO_SHEAR_CHARTS:
         assert export_title(read(f"stages/056/{chart.key}.txt")) == chart.title
 
@@ -27,23 +39,58 @@ def test_control_curves_have_60_points():
     assert len(export_points(read("control/moment_phi.txt"))) == 60
 
 
-def test_peak_stage_is_56():
-    curve = export_points(read("control/moment_phi.txt"))
-    strain = read("stages/056/longitudinal_strain.txt")
-    assert strain_curvature(strain) == pytest.approx(40.389, abs=0.001)
-    check_stage(strain, curve, 56)
-    with pytest.raises(R2xError):
-        check_stage(strain, curve, 55)
-    assert identify_stage(strain, curve) == 56
+@pytest.mark.parametrize("name", ["newbeam", "newbeam-axial", "newbeam-axial-only", "newbeam-csa",
+                                  "newbeam-us"])
+def test_every_reference_stage_is_identified(name):
+    controls, stage, strain = case(name)
+    keys = StageKeys(controls)
+    assert keys.identify(strain) == stage
+    keys.check(strain, stage)
+    for other in (stage - 1, stage + 1):
+        if 0 <= other < keys.count:
+            with pytest.raises(R2xError):
+                keys.check(strain, other)
 
 
-def test_identify_stage_refuses_to_guess():
+def test_strain_features():
     strain = read("stages/056/longitudinal_strain.txt")
-    flat = [(40.389, m) for m in range(5)]           # e.g. axial load only: one curvature
-    with pytest.raises(R2xError, match="stages 0 to 4 all have curvature"):
-        identify_stage(strain, flat)
-    with pytest.raises(R2xError, match="not on the Moment-phi curve"):
-        identify_stage(strain, [(0.0, 0.0), (1.0, 5.0)])
+    assert axis_unit(strain, "X") == "mm/m" and axis_unit(strain, "Y") == "mm"
+    assert strain_at_axis(strain) == pytest.approx(7.7869, abs=1e-6)
+    assert strain_curvature(strain, "mrad/m") == pytest.approx(40.389, abs=0.001)
+    assert strain_curvature(strain, "rad/furlong") is None          # unknown unit: no check
+    us = (REFS / "newbeam-us/stages/056/longitudinal_strain.txt").read_bytes()
+    assert axis_unit(us, "X") == "ms" and axis_unit(us, "Y") == "in"
+    assert strain_at_axis(us) == pytest.approx(7.7869, abs=1e-6)  # strain has no units to change
+    assert strain_curvature(us, "rad/10^3inch") == pytest.approx(1.026, abs=0.001)
+
+
+def test_axial_only_has_one_control_chart_and_no_curvature():
+    controls, _, strain = case("newbeam-axial-only")
+    assert list(controls) == ["axial_ex"]
+    keys = StageKeys(controls)
+    assert keys.phi is None and keys.count == 35 and keys.describe(strain)[1] is None
+
+
+def test_identify_refuses_to_guess():
+    controls, _, strain = case("newbeam")
+    keys = StageKeys(controls)
+    keys.ex = [keys.ex[56]] * 3                     # three stages that look alike
+    keys.phi = [keys.phi[56]] * 3
+    with pytest.raises(R2xError, match="stages 0, 1, 2 all match"):
+        keys.identify(strain)
+    keys.ex = [0.0, 1.0]
+    keys.phi = [0.0, 1.0]
+    with pytest.raises(R2xError, match="not on the control curves"):
+        keys.identify(strain)
+
+
+def test_control_exports():
+    ex, phi = read("control/moment_ex.txt"), read("control/moment_phi.txt")
+    assert list(control_exports(ex, phi)) == ["moment_ex", "moment_phi"]
+    axial = (REFS / "newbeam-axial-only/control/axial_ex.txt").read_bytes()
+    assert control_exports(axial, axial) == {"axial_ex": axial}
+    with pytest.raises(R2xError, match="different data"):
+        control_exports(axial, axial.replace(b"0.000", b"0.001", 1))
 
 
 # -- Copy Chart Data through a stand-in helper ---------------------------------------------------
@@ -131,9 +178,22 @@ def test_wrong_title_is_an_error_not_a_retry():
 def test_shear_control_chart_is_out_of_scope():
     shear = read("control/moment_ex.txt").replace(b"Control : Moment - |e_x",
                                                   b"Control : Shear - |g_x_y")
-    s, _ = session_with({"moment_ex": shear, "longitudinal_strain": shear})
+    s, _ = session_with({"control_top": shear, "longitudinal_strain": shear})
     with pytest.raises(OutOfScope, match="loading includes shear"):
         s.copy_chart(CONTROL_CHARTS[0], timeout=0.2)
     with pytest.raises(R2xError) as e:            # a detail view with that title is just wrong
         s.copy_chart(NO_SHEAR_CHARTS[0], timeout=0.2)
+    assert not isinstance(e.value, OutOfScope)
+
+
+def test_control_positions_take_any_known_control_chart():
+    axial = (REFS / "newbeam-axial-only/control/axial_ex.txt").read_bytes()
+    odd = axial.replace(b"Control : Axial Load - |e_x", b"Control : Torsion - |q")
+    s, _ = session_with({"control_top": read("control/moment_phi.txt"), "control_bottom": axial,
+                         "longitudinal_strain": odd})
+    assert s.copy_chart(CONTROL_CHARTS[0], timeout=0.2) == read("control/moment_phi.txt")
+    assert s.copy_chart(CONTROL_CHARTS[1], timeout=0.2) == axial
+    s, _ = session_with({"control_top": odd})
+    with pytest.raises(R2xError, match="unknown control chart 'Control : Torsion - |q'") as e:
+        s.copy_chart(CONTROL_CHARTS[0], timeout=0.2)
     assert not isinstance(e.value, OutOfScope)

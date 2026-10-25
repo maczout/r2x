@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from r2x import record
+from r2x.settings import Settings
 from r2x.stages import ALL, PEAK, parse_stages
 from r2x.worker.runner import run_job
 from r2x.worker.session import OutOfScope
@@ -69,10 +70,37 @@ def test_shear_input_is_out_of_scope(tmp_path):
     assert list(tmp_path.iterdir()) == []
 
 
-@pytest.mark.parametrize("case", ["newbeam-axial", "newbeam-csa"])
+@pytest.mark.parametrize("case", ["newbeam-axial", "newbeam-axial-only", "newbeam-csa"])
 def test_saved_settings_match_references(tmp_path, case):
     """Response's own Save As stores the case's settings (loads, factors) in saved.r2t, and
     solving that file gives the hand-captured exports. See tests/reference/<case>/README.md."""
     out = tmp_path / f"{case}.r2x.txt"
     run_job(REF / case / "saved.r2t", out, Path(RESPONSE), PREFIX, stages=PEAK)
+    assert record.read(out).sections == reference_sections(case)
+
+
+FLAGS = [
+    ("newbeam-us", Settings(units="us"),
+     {"units": "us", "factors": "1.00,1.00,1.00", "initial": "0.00,0.00,0.00",
+      "increment": "0.00,0.74,0.00"}),
+    ("newbeam-csa", Settings(factors="csa"),
+     {"units": "si", "factors": "0.65,0.85,0.90", "initial": "0.00,0.00,0.00",
+      "increment": "0.00,1.00,0.00"}),
+    ("newbeam-axial", Settings(initial=(-2000, 0)),
+     {"units": "si", "factors": "1.00,1.00,1.00", "initial": "-2000.00,0.00,0.00",
+      "increment": "0.00,1.00,0.00"}),
+    ("newbeam-axial-only", Settings(increment=(-1, 0)),
+     {"units": "si", "factors": "1.00,1.00,1.00", "initial": "0.00,0.00,0.00",
+      "increment": "-1.00,0.00,0.00"}),
+]
+
+
+@pytest.mark.parametrize("case, settings, effective", FLAGS, ids=[f[0] for f in FLAGS])
+def test_settings_match_references(tmp_path, case, settings, effective):
+    """Each option, applied to Newbeam through Response's dialogs, gives the case captured by
+    hand with the same setting (tests/reference/<case>/README.md)."""
+    out = tmp_path / f"{case}.r2x.txt"
+    header = run_job(REF / "newbeam" / "input.r2t", out, Path(RESPONSE), PREFIX,
+                     settings=settings)
+    assert {k: header[k] for k in effective} == effective
     assert record.read(out).sections == reference_sections(case)

@@ -16,7 +16,7 @@ SI Newbeam. Units in the exports: moment kip-ft, depth in, strain ms (millistrai
 numbers as mm/m), curvature rad/10³ in, stress ksi (steel) and psi (concrete).
 
 The stage was identified by εx at mid-depth (7.7869 ms, as in SI) and by curvature
-(1.026 rad/10³ in). The curvature check in r2x 0.0.1 assumes SI units and does not find it.
+(1.026 rad/10³ in), with the units read from the exports' axis titles.
 
 Status bar at that stage: N : −0.0 kips, M : 248.4 kip-ft (336.8 kNm), V : 0.0 kips.
 

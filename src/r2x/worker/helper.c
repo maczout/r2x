@@ -15,6 +15,12 @@
  *   clipseq                  clipboard sequence number
  *   clipclear                empty the clipboard
  *   clip                     CF_TEXT contents, hex-encoded
+ *   find <hwnd> <id>         first descendant of a window with this control ID (dialogs)
+ *   gettext <hwnd>           a control's text (WM_GETTEXT), hex-encoded
+ *   settext <hwnd> <hex>     set a control's text (WM_SETTEXT); text hex-encoded, "-" if empty
+ *   click <hwnd>             post BM_CLICK to a button
+ *   getcheck <hwnd>          a check box or radio button's state (0 or 1)
+ *   alive <hwnd>             "ok 1" if the window exists and is visible, else "ok 0"
  *   quit
  */
 #include <windows.h>
@@ -77,6 +83,56 @@ static BOOL CALLBACK dialogs_cb(HWND h, LPARAM lp) {
 }
 
 static HWND parse_hwnd(const char *s) { return (HWND)(ULONG_PTR)strtoul(s ? s : "0", NULL, 16); }
+
+static int g_find_id;
+static HWND g_found;
+
+static BOOL CALLBACK find_cb(HWND h, LPARAM lp) {
+    (void)lp;
+    if (GetDlgCtrlID(h) == g_find_id) { g_found = h; return FALSE; }
+    return TRUE;
+}
+
+/* Messages to another process's controls go through SendMessageTimeout so a busy or hung
+ * Response cannot block the helper. */
+#define SEND_TIMEOUT_MS 5000
+
+static int hexval(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+static void do_gettext(HWND h) {
+    char buf[1024];
+    DWORD_PTR n = 0;
+    if (!IsWindow(h)) { printf("err no window\n"); return; }
+    if (!SendMessageTimeoutA(h, WM_GETTEXT, sizeof buf, (LPARAM)buf, SMTO_ABORTIFHUNG,
+                             SEND_TIMEOUT_MS, &n)) { printf("err gettext\n"); return; }
+    buf[n < sizeof buf ? n : sizeof buf - 1] = 0;
+    printf("ok ");
+    for (const unsigned char *p = (const unsigned char *)buf; *p; p++) printf("%02x", *p);
+    printf("\n");
+}
+
+static void do_settext(HWND h, const char *hex) {
+    char buf[512];
+    size_t n = 0;
+    DWORD_PTR r;
+    if (!IsWindow(h)) { printf("err no window\n"); return; }
+    if (strcmp(hex, "-")) {
+        for (; hex[0] && hex[1] && n < sizeof buf - 1; hex += 2) {
+            int hi = hexval(hex[0]), lo = hexval(hex[1]);
+            if (hi < 0 || lo < 0) { printf("err bad hex\n"); return; }
+            buf[n++] = (char)(hi * 16 + lo);
+        }
+    }
+    buf[n] = 0;
+    if (!SendMessageTimeoutA(h, WM_SETTEXT, 0, (LPARAM)buf, SMTO_ABORTIFHUNG, SEND_TIMEOUT_MS, &r))
+        printf("err settext\n");
+    else printf("ok\n");
+}
 
 /* Response opens the clipboard, empties it (which already bumps the sequence number), sets the
  * text and closes it; while it holds the clipboard, OpenClipboard fails. Retry for up to ~1 s. */
@@ -163,6 +219,29 @@ int main(void) {
             else printf("err open clipboard\n");
         } else if (!strcmp(cmd, "clip")) {
             do_clip();
+        } else if (!strcmp(cmd, "find") && a1 && a2) {
+            g_find_id = atoi(a2);
+            g_found = NULL;
+            EnumChildWindows(parse_hwnd(a1), find_cb, 0);
+            if (g_found) printf("ok %lx\n", (unsigned long)(ULONG_PTR)g_found);
+            else printf("err no control %s\n", a2);
+        } else if (!strcmp(cmd, "gettext") && a1) {
+            do_gettext(parse_hwnd(a1));
+        } else if (!strcmp(cmd, "settext") && a1 && a2) {
+            do_settext(parse_hwnd(a1), a2);
+        } else if (!strcmp(cmd, "click") && a1) {
+            HWND t = parse_hwnd(a1);
+            printf(IsWindow(t) && PostMessageA(t, BM_CLICK, 0, 0) ? "ok\n" : "err click\n");
+        } else if (!strcmp(cmd, "getcheck") && a1) {
+            DWORD_PTR r = 0;
+            HWND t = parse_hwnd(a1);
+            if (IsWindow(t) && SendMessageTimeoutA(t, BM_GETCHECK, 0, 0, SMTO_ABORTIFHUNG,
+                                                   SEND_TIMEOUT_MS, &r))
+                printf("ok %d\n", r == BST_CHECKED ? 1 : 0);
+            else printf("err getcheck\n");
+        } else if (!strcmp(cmd, "alive") && a1) {
+            HWND t = parse_hwnd(a1);
+            printf("ok %d\n", IsWindow(t) && IsWindowVisible(t) ? 1 : 0);
         } else {
             printf("err unknown command\n");
         }

@@ -15,6 +15,7 @@ from typing import Callable
 # Response-2000 main-menu command IDs (RT_MENU resource of r2k.exe 1.9.7).
 CMD_SECTIONAL_RESPONSE = 5092
 VK_PRIOR, VK_NEXT, VK_DOWN, VK_RETURN, VK_ESCAPE = 0x21, 0x22, 0x28, 0x0D, 0x1B
+IDOK, IDCANCEL = 1, 2
 
 # Position of "Copy Chart Data" in every chart's context menu (after "Copy Chart Picture").
 COPY_CHART_DATA_DOWNS = 2
@@ -23,16 +24,24 @@ COPY_CHART_DATA_DOWNS = 2
 @dataclass(frozen=True)
 class Chart:
     """A chart with a data export: where it sits in Response and the title its export carries."""
-    key: str            # output file stem
-    title: str          # "Title :" line of the export
+    key: str            # record section name (detail views) or position (control charts)
+    title: str | None   # "Title :" line of the export; None: any title in CONTROL_KEYS
     grid: tuple | None  # (row, col) in the nine-graph view, or None for a control chart
     control: int | None = None  # 0 = top control chart, 1 = bottom
 
 
+# Which control charts Response shows depends on the loading, so the two positions are copied
+# and their titles say what they are.
 CONTROL_CHARTS = (
-    Chart("moment_ex", "Control : Moment - |e_x", None, 0),
-    Chart("moment_phi", "Control : Moment - |f", None, 1),
+    Chart("control_top", None, None, 0),
+    Chart("control_bottom", None, None, 1),
 )
+# Control-chart titles r2x knows, and the record section each becomes.
+CONTROL_KEYS = {
+    "Control : Moment - |e_x": "moment_ex",      # moment increment, top
+    "Control : Moment - |f": "moment_phi",       # moment increment, bottom
+    "Control : Axial Load - |e_x": "axial_ex",   # axial-only increment, top and bottom
+}
 NO_SHEAR_CHARTS = (
     Chart("longitudinal_strain", "Longitudinal Strain", (1, 2)),
     Chart("shrinkage_thermal_strain", "Shrinkage & Thermal Strain", (1, 3)),
@@ -148,45 +157,6 @@ def export_points(data: bytes) -> list[tuple[float, float]]:
     return pts
 
 
-def strain_curvature(data: bytes) -> float:
-    """Curvature (mrad/m) of the displayed stage, from the Longitudinal Strain export.
-
-    The export is a closed outline: (0, y_top), (e_top, y_top), ..., (e_bot, y_bot), (0, y_bot),
-    strains in mm/m and depths in mm.
-    """
-    pts = export_points(data)
-    if len(pts) < 4:
-        raise R2xError("Longitudinal Strain export has too few points")
-    (e_top, y_top), (e_bot, y_bot) = pts[1], pts[-2]
-    return (e_bot - e_top) / (y_top - y_bot) * 1000.0
-
-
-# Curvature check tolerance (mrad/m): the control curve prints 3 decimals and the strain export
-# 4 decimals over the section depth, so a correct match is within about 0.001.
-CURVATURE_TOL = 0.002
-
-
-def curvature_matches(phi: float, expected: float) -> bool:
-    return abs(phi - expected) <= CURVATURE_TOL + 1e-4 * abs(expected)
-
-
-def identify_stage(strain: bytes, curve: list[tuple[float, float]]) -> int:
-    """The stage whose Moment-phi point has the curvature of this Longitudinal Strain export.
-
-    Raises unless exactly one stage matches: Response shows no stage number, so a stage that
-    cannot be told apart from its neighbours is an error, not a guess.
-    """
-    phi = strain_curvature(strain)
-    matches = [i for i, (c, _) in enumerate(curve) if curvature_matches(phi, c)]
-    if len(matches) == 1:
-        return matches[0]
-    if not matches:
-        raise R2xError(f"the stage on screen (curvature {phi:.4f} mrad/m) is not on the "
-                       "Moment-phi curve")
-    raise R2xError(f"cannot tell which stage is on screen: stages {matches[0]} to {matches[-1]} "
-                   f"all have curvature {phi:.3f} mrad/m")
-
-
 class Session:
     """A solved or solvable Response-2000 window, reached through a Helper."""
 
@@ -213,10 +183,7 @@ class Session:
         """Raise if Response is showing a message box or other dialog."""
         boxes = self.h.windows("dialogs")
         if boxes:
-            box = boxes[0]
-            texts = [w.text for w in self.h.windows(f"kids {box.hwnd}")
-                     if w.cls == "Static" and w.text.strip()]
-            raise R2xError(f"Response shows a dialog {box.text!r}: {' / '.join(texts)}")
+            raise R2xError(self.describe_dialog(boxes[0].hwnd, boxes[0].text))
 
     def find_charts(self) -> dict[str, str]:
         """Map chart key -> window handle for the solved No Shear view."""
@@ -256,10 +223,14 @@ class Session:
                     raise R2xError(f"Copy Chart Data of {chart.key} failed {attempts} times: {e}")
                 self.note(f"Copy Chart Data of {chart.key} got no reply ({e}); trying again")
         title = export_title(data)
-        if title != chart.title:
+        if chart.control is not None:
+            if title in CONTROL_KEYS:
+                return data
             for start, why in OUT_OF_SCOPE_TITLES.items():
-                if chart.control is not None and title and title.startswith(start):
+                if title and title.startswith(start):
                     raise OutOfScope(f"{why} (Response's control chart is {title!r})")
+            raise R2xError(f"{chart.key}: unknown control chart {title!r}")
+        if title != chart.title:
             raise R2xError(f"{chart.key}: export title {title!r}, expected {chart.title!r}")
         return data
 
@@ -288,11 +259,12 @@ class Session:
 
     # -- solving ------------------------------------------------------------------------------
     def solve(self, quiet: float = 1.0, timeout: float = 300) -> tuple[bytes, bytes]:
-        """Solve -> Sectional Response; return the final control curve exports.
+        """Solve -> Sectional Response; return the final exports of the top and bottom control
+        charts.
 
         Under Wine there is no readable "finished" flag (the menu state lives in Response's
-        process), so the solve counts as finished when the Moment-phi curve has not changed for
-        `quiet` seconds. Response adds points about every 0.2 s while solving.
+        process), so the solve counts as finished when the bottom control curve has not changed
+        for `quiet` seconds. Response adds points about every 0.2 s while solving.
         """
         self.h.ask(f"cmd {CMD_SECTIONAL_RESPONSE}")
         t0 = time.monotonic()
@@ -318,8 +290,56 @@ class Session:
             if now - t0 > timeout:
                 raise R2xError(f"solve did not settle within {timeout:.0f} s")
             time.sleep(0.05)
-        moment_ex = self.copy_chart(CONTROL_CHARTS[0])
-        return moment_ex, last
+        top = self.copy_chart(CONTROL_CHARTS[0])
+        return top, last
+
+    # -- dialogs ------------------------------------------------------------------------------
+    def describe_dialog(self, hwnd: str, title: str) -> str:
+        texts = [w.text for w in self.h.windows(f"kids {hwnd}")
+                 if w.cls == "Static" and w.text.strip()]
+        return f"Response shows a dialog {title!r}: {' / '.join(texts)}"
+
+    def open_dialog(self, command: int, title: str, timeout: float = 10) -> str:
+        """Run a main-menu command that opens a dialog; return the dialog's window handle."""
+        self.check_no_dialog()
+        self.h.ask(f"cmd {command}")
+        def opened():
+            for w in self.h.windows("dialogs"):
+                if w.text == title:
+                    return w.hwnd
+            return None
+        return wait_until(opened, timeout, f"the {title!r} dialog", 0.02)
+
+    def control(self, dialog: str, control_id: int) -> str:
+        return self.h.ask(f"find {dialog} {control_id}")
+
+    def get_text(self, dialog: str, control_id: int) -> str:
+        """A control's text, without the padding Response puts around numbers."""
+        reply = self.h.ask(f"gettext {self.control(dialog, control_id)}")
+        return bytes.fromhex(reply).decode("latin-1").strip()
+
+    def set_text(self, dialog: str, control_id: int, text: str):
+        encoded = text.encode("latin-1").hex() or "-"
+        self.h.ask(f"settext {self.control(dialog, control_id)} {encoded}")
+
+    def is_checked(self, dialog: str, control_id: int) -> bool:
+        return self.h.ask(f"getcheck {self.control(dialog, control_id)}") == "1"
+
+    def click(self, dialog: str, control_id: int):
+        """Post a click; it takes effect after messages already posted, so wait for its result."""
+        self.h.ask(f"click {self.control(dialog, control_id)}")
+
+    def close_dialog(self, dialog: str, ok: bool, timeout: float = 10):
+        """Press OK (or Cancel) and wait for the dialog to close. A message box that Response opens
+        instead (rejecting a value, say) is an error that quotes it."""
+        self.h.ask(f"cmd {IDOK if ok else IDCANCEL} {dialog}")
+        def closed():
+            others = [w for w in self.h.windows("dialogs") if w.hwnd != dialog]
+            if others:
+                raise R2xError(self.describe_dialog(others[0].hwnd, others[0].text))
+            return self.h.ask(f"alive {dialog}") == "0"
+        wait_until(closed, timeout, "the dialog to close", 0.02)
+        self.check_no_dialog()
 
     # -- load stages --------------------------------------------------------------------------
     def press(self, vk: int, times: int = 1):

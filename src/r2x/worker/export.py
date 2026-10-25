@@ -8,9 +8,9 @@ from typing import Callable
 from r2x.progress import Event
 from r2x.record import control_section, stage_section
 from r2x.stages import StageSpec
-from r2x.worker.session import (CONTROL_CHARTS, NO_SHEAR_CHARTS, VK_NEXT, VK_PRIOR, R2xError,
-                                Session, curvature_matches, export_points, identify_stage,
-                                strain_curvature, wait_until)
+from r2x.worker.identify import StageKeys
+from r2x.worker.session import (CONTROL_KEYS, NO_SHEAR_CHARTS, VK_NEXT, VK_PRIOR, R2xError,
+                                Session, export_title, wait_until)
 
 STRAIN = NO_SHEAR_CHARTS[0]
 assert STRAIN.key == "longitudinal_strain"
@@ -24,12 +24,20 @@ class Export:
     sections: list[tuple[str, bytes]] = field(default_factory=list)  # in record order
 
 
-def check_stage(strain: bytes, curve: list[tuple[float, float]], i: int):
-    """Raise unless the Longitudinal Strain export belongs to stage i of the Moment-phi curve."""
-    phi, expected = strain_curvature(strain), curve[i][0]
-    if not curvature_matches(phi, expected):
-        raise R2xError(f"stage {i}: strain profile gives curvature {phi:.4f} mrad/m, "
-                       f"Moment-phi curve has {expected:.3f}")
+def control_exports(*exports: bytes) -> dict[str, bytes]:
+    """Control-chart exports by record section name, in screen order (top first).
+
+    With an axial-only increment both control charts are the same chart; it is kept once.
+    """
+    out: dict[str, bytes] = {}
+    for data in exports:
+        key = CONTROL_KEYS[export_title(data)]
+        if key in out:
+            if out[key] != data:
+                raise R2xError(f"both control charts are {key}, with different data")
+            continue
+        out[key] = data
+    return out
 
 
 def export(session: Session, spec: StageSpec,
@@ -39,19 +47,16 @@ def export(session: Session, spec: StageSpec,
     Raises StageError (from spec.resolve) if spec names a stage past the last one.
     """
     on_event(Event("solving"))
-    moment_ex, moment_phi = session.solve()
-    curve = export_points(moment_phi)
-    n = len(curve)
-    if len(export_points(moment_ex)) != n:
-        raise R2xError(f"control curves disagree: {len(export_points(moment_ex))} vs {n} points")
+    controls = control_exports(*session.solve())
+    keys = StageKeys(controls)
+    n = keys.count
     strain = session.copy_chart(STRAIN)
-    peak = identify_stage(strain, curve)
+    peak = keys.identify(strain)
     on_event(Event("solved", count=n, stage=peak))
     targets = spec.resolve(n, peak)
 
     result = Export(n, peak, targets)
-    result.sections += [(control_section(c.key), data)
-                        for c, data in zip(CONTROL_CHARTS, (moment_ex, moment_phi))]
+    result.sections += [(control_section(key), data) for key, data in controls.items()]
 
     def export_stage(i: int, strain: bytes):
         result.sections.append((stage_section(i, STRAIN.key), strain))
@@ -61,12 +66,12 @@ def export(session: Session, spec: StageSpec,
 
     # Response opens on the peak stage and shows no stage number. Stages at or above the peak are
     # reached by paging up from it. For any stage below, page down until Response stops at
-    # stage 0, then up. Every step is checked against the Moment-phi curve.
+    # stage 0, then up. Every step is checked against the control curves.
     if targets[0] >= peak:
         at = peak
     else:
         session.press(VK_NEXT, times=n)
-        strain = wait_until(lambda: _strain_if_stage(session, curve, 0), 30, "load stage 0", 0.05)
+        strain = wait_until(lambda: _strain_if_stage(session, keys, 0), 30, "load stage 0", 0.05)
         at = 0
     if at in targets:
         export_stage(at, strain)
@@ -74,7 +79,7 @@ def export(session: Session, spec: StageSpec,
         previous = strain
         session.press(VK_PRIOR)
         strain = wait_until(lambda: _changed(session, previous), 10, f"load stage {i}", 0.005)
-        check_stage(strain, curve, i)
+        keys.check(strain, i)
         if i in targets:
             export_stage(i, strain)
 
@@ -82,17 +87,13 @@ def export(session: Session, spec: StageSpec,
         # One more page up must not move past the last stage.
         session.press(VK_PRIOR)
         if session.copy_chart(STRAIN) != strain:
-            raise R2xError(f"Response has more than the {n} stages on its Moment-phi curve")
+            raise R2xError(f"Response has more than the {n} stages on its control curves")
     return result
 
 
-def _strain_if_stage(session: Session, curve, i: int) -> bytes | None:
+def _strain_if_stage(session: Session, keys: StageKeys, i: int) -> bytes | None:
     data = session.copy_chart(STRAIN)
-    try:
-        check_stage(data, curve, i)
-    except R2xError:
-        return None
-    return data
+    return data if keys.matches(data, i) else None
 
 
 def _changed(session: Session, previous: bytes) -> bytes | None:

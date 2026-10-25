@@ -53,6 +53,7 @@ py -m pip install https://github.com/maczout/r2x/archive/main.zip
 r2x solve .\Newbeam.r2t                    # one or more files, or a glob
 r2x solve .\Newbeam.r2t --stage peak,0-5   # detail views at these stages (default: peak)
 r2x solve .\cases\*.r2t --out .\results --parallel 2
+r2x solve .\col.rsp --units si --initial -2000,0 --increment 0,1
 r2x solve .\Newbeam.r2t --stdout | py parse.py   # the record on stdout, no files
 r2x health                                 # the image's r2x, Wine and Response-2000 versions
 ```
@@ -60,8 +61,9 @@ r2x health                                 # the image's r2x, Wine and Response-
 Results go next to each input unless `--out` is given; an existing record is only replaced with
 `--overwrite`. Progress goes to stderr, with a status line when stderr is a terminal; `-q` shows
 errors only. Exit status: 0 solved, 1 failed, 2 usage error, 3 out of scope (with several inputs,
-the most serious of these). Not available yet: `--units`, `--factors`, `--initial`,
-`--increment`, `--report`, and solving without an input. On Linux `r2x` calls `docker` directly;
+the most serious of these). `--units`, `--factors`, `--initial` and `--increment` override the
+input's settings through Response's own dialogs; the settings in effect are in the record header.
+Not available yet: `--report`, and solving without an input. On Linux `r2x` calls `docker` directly;
 `R2X_IMAGE`, `R2X_DOCKER` and `R2X_WSL_DISTRO` override the defaults.
 
 ## Output

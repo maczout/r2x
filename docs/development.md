@@ -37,11 +37,18 @@ per input as each container has, so `--parallel` works too. `tests/test_cli_wine
   **Copy Chart Data** by right-clicking a chart and choosing the second menu item. Every export's
   `Title :` line is checked against the expected chart. A copy that gets no reply (about one in
   several thousand under Wine) is dismissed and tried again, up to three times.
-- `export.py` identifies the stage on screen after the solve, the peak, by matching the
-  curvature of its Longitudinal Strain export to the Moment–φ curve, and stops rather than guess
-  if several stages match. `--stage peak` (the default) needs no paging. Stages above the peak
-  are reached by paging up from it; for any stage below, it pages down until Response stops at
-  stage 0, then up. Every step is checked the same way.
+- `dialogs.py` applies `--units`, `--factors`, `--initial` and `--increment` through Response's
+  Preferences and Define Loading dialogs (menu commands 321 and 152), reads the settings in
+  effect back for the record header, and stops before solving if the loading includes shear.
+  Control IDs come from `r2k.exe`'s RT_DIALOG resources: `python tools/dialogs.py
+  Response/r2k.exe` (needs `pefile`) lists them; the output is in `docs/r2k-dialogs.txt`.
+- `identify.py` tells which stage a Longitudinal Strain export belongs to: εx (the profile's
+  strain at y = 0) against the control chart's εx curve, and curvature against the Moment–φ
+  curve when there is one, with units from the axis titles. `export.py` uses it to identify the
+  stage on screen after the solve, the peak, and stops rather than guess if several stages
+  match. `--stage peak` (the default) needs no paging. Stages above the peak are reached by
+  paging up from it; for any stage below, it pages down until Response stops at stage 0, then
+  up. Every step is checked the same way.
 - `runner.py` writes the result as one raw record (`docs/raw-format.md`; reader and writer in
   `r2x/record.py`), under a temporary name until it is complete.
 - The worker reports progress on stderr in the fixed form of `r2x/progress.py`, which the command
@@ -49,8 +56,13 @@ per input as each container has, so `--parallel` works too. `tests/test_cli_wine
   stage), 3 out of scope.
 
 Known heuristic: Wine gives no readable "solve finished" signal, so the solve counts as finished
-once the Moment–φ curve has not changed for 1 s (Response extends it about every 0.2 s while
-solving). Background in `docs/wine-spike.md`.
+once the bottom control curve has not changed for 1 s (Response extends it about every 0.2 s
+while solving). Background in `docs/wine-spike.md`.
+
+The Wine prefix has `HKCU\Software\Wine\X11 Driver` `Managed=N` (the runner sets it if it is
+missing; the image sets it at build time). Xvfb has no window manager, and with managed windows
+Wine waits 2 s for one every time a dialog closes; unmanaged windows skip the wait. The exports
+are the same either way (the Wine tests pass with both).
 
 ## Container image
 
