@@ -1,6 +1,14 @@
 # Command line
 
-**Status:** agreed 2026-10-25, not yet implemented. The README describes what r2x does today.
+**Status:** agreed 2026-10-25. Implemented: the raw record (`docs/raw-format.md`), `--stage`,
+`--out`, `--stdout`, `--overwrite`, `--parallel`, `--quiet` and the exit statuses. Not yet:
+`--units`, `--factors`, `--initial`, `--increment`, `--report`, and solving without an input;
+r2x accepts these options but stops with a usage error. `r2x solve --help` matches the text below
+plus two notes, and `tests/test_cli.py` keeps them in step.
+
+A stage number past the last stage is a usage error (exit status 2), found once the solve has
+given the stage count. With several inputs, the exit status is the most serious outcome: 1, then
+2, then 3.
 
 ## Decisions
 

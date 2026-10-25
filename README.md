@@ -11,12 +11,8 @@ Input is any file Response-2000 opens (`.r2t`, `.rsp`).
 Tested with Response-2000 1.9.7. Early development.
 
 ```
-PS> r2x solve .\Newbeam.r2t
-[Newbeam] solved: 60 load stages
-[Newbeam] exported stage 10/60
-...
-[Newbeam] exported stage 60/60
-[Newbeam] done in 9.1 s -> Newbeam_r2x
+PS> r2x solve .\Newbeam.r2t                # writes .\Newbeam.r2x.txt: the peak stage
+PS> r2x solve .\Newbeam.r2t --stage all    # every load stage
 ```
 
 ## How it works
@@ -25,11 +21,11 @@ PS> r2x solve .\Newbeam.r2t
 r2x CLI (Windows)  ──docker run──▶  container (in WSL): Xvfb + Wine + Response-2000
 ```
 
-`r2x solve` runs the container once per input file, with the input mounted read-only and the result
-folder written straight to disk. Inside, Response opens the input, runs **Solve → Sectional
-Response**, steps through every load stage, and each chart's **Copy Chart Data** is read from the
-clipboard of a virtual display. Every container has its own display and Wine prefix, so several
-can run at once (`-j`).
+`r2x solve` runs the container once per input file, with the input mounted read-only and the
+record written straight to disk. Inside, Response opens the input and runs **Solve → Sectional
+Response**; the control charts and the detail views of the selected load stages are then read
+through **Copy Chart Data** from the clipboard of a virtual display. Every container has its own
+display and Wine prefix, so several can run at once (`--parallel`).
 
 ## Setup (Windows)
 
@@ -50,18 +46,23 @@ py -m pip install https://github.com/maczout/r2x/archive/main.zip
 
 ## Usage
 
-The next version of the command line is specified in `docs/cli.md`; this section describes the
-current one.
+`r2x solve --help` has the details; the full interface, with the decisions behind it, is in
+`docs/cli.md`.
 
 ```powershell
-r2x solve .\Newbeam.r2t                  # one or more files, or a glob
-r2x solve .\cases\*.r2t --out .\results -j 2
-r2x health                               # the image's r2x, Wine and Response-2000 versions
+r2x solve .\Newbeam.r2t                    # one or more files, or a glob
+r2x solve .\Newbeam.r2t --stage peak,0-5   # detail views at these stages (default: peak)
+r2x solve .\cases\*.r2t --out .\results --parallel 2
+r2x solve .\Newbeam.r2t --stdout | py parse.py   # the record on stdout, no files
+r2x health                                 # the image's r2x, Wine and Response-2000 versions
 ```
 
-Results go next to each input unless `--out` is given; an existing result folder is only replaced
-with `--force`. The exit code is non-zero if any input failed. On Linux `r2x` calls `docker`
-directly; `R2X_IMAGE`, `R2X_DOCKER` and `R2X_WSL_DISTRO` override the defaults.
+Results go next to each input unless `--out` is given; an existing record is only replaced with
+`--overwrite`. Progress goes to stderr, with a status line when stderr is a terminal; `-q` shows
+errors only. Exit status: 0 solved, 1 failed, 2 usage error, 3 out of scope (with several inputs,
+the most serious of these). Not available yet: `--units`, `--factors`, `--initial`,
+`--increment`, `--report`, and solving without an input. On Linux `r2x` calls `docker` directly;
+`R2X_IMAGE`, `R2X_DOCKER` and `R2X_WSL_DISTRO` override the defaults.
 
 ## Output
 

@@ -23,6 +23,11 @@ R2X_RESPONSE_DIR=Response pytest        # includes the end-to-end Newbeam tests
 The first run creates a Wine prefix in `~/.cache/r2x/prefix` and builds the helper there.
 Each job runs Response from a fresh temporary copy of its program folder.
 
+The command line can be tested without Docker: `tests/fake_docker.py` stands in for it
+(`R2X_DOCKER="python tests/fake_docker.py"`). By default it imitates the worker; with
+`FAKE_DOCKER_MODE=wine` it runs the real worker on the host, with its own copy of the Wine prefix
+per input as each container has, so `--parallel` works too. `tests/test_cli_wine.py` uses it.
+
 ## How the worker drives Response
 
 - `src/r2x/worker/helper.c` is a small Win32 program that runs in the same Wine prefix as

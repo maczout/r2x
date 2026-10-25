@@ -1,7 +1,7 @@
-"""r2x command line: runs the r2x container once per input file.
+"""r2x command line: solves each input in the r2x container and keeps its raw record.
 
-On Windows the container runs in Docker inside WSL (`wsl --exec docker ...`); elsewhere `docker` is
-called directly. Standard library only.
+The interface is specified in docs/cli.md. The container runs once per input: in Docker inside
+WSL on Windows (`wsl --exec docker ...`), with `docker` directly elsewhere. Standard library only.
 
 Environment:
   R2X_IMAGE        image name (default r2x)
@@ -15,21 +15,24 @@ import argparse
 import glob
 import os
 import shlex
+import shutil
 import subprocess
 import sys
-import threading
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PureWindowsPath
 
-from r2x import __version__
+from r2x import __version__, progress
+from r2x.display import Display, Job
+from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE
+from r2x.stages import StageError, StageSpec, parse_stages
 
 DEFAULT_IMAGE = "r2x"
-_print_lock = threading.Lock()
+RECORD_SUFFIX = ".r2x.txt"
 
 
-def say(line: str):
-    with _print_lock:
-        print(line, file=sys.stderr, flush=True)
+class UsageError(Exception):
+    """A problem with the command line, found before anything runs (exit status 2)."""
 
 
 # -- docker -------------------------------------------------------------------------------------
@@ -48,7 +51,7 @@ def windows_to_wsl(path: str, automount: str = "/mnt") -> str:
     """C:\\Users\\x\\a b.r2t -> /mnt/c/Users/x/a b.r2t (WSL's default drive mounts)."""
     p = PureWindowsPath(path)
     if not p.drive or not p.drive.endswith(":") or len(p.drive) != 2:
-        raise SystemExit(f"r2x: cannot map {path} into WSL (only drive-letter paths are supported)")
+        raise UsageError(f"cannot map {path} into WSL (only drive-letter paths are supported)")
     return f"{automount}/{p.drive[0].lower()}/" + "/".join(p.parts[1:])
 
 
@@ -60,69 +63,151 @@ def docker_path(p: Path) -> str:
     return str(p)
 
 
-# -- inputs -------------------------------------------------------------------------------------
+# -- inputs and outputs -------------------------------------------------------------------------
 def expand_inputs(patterns: list[str]) -> list[Path]:
     """Expand globs here: PowerShell and cmd pass *.r2t through unexpanded."""
     out: list[Path] = []
     for pat in patterns:
         matches = sorted(glob.glob(pat)) if glob.has_magic(pat) else [pat]
         if not matches:
-            raise SystemExit(f"r2x: no files match {pat}")
+            raise UsageError(f"no files match {pat}")
         for m in matches:
             p = Path(m)
             if not p.is_file():
-                raise SystemExit(f"r2x: not a file: {m}")
+                raise UsageError(f"not a file: {m}")
             if p.resolve() not in [q.resolve() for q in out]:
                 out.append(p)
     return out
 
 
-def output_dir(inp: Path, out: Path | None) -> Path:
-    """The raw record's path (docs/raw-format.md)."""
-    return (out if out else inp.parent) / f"{inp.stem}.r2x.txt"
+def record_path(inp: Path, out: Path | None) -> Path:
+    """Where the input's raw record goes (docs/raw-format.md)."""
+    return (out if out else inp.parent) / f"{inp.stem}{RECORD_SUFFIX}"
+
+
+def overall_status(statuses: list[int]) -> int:
+    """The most serious outcome: failed, then usage error, then out of scope, then solved."""
+    for s in (FAILED, USAGE, OUT_OF_SCOPE):
+        if s in statuses:
+            return s
+    return SOLVED
+
+
+# -- one input ----------------------------------------------------------------------------------
+def container_command(inp: Path, record: Path, stages: StageSpec, image: str) -> list[str]:
+    return docker_command() + [
+        "run", "--rm", "--pull", "never", "--network", "none",
+        "-v", f"{docker_path(inp)}:/in/{inp.name}:ro",
+        "-v", f"{docker_path(record.parent)}:/out",
+        image, "python", "-m", "r2x.worker", f"/in/{inp.name}", f"/out/{record.name}",
+        "--stage", str(stages),
+    ]
+
+
+def run_container(inp: Path, record: Path, stages: StageSpec, image: str, display: Display,
+                  job: Job) -> tuple[int, str]:
+    """Solve one input in its own container; return its exit status and, if it failed, why."""
+    cmd = container_command(inp, record, stages, image)
+    display.start(job)
+    try:
+        proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                                stderr=subprocess.PIPE, text=True, encoding="utf-8",
+                                errors="replace")
+    except FileNotFoundError:
+        hint = "is WSL installed?" if os.name == "nt" else "is Docker installed?"
+        return FAILED, f"cannot run {cmd[0]!r} ({hint})"
+    reason, other = "", []
+    for line in proc.stderr:
+        e = progress.parse(line)
+        if e is None:
+            if line.strip():
+                other.append(line.rstrip())
+        elif e.kind in ("failed", "usage", "out-of-scope"):
+            reason = e.text
+        elif e.kind != "wrote":
+            display.event(job, e)
+    code = proc.wait()
+    if code == SOLVED:
+        if not record.is_file():
+            return FAILED, f"the container finished but wrote no {record.name}"
+        return SOLVED, ""
+    if code in (FAILED, USAGE, OUT_OF_SCOPE) and reason:
+        return code, reason
+    detail = " / ".join(other[-3:]) if other else "no message"
+    return FAILED, f"exit status {code}: {detail}"
 
 
 # -- commands -----------------------------------------------------------------------------------
-def solve_one(inp: Path, dest: Path, image: str) -> bool:
-    dest.parent.mkdir(parents=True, exist_ok=True)
-    cmd = docker_command() + [
-        "run", "--rm", "--pull", "never", "--network", "none",
-        "-v", f"{docker_path(inp)}:/in/{inp.name}:ro",
-        "-v", f"{docker_path(dest.parent)}:/out",
-        image, "python", "-m", "r2x.worker", f"/in/{inp.name}", f"/out/{dest.name}",
-    ]
-    try:
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
-                                encoding="utf-8", errors="replace")
-    except FileNotFoundError:
-        say(f"[{inp.stem}] failed: cannot run {cmd[0]!r}"
-            + (" (is WSL installed?)" if os.name == "nt" else " (is Docker installed?)"))
-        return False
-    for line in proc.stderr:
-        line = line.rstrip()
-        if line:
-            line = line.removeprefix("r2x: ").replace(f"/out/{dest.name}", str(dest))
-            say(f"[{inp.stem}] {line}")
-    return proc.wait() == 0
+NOT_YET = {"units": "--units", "factors": "--factors", "initial": "--initial",
+           "increment": "--increment", "report": "--report"}
+
+
+def check_solve_args(a) -> None:
+    unavailable = [flag for attr, flag in NOT_YET.items() if getattr(a, attr) not in (None, False)]
+    if unavailable:
+        raise UsageError(f"{', '.join(unavailable)}: not available yet (see docs/cli.md)")
+    if not a.inputs:
+        raise UsageError("solving without an input (File > New) is not available yet; "
+                         "give an input file")
+    if a.stdout and a.out:
+        raise UsageError("--stdout writes no files, so --out does not apply")
 
 
 def cmd_solve(a) -> int:
+    check_solve_args(a)
     inputs = expand_inputs(a.inputs)
-    dests = [output_dir(i, a.out) for i in inputs]
-    clash = {d for d in dests if dests.count(d) > 1}
+    live = sys.stderr.isatty()
+    if a.stdout:
+        if len(inputs) != 1:
+            raise UsageError(f"--stdout takes one input; {len(inputs)} given")
+        return solve_to_stdout(inputs[0], a, live)
+
+    records = [record_path(i, a.out) for i in inputs]
+    clash = sorted({str(r) for r in records if records.count(r) > 1})
     if clash:
-        raise SystemExit(f"r2x: several inputs would write {sorted(map(str, clash))[0]}")
-    for d in dests:
-        if d.exists():
-            if not a.force:
-                raise SystemExit(f"r2x: {d} exists (use --force to replace it)")
-            d.unlink()
-    with ThreadPoolExecutor(max_workers=max(1, a.jobs)) as pool:
-        ok = list(pool.map(lambda pair: solve_one(*pair, a.image), zip(inputs, dests)))
-    failed = ok.count(False)
-    if len(inputs) > 1:
-        say(f"r2x: {len(inputs) - failed} of {len(inputs)} solved")
-    return 1 if failed else 0
+        raise UsageError(f"several inputs would write {clash[0]}")
+    existing = [r for r in records if r.exists()]
+    if existing and not a.overwrite:
+        more = f" (and {len(existing) - 1} more)" if len(existing) > 1 else ""
+        raise UsageError(f"{existing[0]} exists{more}; use --overwrite to replace")
+    if a.out:
+        a.out.mkdir(parents=True, exist_ok=True)
+    for r in existing:
+        r.unlink()
+
+    with Display(sys.stderr, live, a.quiet) as display:
+        jobs = [display.add(i.stem) for i in inputs]
+
+        def solve(k: int) -> int:
+            status, reason = run_container(inputs[k], records[k], a.stage, a.image, display,
+                                           jobs[k])
+            display.finish(jobs[k], status, reason, str(records[k]))
+            return status
+
+        with ThreadPoolExecutor(max_workers=a.parallel) as pool:
+            statuses = list(pool.map(solve, range(len(inputs))))
+        display.summary()
+    return overall_status(statuses)
+
+
+def solve_to_stdout(inp: Path, a, live: bool) -> int:
+    """Solve into a temporary folder, then copy the record's bytes to stdout unchanged."""
+    with tempfile.TemporaryDirectory(prefix="r2x-") as tmp:
+        record = Path(tmp) / f"{inp.stem}{RECORD_SUFFIX}"
+        with Display(sys.stderr, live, a.quiet) as display:
+            job = display.add(inp.stem)
+            status, reason = run_container(inp, record, a.stage, a.image, display, job)
+            display.finish(job, status, reason, "stdout")
+        if status == SOLVED:
+            # The binary buffer, so that Windows cannot rewrite the record's line endings.
+            try:
+                with open(record, "rb") as f:
+                    shutil.copyfileobj(f, sys.stdout.buffer)
+                sys.stdout.buffer.flush()
+            except BrokenPipeError:
+                os.dup2(os.open(os.devnull, os.O_WRONLY), sys.stdout.fileno())
+                return FAILED
+    return status
 
 
 def cmd_health(a) -> int:
@@ -133,7 +218,99 @@ def cmd_health(a) -> int:
         return subprocess.run(cmd).returncode
     except FileNotFoundError:
         print(f"cannot run {cmd[0]!r}", file=sys.stderr)
-        return 1
+        return FAILED
+
+
+# -- arguments ----------------------------------------------------------------------------------
+SOLVE_DESCRIPTION = """\
+Run a full sectional response in Response-2000 1.9.7 and capture the data
+from its control charts and detail views.
+
+Scope: axial load and moment. Not M-N interaction or full-member analysis.
+r2x never edits the input file. Options override the input. Options you
+leave out keep the input's value, or Response's start-up default if the
+input has none.
+
+Not available yet: --units, --factors, --initial, --increment, --report,
+and solving without an input."""
+
+SOLVE_EPILOG = """\
+Results (NAME is the input file name):
+  NAME.r2x.txt          Raw record: exported chart data, byte for byte, with
+                        versions, input SHA-256 and the settings in effect.
+  NAME.r2x.html         Report (--report only).
+
+Exit status: 0 solved · 1 failed · 2 usage error · 3 out of scope
+With several inputs, the most serious: 1, then 2, then 3.
+
+Examples:
+  r2x solve
+  r2x solve beam.r2t --report
+  r2x solve beam.r2t --stage all
+  r2x solve col.rsp --units si --initial -2000,0 --increment 0,1
+  r2x solve cases\\*.r2t --out results --parallel 4
+  r2x solve beam.r2t --stdout | py parse.py"""
+
+
+class HelpFormatter(argparse.RawTextHelpFormatter):
+    """Help laid out as in docs/cli.md: `-p, --parallel N`, `INPUT ...`, on any Python 3.10+."""
+
+    def __init__(self, prog):
+        super().__init__(prog, max_help_position=24, width=80)
+
+    def _format_action_invocation(self, action):
+        if not action.option_strings:
+            return f"{action.metavar} ..." if action.nargs in ("*", "+") else action.metavar
+        names = ", ".join(action.option_strings)
+        if action.nargs == 0:
+            return names
+        return f"{names} {self._format_args(action, action.dest.upper())}"
+
+
+def stage_spec(text: str) -> StageSpec:
+    try:
+        return parse_stages(text)
+    except StageError as e:
+        raise argparse.ArgumentTypeError(str(e))
+
+
+def load_pair(text: str) -> tuple[float, float]:
+    parts = text.split(",")
+    try:
+        if len(parts) != 2:
+            raise ValueError
+        return float(parts[0]), float(parts[1])
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"{text!r}: expected N,M, e.g. -2000,0")
+
+
+def increment_pair(text: str) -> tuple[float, float]:
+    n, m = load_pair(text)
+    if n == 0 and m == 0:
+        raise argparse.ArgumentTypeError("the increment cannot be 0,0")
+    return n, m
+
+
+def positive_int(text: str) -> int:
+    try:
+        n = int(text)
+    except ValueError:
+        n = 0
+    if n < 1:
+        raise argparse.ArgumentTypeError(f"{text!r}: expected a whole number, 1 or more")
+    return n
+
+
+def join_pair_values(argv: list[str]) -> list[str]:
+    """--initial -2000,0 -> --initial=-2000,0, so argparse does not take -2000,0 for an option."""
+    out, it = [], iter(argv)
+    for arg in it:
+        if arg in ("--initial", "--increment"):
+            value = next(it, None)
+            out.append(arg if value is None else f"{arg}={value}")
+        else:
+            out.append(arg)
+    return out
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -141,14 +318,58 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"r2x {__version__}")
     p.add_argument("--image", default=os.environ.get("R2X_IMAGE", DEFAULT_IMAGE),
                    help="container image (default: $R2X_IMAGE or r2x)")
-    sub = p.add_subparsers(dest="command", required=True)
+    sub = p.add_subparsers(dest="command", required=True, metavar="{solve,health}")
 
-    solve = sub.add_parser("solve", help="solve input files and export their data")
-    solve.add_argument("inputs", nargs="+", help="one or more input files, or globs")
-    solve.add_argument("--out", type=Path, help="folder for the results (default: next to each input)")
-    solve.add_argument("-j", "--jobs", type=int, default=1, help="inputs to run at once (default 1)")
-    solve.add_argument("--force", action="store_true", help="replace existing result folders")
-    solve.set_defaults(func=cmd_solve)
+    s = sub.add_parser("solve", help="solve inputs and capture their exported data",
+                       usage="r2x solve [INPUT ...] [options]", description=SOLVE_DESCRIPTION,
+                       epilog=SOLVE_EPILOG, formatter_class=HelpFormatter, add_help=False,
+                       allow_abbrev=False)
+    s.add_argument("-h", "--help", action="help", help=argparse.SUPPRESS)
+
+    g = s.add_argument_group("Input")
+    g.add_argument("inputs", nargs="*", metavar="INPUT",
+                   help=".rsp or .r2t files; globs allowed (cases\\*.r2t).\n"
+                        "Default: a new Quick Define section (Newbeam).")
+
+    g = s.add_argument_group("Analysis")
+    g.add_argument("--units", choices=("si", "us", "kgcm"), type=str.lower,
+                   help="Units for loads and results.\n"
+                        "Default: input's, else si.\n"
+                        "  si     kN    kN·m    mm   MPa\n"
+                        "  us     kip   kip·ft  in   psi, ksi\n"
+                        "  kgcm   t     t·m     cm   kg/cm2")
+    g.add_argument("--factors", choices=("none", "csa"), type=str.lower,
+                   help="Material reduction factors.\n"
+                        "Default: input's, else none.")
+    g.add_argument("--initial", type=load_pair, metavar="N,M",
+                   help="Initial load. Default: input's, else 0,0.")
+    g.add_argument("--increment", type=increment_pair, metavar="N,M",
+                   help="Load increment; only signs and ratio matter.\n"
+                        "Default: input's, else 0,1.\n"
+                        "N: tension positive. M: compression on top positive.")
+
+    g = s.add_argument_group("Output")
+    g.add_argument("--stage", type=stage_spec, default=stage_spec("peak"), metavar="STAGES",
+                   help="Stages for the detail views: peak, all, or numbers\n"
+                        "and ranges (0,10,20-30 or peak,0-5). 0 is the\n"
+                        "initial load. Control charts always cover every\n"
+                        "stage. Default: peak.")
+    g.add_argument("--report", action="store_true",
+                   help="Also write an HTML report of the peak stage.\n"
+                        "Default: off.")
+    g.add_argument("--out", type=Path, metavar="DIR",
+                   help="Folder for results. Default: next to each input.")
+    g.add_argument("--stdout", action="store_true",
+                   help="Write the raw record to stdout and no files. One\n"
+                        "input only; not with --report.")
+    g.add_argument("--overwrite", action="store_true",
+                   help="Replace existing results. Default: stop.")
+
+    g = s.add_argument_group("Running")
+    g.add_argument("-p", "--parallel", type=positive_int, default=1, metavar="N",
+                   help="Solve up to N inputs at once. Default: 1.")
+    g.add_argument("-q", "--quiet", action="store_true", help="Errors only. Default: off.")
+    s.set_defaults(func=cmd_solve)
 
     health = sub.add_parser("health", help="show the image's r2x, Wine and Response-2000 versions")
     health.set_defaults(func=cmd_health)
@@ -156,8 +377,13 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    a = build_parser().parse_args(argv)
-    return a.func(a)
+    argv = sys.argv[1:] if argv is None else argv
+    a = build_parser().parse_args(join_pair_values(argv))
+    try:
+        return a.func(a)
+    except UsageError as e:
+        print(f"r2x: {e}", file=sys.stderr)
+        return USAGE
 
 
 if __name__ == "__main__":
