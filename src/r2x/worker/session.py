@@ -310,6 +310,15 @@ class Session:
             return None
         return wait_until(opened, timeout, f"the {title!r} dialog", 0.02)
 
+    def wait_for_dialog_title(self, dialog: str, title: str, timeout: float = 10):
+        """Wait until an open dialog's title changes to title (a wizard's next page, say)."""
+        def shown():
+            others = [w for w in self.h.windows("dialogs") if w.hwnd != dialog]
+            if others:
+                raise R2xError(self.describe_dialog(others[0].hwnd, others[0].text))
+            return any(w.hwnd == dialog and w.text == title for w in self.h.windows("dialogs"))
+        wait_until(shown, timeout, f"the {title!r} dialog", 0.02)
+
     def control(self, dialog: str, control_id: int) -> str:
         return self.h.ask(f"find {dialog} {control_id}")
 

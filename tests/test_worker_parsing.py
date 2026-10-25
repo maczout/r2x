@@ -197,3 +197,12 @@ def test_control_positions_take_any_known_control_chart():
     with pytest.raises(R2xError, match="unknown control chart 'Control : Torsion - |q'") as e:
         s.copy_chart(CONTROL_CHARTS[0], timeout=0.2)
     assert not isinstance(e.value, OutOfScope)
+
+
+@pytest.mark.parametrize("argv", [["--new"], ["--new", "a", "b"], ["only-one"], ["a", "b", "c"]])
+def test_worker_wants_input_and_record_or_new_and_record(argv, capsys):
+    from r2x.worker.__main__ import main
+    with pytest.raises(SystemExit) as e:
+        main(argv + ["--response-dir", "."])
+    err = capsys.readouterr().err
+    assert e.value.code == 2 and ("give RECORD with --new" in err or "required: PATH" in err)

@@ -19,7 +19,7 @@ from r2x.settings import Settings
 from r2x.stages import PEAK, StageSpec, format_ranges
 from r2x.worker import dialogs
 from r2x.worker.export import export
-from r2x.worker.session import Helper, R2xError, Session
+from r2x.worker.session import Helper, R2xError, Session, wait_until
 
 HELPER_SOURCE = Path(__file__).with_name("helper.c")
 
@@ -89,18 +89,26 @@ def wine_path(p: Path) -> str:
     return "Z:" + str(p.resolve()).replace("/", "\\")
 
 
-def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
+# A Response document with this name in the program folder is its template for new sections.
+TEMPLATE = "r2k.r2k"
+NEW_INPUT = "File > New"      # input-name in the record header when there is no input file
+
+
+def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path,
             display: str | None = None, stages: StageSpec = PEAK,
             settings: Settings = Settings(), cache: Path | None = None,
             on_event: Callable[[Event], None] = lambda e: None) -> dict[str, str]:
     """Solve input_file in Response-2000 and write its raw record to the file out.
 
-    Settings are applied through Response's dialogs before solving, and the settings in effect
-    are read back into the header. An input whose loading includes shear stops here (OutOfScope).
-    The record is written only once the export is complete, under a temporary name first, so a
-    failed job leaves no file behind. Returns the record header.
+    With no input file, Response starts empty and the section is defined by accepting every
+    default of Quick Define, as File > New does (docs/cli.md). Settings are applied through
+    Response's dialogs before solving, and the settings in effect are read back into the header.
+    An input whose loading includes shear stops here (OutOfScope). The record is written only
+    once the export is complete, under a temporary name first, so a failed job leaves no file
+    behind. Returns the record header.
     """
-    input_file, out = Path(input_file), Path(out)
+    input_file = Path(input_file) if input_file is not None else None
+    out = Path(out)
     response_dir = Path(response_dir)
     exe = response_dir / "r2k.exe"
     if not exe.is_file():
@@ -125,10 +133,13 @@ def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
         job = Path(tempfile.mkdtemp(prefix="r2x-job-"))
         stack.callback(shutil.rmtree, job, ignore_errors=True)
         shutil.copytree(response_dir, job / "Response")
-        job_input = job / input_file.name
-        shutil.copyfile(input_file, job_input)
+        args = []
+        if input_file is not None:
+            job_input = job / input_file.name
+            shutil.copyfile(input_file, job_input)
+            args = [wine_path(job_input)]
 
-        r2k = subprocess.Popen(["wine", "r2k.exe", wine_path(job_input)], cwd=job / "Response",
+        r2k = subprocess.Popen(["wine", "r2k.exe", *args], cwd=job / "Response",
                                env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         def stop_response():  # runs before the helper closes and the prefix is shut down
             subprocess.run(["wineserver", "-k"], env=env, stderr=subprocess.DEVNULL)
@@ -137,9 +148,15 @@ def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
         helper = Helper(str(helper_exe), env)
         stack.callback(helper.close)
         session = Session(helper, note=lambda text: on_event(note(text)))
-        session.wait_for_file(input_file.stem)
-        time.sleep(0.2)
-        session.check_no_dialog()
+        if input_file is not None:
+            session.wait_for_file(input_file.stem)
+            time.sleep(0.2)
+            session.check_no_dialog()
+        else:
+            wait_until(lambda: helper.try_ask("main"), 60, "Response to start", 0.1)
+            time.sleep(0.2)
+            session.check_no_dialog()
+            dialogs.quick_define(session)
         dialogs.apply(session, settings)
         effective = dialogs.read(session)
         dialogs.check_scope(effective)
@@ -150,8 +167,10 @@ def run_job(input_file: Path, out: Path, response_dir: Path, prefix: Path,
         "r2x-version": __version__,
         "response-exe-sha256": sha256(exe),
         "wine-version": wine_version,
-        "input-name": input_file.name,
-        "input-sha256": sha256(input_file),
+        **({"input-name": input_file.name, "input-sha256": sha256(input_file)} if input_file
+           else {"input-name": NEW_INPUT}),
+        **({"template-sha256": sha256(response_dir / TEMPLATE)}
+           if input_file is None and (response_dir / TEMPLATE).is_file() else {}),
         **effective,
         "stage-count": str(result.stage_count),
         "peak-stage": str(result.peak),

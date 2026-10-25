@@ -51,7 +51,7 @@ def host_path(mounts: dict[str, str], p: str) -> Path:
     return Path(mounts[folder]) / name
 
 
-def fake_worker(inp: Path, out: Path, stage: str, settings: dict[str, str]) -> int:
+def fake_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str]) -> int:
     from r2x import record
     from r2x.progress import Event
     from r2x.stages import StageError, parse_stages
@@ -59,7 +59,8 @@ def fake_worker(inp: Path, out: Path, stage: str, settings: dict[str, str]) -> i
     def say(e):
         print(e.line(), file=sys.stderr, flush=True)
 
-    text = inp.read_text(errors="replace")
+    text = inp.read_text(errors="replace") if inp else ""
+    name = inp.name if inp else "File > New"
     say(Event("solving"))
     if "slow" in text:
         time.sleep(1)
@@ -83,13 +84,13 @@ def fake_worker(inp: Path, out: Path, stage: str, settings: dict[str, str]) -> i
         sections.append((f"stage/{i}/longitudinal_strain", b"stage %d\r\n" % i))
         say(Event("stage", stage=i, done=k + 1, total=len(targets)))
     if "noout" not in text:
-        out.write_bytes(record.encode({"input-name": inp.name, **settings, "stage-count": "10",
+        out.write_bytes(record.encode({"input-name": name, **settings, "stage-count": "10",
                                        "peak-stage": "7"}, sections))
         say(Event("wrote", str(out), seconds=0.1))
     return 0
 
 
-def wine_worker(inp: Path, out: Path, stage: str, settings: dict[str, str]) -> int:
+def wine_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str]) -> int:
     template = Path(os.environ.get("R2X_WINEPREFIX", Path.home() / ".cache/r2x/prefix"))
     with tempfile.TemporaryDirectory(prefix="fake-docker-") as tmp:
         prefix = Path(tmp) / "prefix"
@@ -97,7 +98,8 @@ def wine_worker(inp: Path, out: Path, stage: str, settings: dict[str, str]) -> i
             shutil.copytree(template, prefix, symlinks=True)
         env = dict(os.environ, R2X_WINEPREFIX=str(prefix))
         options = [f"--{k}={v}" for k, v in settings.items()]
-        return subprocess.run([sys.executable, "-m", "r2x.worker", str(inp), str(out),
+        source = [str(inp)] if inp else ["--new"]
+        return subprocess.run([sys.executable, "-m", "r2x.worker", *source, str(out),
                                "--stage", stage, *options], env=env).returncode
 
 
@@ -110,7 +112,8 @@ def main(argv: list[str]) -> int:
         return 0
     if command[:3] != ["python", "-m", "r2x.worker"]:
         raise SystemExit(f"fake docker: unexpected command {command}")
-    inp, out = host_path(mounts, command[3]), host_path(mounts, command[4])
+    inp = None if command[3] == "--new" else host_path(mounts, command[3])
+    out = host_path(mounts, command[4])
     stage = command[command.index("--stage") + 1] if "--stage" in command else "peak"
     settings = {}                       # --units us, --initial=-2000,0 ... as the worker gets them
     rest = command[5:]

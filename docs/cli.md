@@ -2,8 +2,8 @@
 
 **Status:** agreed 2026-10-25. Implemented: the raw record (`docs/raw-format.md`), `--stage`,
 `--out`, `--stdout`, `--overwrite`, `--parallel`, `--quiet`, the exit statuses, and `--units`,
-`--factors`, `--initial` and `--increment` through Response's dialogs. Not yet: `--report`, and
-solving without an input; r2x accepts these but stops with a usage error. `r2x solve --help`
+`--factors`, `--initial` and `--increment` through Response's dialogs, and solving without an
+input. Not yet: `--report`; r2x accepts it but stops with a usage error. `r2x solve --help`
 matches the text below plus two notes, and `tests/test_cli.py` keeps them in step.
 
 A stage number past the last stage is a usage error (exit status 2), found once the solve has
@@ -27,7 +27,8 @@ given the stage count. With several inputs, the exit status is the most serious 
   and written to the record header.
 - **No input means File > New.** r2x accepts the Quick Define defaults through the dialogs rather
   than shipping a copy of Newbeam, so the default follows the installed program (including an
-  `r2k.r2k` template file, if one is present).
+  `r2k.r2k` template file, if one is present). The record is `newbeam.r2x.txt`, Response's name
+  for a new section, in the current folder unless `--out` is given.
 - **Stages.** Control charts always cover every stage; `--stage` selects the stages exported for
   the detail views. Stage 0 is the initial load. `peak` is the stage Response shows when the solve
   finishes. A stage number past the last stage is an error.
@@ -86,7 +87,7 @@ Running:
   -p, --parallel N      Solve up to N inputs at once. Default: 1.
   -q, --quiet           Errors only. Default: off.
 
-Results (NAME is the input file name):
+Results (NAME is the input file name, or newbeam without one):
   NAME.r2x.txt          Raw record: exported chart data, byte for byte, with
                         versions, input SHA-256 and the settings in effect.
   NAME.r2x.html         Report (--report only).
@@ -161,3 +162,13 @@ How the implementation follows from this (Phase 3):
 - Stage identification matches εx, the strain profile's value at y = 0, against the εx curve, and
   the curvature against the Moment–φ curve when there is one, with units from the axis titles
   (mrad/m with mm or cm, rad/10³ in with in). Both checks must agree.
+
+Without an input (Phase 4), r2x starts Response with no file and opens the Quick Define wizard
+with **Define > Quick Define**, then presses Next three times and Finish. On a fresh start that
+is the wizard File > New shows; File > New's own command (24331) does not respond to a posted
+message under Wine. The section is Newbeam: its control curves are byte-identical to opening
+`tests/reference/newbeam/input.r2t`. Its detail views are not: they list the reinforcement
+layers in another order and differ in the last digit of some depths, as a section defined in
+memory differs from one read back from a file. With an `r2k.r2k` template in the program
+folder, Response loads it at start and the new section keeps the template's settings (with a
+saved CSA file as the template, the factors are CSA); the record header has its SHA-256.

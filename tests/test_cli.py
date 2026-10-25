@@ -71,7 +71,7 @@ def test_help_matches_spec(capsys):
     with pytest.raises(SystemExit):
         build_parser().parse_args(["solve", "--help"])
     text = capsys.readouterr().out
-    for note in ("\nNot available yet: --report, and solving without an input.\n",
+    for note in ("\nNot available yet: --report.\n",
                  "With several inputs, the most serious: 1, then 2, then 3.\n"):
         assert note in text
         text = text.replace(note, "")
@@ -96,6 +96,11 @@ def test_expand_inputs(tmp_path, monkeypatch):
         expand_inputs(["*.xyz"])
     with pytest.raises(UsageError):
         expand_inputs(["missing.r2t"])
+
+
+def test_record_path_without_input():
+    assert record_path(None, None) == Path("newbeam.r2x.txt")
+    assert record_path(None, Path("res")) == Path("res/newbeam.r2x.txt")
 
 
 def test_record_path():
@@ -207,7 +212,6 @@ def test_stdout(cases):
     (["slow*.r2t", "--stdout"], "--stdout takes one input; 2 given"),
     (["beam.r2t", "--stdout", "--out", "x"], "--out does not apply"),
     (["beam.r2t", "--report", "--initial", "1,0"], "--report: not available yet"),
-    ([], "without an input (File > New) is not available yet"),
     (["nothing*.r2t"], "no files match"),
     (["beam.r2t", str(Path(".") / "beam.r2t"), "be*.r2t"], ""),  # same file thrice: once
 ])
@@ -224,6 +228,20 @@ def test_main_in_process(cases, capsys):
     assert main(["solve", str(cases / "beam.r2t"), "-q"]) == 0
     assert main(["solve", str(cases / "beam.r2t")]) == 2
     assert "exists" in capsys.readouterr().err
+
+
+def test_no_input_means_a_new_section(cases, monkeypatch):
+    monkeypatch.chdir(cases)
+    code, _, err = r2x("solve", "--factors", "csa")
+    rec = record.read(cases / "newbeam.r2x.txt")
+    assert code == 0 and rec.header["input-name"] == "File > New"
+    assert rec.header["factors"] == "csa" and "[newbeam] solved" in err
+    code, _, err = r2x("solve")
+    assert code == 2 and "use --overwrite" in err
+    code, out, _ = r2x("solve", "--stdout")
+    assert code == 0 and record.decode(out).header["input-name"] == "File > New"
+    code, _, _ = r2x("solve", "--out", "res")
+    assert code == 0 and (cases / "res" / "newbeam.r2x.txt").exists()
 
 
 def test_settings_reach_the_worker(cases):

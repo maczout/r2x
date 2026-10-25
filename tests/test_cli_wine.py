@@ -38,3 +38,11 @@ def test_parallel_with_an_out_of_scope_input(tmp_path):
     assert "[dm-n1n] out of scope: the loading includes shear" in err
     assert record.read(tmp_path / "input.r2x.txt").sections == reference_sections("newbeam")
     assert not (tmp_path / "dm-n1n.r2x.txt").exists()
+
+
+def test_no_input(tmp_path):
+    code, out, err = r2x("solve", "--stdout", cwd=tmp_path)
+    assert code == 0, err
+    rec = record.decode(out)
+    assert rec.header["input-name"] == "File > New" and rec.header["peak-stage"] == "56"
+    assert rec.control("moment_phi") == (REF / "newbeam/control/moment_phi.txt").read_bytes()

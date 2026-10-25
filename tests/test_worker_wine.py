@@ -104,3 +104,42 @@ def test_settings_match_references(tmp_path, case, settings, effective):
                      settings=settings)
     assert {k: header[k] for k in effective} == effective
     assert record.read(out).sections == reference_sections(case)
+
+
+def same_points(a: bytes, b: bytes, tol: float = 0.0011) -> bool:
+    """Two exports with the same title and the same points, in any order, within tol."""
+    from r2x.worker.session import export_points, export_title
+    pa, pb = sorted(export_points(a)), sorted(export_points(b))
+    return (export_title(a) == export_title(b) and len(pa) == len(pb)
+            and all(abs(x1 - x2) <= tol and abs(y1 - y2) <= tol
+                    for (x1, y1), (x2, y2) in zip(pa, pb)))
+
+
+@pytest.mark.parametrize("case, settings", [("newbeam", Settings()),
+                                            ("newbeam-csa", Settings(factors="csa"))])
+def test_new_section_matches_newbeam(tmp_path, case, settings):
+    """No input: Quick Define's defaults give Newbeam. The control curves are byte-identical to
+    the case opened from input.r2t. The detail views list the reinforcement layers in another
+    order and differ in the last digit of some depths (a section defined in memory against one
+    read back from a file), so they are compared as points."""
+    out = tmp_path / "newbeam.r2x.txt"
+    header = run_job(None, out, Path(RESPONSE), PREFIX, settings=settings)
+    assert header["input-name"] == "File > New"
+    assert "input-sha256" not in header and "template-sha256" not in header
+    rec, ref = record.read(out), reference_sections(case)
+    assert rec.sections.keys() == ref.keys()
+    for name, body in ref.items():
+        if name.startswith("control/"):
+            assert rec.sections[name] == body, name
+        else:
+            assert same_points(rec.sections[name], body), name
+
+
+def test_new_section_records_the_template(tmp_path):
+    response = tmp_path / "Response"
+    shutil.copytree(RESPONSE, response)
+    shutil.copyfile(REF / "newbeam-csa" / "saved.r2t", response / "r2k.r2k")
+    header = run_job(None, tmp_path / "new.r2x.txt", response, PREFIX)
+    assert header["template-sha256"] == __import__("hashlib").sha256(
+        (response / "r2k.r2k").read_bytes()).hexdigest()
+    assert header["factors"] == "0.65,0.85,0.90"      # Response loads the template at start

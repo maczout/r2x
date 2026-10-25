@@ -50,6 +50,7 @@ py -m pip install https://github.com/maczout/r2x/archive/main.zip
 `docs/cli.md`.
 
 ```powershell
+r2x solve                                  # no input: a new section, as File > New gives
 r2x solve .\Newbeam.r2t                    # one or more files, or a glob
 r2x solve .\Newbeam.r2t --stage peak,0-5   # detail views at these stages (default: peak)
 r2x solve .\cases\*.r2t --out .\results --parallel 2
@@ -63,7 +64,7 @@ Results go next to each input unless `--out` is given; an existing record is onl
 errors only. Exit status: 0 solved, 1 failed, 2 usage error, 3 out of scope (with several inputs,
 the most serious of these). `--units`, `--factors`, `--initial` and `--increment` override the
 input's settings through Response's own dialogs; the settings in effect are in the record header.
-Not available yet: `--report`, and solving without an input. On Linux `r2x` calls `docker` directly;
+Not available yet: `--report`. On Linux `r2x` calls `docker` directly;
 `R2X_IMAGE`, `R2X_DOCKER` and `R2X_WSL_DISTRO` override the defaults.
 
 ## Output

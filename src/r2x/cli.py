@@ -30,6 +30,7 @@ from r2x.stages import StageError, StageSpec, parse_stages
 
 DEFAULT_IMAGE = "r2x"
 RECORD_SUFFIX = ".r2x.txt"
+NEW_NAME = "newbeam"     # record name without an input: Response's name for a new section
 
 
 class UsageError(Exception):
@@ -81,9 +82,15 @@ def expand_inputs(patterns: list[str]) -> list[Path]:
     return out
 
 
-def record_path(inp: Path, out: Path | None) -> Path:
-    """Where the input's raw record goes (docs/raw-format.md)."""
-    return (out if out else inp.parent) / f"{inp.stem}{RECORD_SUFFIX}"
+def job_name(inp: Path | None) -> str:
+    return inp.stem if inp is not None else NEW_NAME
+
+
+def record_path(inp: Path | None, out: Path | None) -> Path:
+    """Where the input's raw record goes (docs/raw-format.md); without an input, the current
+    folder."""
+    folder = out if out else (inp.parent if inp is not None else Path("."))
+    return folder / f"{job_name(inp)}{RECORD_SUFFIX}"
 
 
 def overall_status(statuses: list[int]) -> int:
@@ -95,19 +102,21 @@ def overall_status(statuses: list[int]) -> int:
 
 
 # -- one input ----------------------------------------------------------------------------------
-def container_command(inp: Path, record: Path, stages: StageSpec, settings: Settings,
+def container_command(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
                       image: str) -> list[str]:
+    """docker run for one input; without an input the worker defines a new section (--new)."""
+    mounts = ["-v", f"{docker_path(inp)}:/in/{inp.name}:ro"] if inp is not None else []
+    worker_input = [f"/in/{inp.name}"] if inp is not None else ["--new"]
     return docker_command() + [
-        "run", "--rm", "--pull", "never", "--network", "none",
-        "-v", f"{docker_path(inp)}:/in/{inp.name}:ro",
+        "run", "--rm", "--pull", "never", "--network", "none", *mounts,
         "-v", f"{docker_path(record.parent)}:/out",
-        image, "python", "-m", "r2x.worker", f"/in/{inp.name}", f"/out/{record.name}",
+        image, "python", "-m", "r2x.worker", *worker_input, f"/out/{record.name}",
         "--stage", str(stages), *settings.args(),
     ]
 
 
-def run_container(inp: Path, record: Path, stages: StageSpec, settings: Settings, image: str,
-                  display: Display, job: Job) -> tuple[int, str]:
+def run_container(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
+                  image: str, display: Display, job: Job) -> tuple[int, str]:
     """Solve one input in its own container; return its exit status and, if it failed, why."""
     cmd = container_command(inp, record, stages, settings, image)
     display.start(job)
@@ -151,16 +160,13 @@ def check_solve_args(a) -> None:
     unavailable = [flag for attr, flag in NOT_YET.items() if getattr(a, attr) not in (None, False)]
     if unavailable:
         raise UsageError(f"{', '.join(unavailable)}: not available yet (see docs/cli.md)")
-    if not a.inputs:
-        raise UsageError("solving without an input (File > New) is not available yet; "
-                         "give an input file")
     if a.stdout and a.out:
         raise UsageError("--stdout writes no files, so --out does not apply")
 
 
 def cmd_solve(a) -> int:
     check_solve_args(a)
-    inputs = expand_inputs(a.inputs)
+    inputs: list[Path | None] = expand_inputs(a.inputs) if a.inputs else [None]
     live = sys.stderr.isatty()
     if a.stdout:
         if len(inputs) != 1:
@@ -181,7 +187,7 @@ def cmd_solve(a) -> int:
         r.unlink()
 
     with Display(sys.stderr, live, a.quiet) as display:
-        jobs = [display.add(i.stem) for i in inputs]
+        jobs = [display.add(job_name(i)) for i in inputs]
 
         def solve(k: int) -> int:
             status, reason = run_container(inputs[k], records[k], a.stage, settings_from(a),
@@ -195,12 +201,12 @@ def cmd_solve(a) -> int:
     return overall_status(statuses)
 
 
-def solve_to_stdout(inp: Path, a, live: bool) -> int:
+def solve_to_stdout(inp: Path | None, a, live: bool) -> int:
     """Solve into a temporary folder, then copy the record's bytes to stdout unchanged."""
     with tempfile.TemporaryDirectory(prefix="r2x-") as tmp:
-        record = Path(tmp) / f"{inp.stem}{RECORD_SUFFIX}"
+        record = Path(tmp) / f"{job_name(inp)}{RECORD_SUFFIX}"
         with Display(sys.stderr, live, a.quiet) as display:
-            job = display.add(inp.stem)
+            job = display.add(job_name(inp))
             status, reason = run_container(inp, record, a.stage, settings_from(a), a.image,
                                            display, job)
             display.finish(job, status, reason, "stdout")
@@ -237,10 +243,10 @@ r2x never edits the input file. Options override the input. Options you
 leave out keep the input's value, or Response's start-up default if the
 input has none.
 
-Not available yet: --report, and solving without an input."""
+Not available yet: --report."""
 
 SOLVE_EPILOG = """\
-Results (NAME is the input file name):
+Results (NAME is the input file name, or newbeam without one):
   NAME.r2x.txt          Raw record: exported chart data, byte for byte, with
                         versions, input SHA-256 and the settings in effect.
   NAME.r2x.html         Report (--report only).

@@ -62,8 +62,9 @@ end                                          end of record
 | `r2x-version` | `0.0.1` | r2x version that wrote the record |
 | `response-exe-sha256` | `bbf4bc59…` | SHA-256 of `r2k.exe` |
 | `wine-version` | `wine-9.0 (Ubuntu 9.0~repack-4build3)` | output of `wine --version` |
-| `input-name` | `Newbeam.r2t` | input file name |
-| `input-sha256` | `036440c7…` | SHA-256 of the input file's bytes |
+| `input-name` | `Newbeam.r2t` | input file name, or `File > New` when there is no input |
+| `input-sha256` | `036440c7…` | SHA-256 of the input file's bytes; absent with no input |
+| `template-sha256` | `0e74ef3d…` | with no input, SHA-256 of `r2k.r2k`, Response's template for new sections, if the program folder has one; absent otherwise |
 | `units` | `si` | units in effect: `si`, `us` or `kgcm` |
 | `factors` | `0.65,0.85,0.90` | material factors in effect: concrete, steel, prestress |
 | `initial` | `-2000.00,0.00,0.00` | initial load in effect: N, M, V in the units in effect |

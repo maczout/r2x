@@ -17,6 +17,7 @@ python3 -m venv ~/.venvs/r2x && . ~/.venvs/r2x/bin/activate
 pip install -e '.[dev]'
 python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/Newbeam.r2x.txt --response-dir Response
 python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/all.r2x.txt --stage all --response-dir Response
+python -m r2x.worker --new /tmp/new.r2x.txt --response-dir Response       # no input: File > New
 R2X_RESPONSE_DIR=Response pytest        # includes the end-to-end Newbeam tests
 ```
 

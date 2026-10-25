@@ -77,3 +77,28 @@ def check_scope(effective: dict[str, str]):
         if shear != 0:
             shown = effective[key].split(",")[2]
             raise OutOfScope(f"the loading includes shear ({key} V = {shown})")
+
+
+# -- File > New ---------------------------------------------------------------------------------
+CMD_QUICK_DEFINE = 150         # Define > Quick Define
+QUICK_DEFINE = "Quick Define - Step {} of 4"
+WIZARD_NEXT, WIZARD_FINISH = 0x3024, 0x3025     # property-sheet wizard buttons
+
+
+def quick_define(session: Session, timeout: float = 10):
+    """Define a new section by accepting every default of the four Quick Define pages.
+
+    On a fresh start this is what File > New shows. File > New's own command (24331) does not
+    respond to a posted message under Wine, so r2x opens the wizard with Define > Quick Define.
+    """
+    start_title = session.main_window()[1]
+    wizard = session.open_dialog(CMD_QUICK_DEFINE, QUICK_DEFINE.format(1))
+    for step in range(1, 5):
+        session.click(wizard, WIZARD_FINISH if step == 4 else WIZARD_NEXT)
+        if step < 4:
+            session.wait_for_dialog_title(wizard, QUICK_DEFINE.format(step + 1), timeout)
+    wait_until(lambda: session.h.ask(f"alive {wizard}") == "0", timeout,
+               "the Quick Define wizard to finish", 0.02)
+    session.check_no_dialog()
+    wait_until(lambda: session.main_window()[1] != start_title, timeout,
+               "Response to show the new section", 0.02)

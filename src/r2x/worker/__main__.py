@@ -1,4 +1,7 @@
-"""python -m r2x.worker INPUT RECORD [options]  — solve one input and write its raw record.
+"""python -m r2x.worker (INPUT | --new) RECORD [options]  — solve one input and write its record.
+
+With --new instead of an input, the section is a new one with Quick Define's defaults, as
+File > New gives.
 
 Needs Wine, Xvfb and mingw-w64 (see docs/development.md). Progress goes to stderr in the fixed
 form of r2x.progress. Exit status: 0 solved, 1 failed, 2 usage error, 3 out of scope.
@@ -25,9 +28,12 @@ def report(event: Event):
 
 def main(argv: list[str] | None = None) -> int:
     p = argparse.ArgumentParser(prog="python -m r2x.worker", description=__doc__,
+                                usage="%(prog)s (INPUT | --new) RECORD [options]",
                                 formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("input", type=Path)
-    p.add_argument("record", type=Path, help="raw record file to write (e.g. Newbeam.r2x.txt)")
+    p.add_argument("paths", nargs="+", type=Path, metavar="PATH",
+                   help="input file (left out with --new) and the raw record file to write")
+    p.add_argument("--new", action="store_true",
+                   help="no input: a new section with Quick Define's defaults (File > New)")
     p.add_argument("--stage", default="peak", metavar="STAGES",
                    help="stages for the detail views: peak, all, or numbers and ranges "
                         "(default: peak)")
@@ -42,6 +48,9 @@ def main(argv: list[str] | None = None) -> int:
                    help="Wine prefix (default: $R2X_WINEPREFIX or ~/.cache/r2x/prefix)")
     p.add_argument("--display", help="use this X display instead of starting Xvfb")
     a = p.parse_args(argv)
+    if len(a.paths) != (1 if a.new else 2):
+        p.error("give RECORD with --new, otherwise INPUT and RECORD")
+    a.input, a.record = (None, a.paths[0]) if a.new else a.paths
     if not a.response_dir:
         p.error("--response-dir or $R2X_RESPONSE_DIR is required")
     try:
