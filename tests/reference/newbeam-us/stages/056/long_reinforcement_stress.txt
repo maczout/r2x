@@ -1,0 +1,20 @@
+  Data from Graph
+  ==============
+
+  Title		: Long. Reinforcement Stress
+
+  X Axis Title	: Stress (ksi)
+  Y Axis Title	: Beam Depth (in)
+
+   Stress (ksi)		Beam Depth (in)
+Line type : 0
+   0.000   	   11.811
+   0.000   	   -9.791
+   64.097   	   -9.791
+   64.097   	   -8.799
+   0.000   	   -8.799
+   0.000   	   9.024
+   -54.074   	   9.024
+   -54.074   	   9.791
+   0.000   	   9.791
+   0.000   	   -11.811

@@ -337,7 +337,7 @@ def build_parser() -> argparse.ArgumentParser:
                         "Default: input's, else si.\n"
                         "  si     kN    kN·m    mm   MPa\n"
                         "  us     kip   kip·ft  in   psi, ksi\n"
-                        "  kgcm   t     t·m     cm   kg/cm2")
+                        "  kgcm   ton   ton·m   cm   kg/cm2, t/cm2")
     g.add_argument("--factors", choices=("none", "csa"), type=str.lower,
                    help="Material reduction factors.\n"
                         "Default: input's, else none.")

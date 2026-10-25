@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<!DOCTYPE suite_3g SYSTEM "r3g.dtd">
+<!-- The Response Suite of programs is Copyright Evan C. Bentz 2011 -->
+
+<document>
+	<r3g_beam	date		="2026/10/24"
+			units		="US"	>
+		<concrete	fcp		="5076.3"
+				maxagg	="0.75"	/>
+		<rebar		fy		="58.0"
+				E		="29008"
+				fu		="87.0"
+				esh		="7.0"
+				eu		="100.0"	/>
+		<rebar		fy		="58.0"
+				E		="29008"
+				fu		="87.0"
+				esh		="7.0"
+				eu		="100.0"
+				name		="Trans"	/>
+		<prestress	fu		="269.8"
+				E		="29008"	/>
+		<sectionSOLID		>
+					23.62	9.84
+					0.00	9.84	"Concrete 1"
+			</sectionSOLID>
+		<shapesection	name		="RECT"
+				par1		="9.84"
+				par2		="23.62"
+				par3		="0.00"
+				par4		="0.00"
+				par5		="0.00"
+				par6		="0.00"	/>
+		<longreinfx	z		="2.52"
+				type		="Steel 1"
+				num		="3"
+				A		="2.325"
+				bartitle	="25M"	/>
+		<longreinfx	z		="21.22"
+				type		="Steel 1"
+				A		="0.465"
+				bartitle	="20M"
+				name		="top"	/>
+		<transreinfz	A		="0.155"
+				type		="Trans"
+				pattern	="5"
+				space		="9.84"
+				disttop	="21.8"
+				distbot	="1.8"
+				bartitle	="10M"
+				name		="stirrup"	/>
+		<sectloading	MM		="0.738"	/>
+
+	</r3g_beam>
+	<R2010_Analysis	length	="102.36"
+			topplatesize	="5.91"
+			displocate	="70.87"	>
+		<BMD			>
+				7.87 0.000 0
+				78.74 1.328 0
+				102.36 1.328 0
+			</BMD>
+		<mattypes		>
+				0.00 "New Cross Section"
+			</mattypes>
+		<supports	which		="left"
+				platesize	="5.91"
+				platelocate	="7.87"	/>
+		<supports	which		="right"
+				platesize	="5.91"
+				platelocate	="102.36"
+				support	="fixedverticalroller"	/>
+
+	</R2010_Analysis>
+</document>

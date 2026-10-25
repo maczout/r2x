@@ -17,13 +17,13 @@ given the stage count. With several inputs, the exit status is the most serious 
   that schema evolves, and a real clone can later replace the wrapper behind the same schema.
 - **The raw record is the result.** One text file per input. Each section is Response's Copy
   Chart Data text, byte for byte, behind a header with the versions, the input's SHA-256 and the
-  settings in effect. Its layout gets its own document (`docs/raw-format.md`, to write) and a
-  version number, since it is the kernel's contract.
+  settings in effect. Its layout has its own document (`docs/raw-format.md`) and a version
+  number, since it is the kernel's contract.
 - **Settings go through Response's dialogs only.** r2x never edits the input file, so it does not
   depend on the input format (`.rsp`, XML `.r2t`, or the older Ver_0.8 text `.r2t`).
 - **Options are overrides.** An option that is left out keeps the input's value. If the input has
-  none, it takes Response's start-up default, i.e. what File > New gives (expected: SI, no
-  factors, initial 0,0, increment 0,1; to confirm). The settings actually in effect are read back
+  none, it takes Response's start-up default, i.e. what File > New gives: SI, factors 1.00,
+  initial 0,0, increment 0,1 (confirmed below). The settings actually in effect are read back
   and written to the record header.
 - **No input means File > New.** r2x accepts the Quick Define defaults through the dialogs rather
   than shipping a copy of Newbeam, so the default follows the installed program (including an
@@ -61,7 +61,7 @@ Analysis:
                         Default: input's, else si.
                           si     kN    kN·m    mm   MPa
                           us     kip   kip·ft  in   psi, ksi
-                          kgcm   t     t·m     cm   kg/cm2
+                          kgcm   ton   ton·m   cm   kg/cm2, t/cm2
   --factors {none,csa}  Material reduction factors.
                         Default: input's, else none.
   --initial N,M         Initial load. Default: input's, else 0,0.
@@ -103,16 +103,57 @@ Examples:
 
 `r2x health` is unchanged.
 
-## To confirm in Response-2000 1.9.7 before implementing
+## Confirmed in Response-2000 on Windows
 
-The help text was written from the version-0.8-era manual (Bentz 2000, Appendix A).
+Checked by hand on 2026-10-25 (Phase 0). Screenshots are in Jamie's `_archive/phase0`; the
+reference cases are in `tests/reference/`.
 
-- Options > Preferences: the names of the three unit systems, their force, moment, length and
-  stress units (the `us` and `kgcm` rows above are unverified), and the material-factor fields
-  and CSA button.
-- Loads > Sectional Loads: the layout of the initial and increment columns.
-- File > New: the start-up defaults listed under *Decisions*, and whether the program folder has
-  an `r2k.r2k` template.
-- Whether units and material factors are saved in `.rsp` and `.r2t` files.
-- Which stage Response shows after solving an axial-only increment (is it still "peak"?).
-- The clipboard format of Copy Chart Picture (bitmap or metafile).
+- **Units.** Options > Preferences ("Response-2000 Preferences") offers SI Metric, US Customary
+  and kg/cm Metric, and a File Override checkbox, ticked by default. Loads are in kN and kNm,
+  kips and kip-ft, or ton and ton-m; lengths in mm, in or cm; stress in MPa, psi (concrete) and
+  ksi (steel), or kg/cm² (concrete) and t/cm² (steel). In exports, strain is mm/m in SI and ms
+  (the same numbers) in US units; curvature is mrad/m in SI and rad/10³ in in US units.
+- **Switching units converts everything in memory, loads included.** An increment of 1.00 kNm
+  becomes 0.74 kip-ft, and 0.10 ton-m. So r2x sets units before loads, and `--initial` and
+  `--increment` are in the units in effect. The Define Loading dialog shows two decimals, so
+  loads read back from it are rounded to two decimals.
+- **Material factors.** Concrete, Steel and Prestress fields, 1.00 meaning no factor. The CSA
+  button sets 0.65, 0.85 and 0.90; None sets 1.00. With factors, the status bar says
+  "(FACTORED)" and labels the loads Nf, Mf, Vf; chart titles do not change.
+- **Loads > Sectional Loads** opens "Define Loading": rows Axial Load, Moment and Shear; columns
+  Constant + Increment; units at the right. Shear is in the same dialog, so r2x can check it
+  there before solving.
+- **File > New.** Quick Define has four pages (title and materials; section shape; top and
+  bottom bars; stirrups and tendons). Accepting every default gives exactly Newbeam: the saved
+  file differs from `tests/reference/newbeam/input.r2t` only in its date. Start-up state: SI,
+  factors 1.00, loads 0,0,0 + 0,1,0. There is no `r2k.r2k` template in the program folder.
+- **What a file stores.** Save As writes the same XML whether it is named `.r2t` or `.rsp`. It
+  stores non-default loads (`<sectloading BN="-2000.0"/>`, `MN`, `MM`), factors
+  (`<analysisoptions phic="0.65" phis="0.85" phip="0.90"/>`) and units (`units="US"`, with every
+  value converted and rounded to the displayed precision). The rounding makes a file saved in US
+  units a slightly different section (Newbeam: 248.31 against 248.44 kip-ft at peak), so r2x
+  switches units in memory and never by saving and reopening.
+- **File Override.** Ticked, a file's units win when it is opened, and the preference switches
+  to match; unticked, the preference wins. Factors come from the file either way. Response keeps
+  no preferences between sessions (`Response.ini` holds only recent files), so every job starts
+  in SI, factors 1.00, File Override ticked, and an input's stored settings stay in effect unless
+  an option overrides them, as *Decisions* assumes.
+- **Peak.** Response opens on the peak of the load being increased: the maximum moment for a
+  moment increment (with or without a constant axial load), the largest compression for an
+  axial-only increment.
+- **Axial-only increment.** Both control charts are `Control : Axial Load - |e_x` (axial load
+  against εx) and identical; there is no Moment–φ chart. Curvature is not zero when the
+  reinforcement is unsymmetric, and the moment shows a small numerical value (−2.5 kNm for
+  Newbeam) where it should be zero.
+- **Copy Chart Picture** puts EnhancedMetafile and MetaFilePict on the clipboard; no bitmap.
+- **Version.** The splash screen says 1.9.6 (beta); Help > About said 1.9.7. r2x identifies the
+  program by `r2k.exe`'s SHA-256 rather than by either name.
+
+What this means for the implementation:
+
+- The control charts depend on the loading. r2x has to recognise the pair it gets (Moment–εx and
+  Moment–φ, or Axial Load–εx twice) instead of expecting one pair. Today it fails on an
+  axial-only increment.
+- Stage identification has to read units from the axis titles (curvature in mrad/m or
+  rad/10³ in) and use εx as a second key: the Longitudinal Strain export's value at mid-depth
+  equals the control chart's εx in every case so far. Today r2x fails on any input in US units.

@@ -67,3 +67,12 @@ def test_shear_input_is_out_of_scope(tmp_path):
     with pytest.raises(OutOfScope, match="shear"):
         run_job(shear, tmp_path / "dm.r2x.txt", Path(RESPONSE), PREFIX)
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("case", ["newbeam-axial", "newbeam-csa"])
+def test_saved_settings_match_references(tmp_path, case):
+    """Response's own Save As stores the case's settings (loads, factors) in saved.r2t, and
+    solving that file gives the hand-captured exports. See tests/reference/<case>/README.md."""
+    out = tmp_path / f"{case}.r2x.txt"
+    run_job(REF / case / "saved.r2t", out, Path(RESPONSE), PREFIX, stages=PEAK)
+    assert record.read(out).sections == reference_sections(case)
