@@ -12,7 +12,8 @@ matching curvature to the Moment–φ curve, so the charts are filed under `stag
 2. **Solve → Sectional Response.** Do not use More Detail, and do not change the load stage.
 3. Check the view is **No Shear** and the status bar shows M : 336.8 kNm.
 4. In PowerShell, from this folder:
-   `powershell -ExecutionPolicy Bypass -File ..\capture.ps1`
+   `powershell -ExecutionPolicy Bypass -File ..\capture.ps1 -Stage 056`
+   (stage 056 was known from the Wine spike; new cases capture into `stages\peak`).
    For each chart it names, right-click that chart → **Copy Chart Data**, then press Enter.
 
 | Captured | Notes |
