@@ -115,18 +115,24 @@ def same_points(a: bytes, b: bytes, tol: float = 0.0011) -> bool:
                     for (x1, y1), (x2, y2) in zip(pa, pb)))
 
 
-@pytest.mark.parametrize("case, settings", [("newbeam", Settings()),
-                                            ("newbeam-csa", Settings(factors="csa"))])
-def test_new_section_matches_newbeam(tmp_path, case, settings):
-    """No input: Quick Define's defaults give Newbeam. The control curves are byte-identical to
-    the case opened from input.r2t. The detail views list the reinforcement layers in another
-    order and differ in the last digit of some depths (a section defined in memory against one
-    read back from a file), so they are compared as points."""
+def test_new_section_matches_file_new(tmp_path):
+    """No input: r2x's Quick Define with every default gives exactly what File > New gives on
+    Windows (tests/reference/newbeam-filenew)."""
     out = tmp_path / "newbeam.r2x.txt"
-    header = run_job(None, out, Path(RESPONSE), PREFIX, settings=settings)
+    header = run_job(None, out, Path(RESPONSE), PREFIX)
     assert header["input-name"] == "File > New"
     assert "input-sha256" not in header and "template-sha256" not in header
-    rec, ref = record.read(out), reference_sections(case)
+    assert record.read(out).sections == reference_sections("newbeam-filenew")
+
+
+def test_new_section_with_factors(tmp_path):
+    """Settings apply to a new section too. There is no hand capture of File > New with CSA
+    factors, so this compares with newbeam-csa (opened from a file): the control curves are
+    byte-identical; the detail views differ as newbeam-filenew does from newbeam (layer order,
+    last digit of some depths), so they are compared as points."""
+    out = tmp_path / "newbeam.r2x.txt"
+    run_job(None, out, Path(RESPONSE), PREFIX, settings=Settings(factors="csa"))
+    rec, ref = record.read(out), reference_sections("newbeam-csa")
     assert rec.sections.keys() == ref.keys()
     for name, body in ref.items():
         if name.startswith("control/"):

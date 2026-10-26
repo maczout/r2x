@@ -166,9 +166,11 @@ How the implementation follows from this (Phase 3):
 Without an input (Phase 4), r2x starts Response with no file and opens the Quick Define wizard
 with **Define > Quick Define**, then presses Next three times and Finish. On a fresh start that
 is the wizard File > New shows; File > New's own command (24331) does not respond to a posted
-message under Wine. The section is Newbeam: its control curves are byte-identical to opening
-`tests/reference/newbeam/input.r2t`. Its detail views are not: they list the reinforcement
-layers in another order and differ in the last digit of some depths, as a section defined in
-memory differs from one read back from a file. With an `r2k.r2k` template in the program
+message under Wine. The result matches a hand capture of File > New on Windows byte for byte
+(`tests/reference/newbeam-filenew`). The section is Newbeam, but only its control curves are
+byte-identical to opening `tests/reference/newbeam/input.r2t`: the detail views list the
+reinforcement layers in another order and differ in the last digit of some depths. That is
+Response's own difference between a section defined in memory and one read back from a file,
+and it shows on Windows too. With an `r2k.r2k` template in the program
 folder, Response loads it at start and the new section keeps the template's settings (with a
 saved CSA file as the template, the factors are CSA); the record header has its SHA-256.

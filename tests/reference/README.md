@@ -12,6 +12,7 @@ them.
 | `newbeam-axial-only` | axial increment only | 22 of 0–34 | yes |
 | `newbeam-csa` | CSA material factors | 46 of 0–56 | yes |
 | `newbeam-us` | US Customary units | 56 of 0–59 | no: values rounded on save |
+| `newbeam-filenew` | no input: File > New, Quick Define's defaults | 56 of 0–59 | (no input file) |
 
 Cases with settings keep `input.r2t` as given and say in their README how the settings were
 applied. `saved.r2t`, where present, is Response's own Save As after applying them.

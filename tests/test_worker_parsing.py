@@ -40,7 +40,7 @@ def test_control_curves_have_60_points():
 
 
 @pytest.mark.parametrize("name", ["newbeam", "newbeam-axial", "newbeam-axial-only", "newbeam-csa",
-                                  "newbeam-us"])
+                                  "newbeam-us", "newbeam-filenew"])
 def test_every_reference_stage_is_identified(name):
     controls, stage, strain = case(name)
     keys = StageKeys(controls)
