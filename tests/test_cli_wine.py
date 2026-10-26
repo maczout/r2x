@@ -28,6 +28,15 @@ def test_stdout_matches_references():
     assert record.decode(out).sections == reference_sections("newbeam")
 
 
+def test_report_through_the_command_line(tmp_path):
+    code, _, err = r2x("solve", str(REF / "newbeam" / "input.r2t"), "--report", "--out",
+                       str(tmp_path))
+    assert code == 0, err
+    assert record.read(tmp_path / "input.r2x.txt").sections == reference_sections("newbeam")
+    page = (tmp_path / "input.r2x.html").read_text(encoding="utf-8")
+    assert page.count("data:image/png;base64,") == 8
+
+
 def test_parallel_with_an_out_of_scope_input(tmp_path):
     shear = Path(os.environ["R2X_RESPONSE_DIR"]) / "dm-n1n.rsp"
     if not shear.is_file():

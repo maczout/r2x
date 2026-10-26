@@ -3,8 +3,11 @@
 Runs only when $R2X_RESPONSE_DIR points at a Response-2000 program folder and Wine, Xvfb and
 mingw-w64 are installed.
 """
+import base64
 import os
+import re
 import shutil
+import struct
 from pathlib import Path
 
 import pytest
@@ -36,12 +39,26 @@ def reference_sections(case):
     return out
 
 
-def solve(tmp_path, stages, name="Newbeam"):
+def solve(tmp_path, stages, name="Newbeam", report=None):
     out = tmp_path / f"{name}.r2x.txt"
-    header = run_job(REF / "newbeam" / "input.r2t", out, Path(RESPONSE), PREFIX, stages=stages)
+    header = run_job(REF / "newbeam" / "input.r2t", out, Path(RESPONSE), PREFIX, stages=stages,
+                     report=report)
     rec = record.read(out)
     assert rec.header == header
     return rec
+
+
+PNG = re.compile(r'<img src="data:image/png;base64,([A-Za-z0-9+/=]+)"')
+
+
+def report_pictures(path: Path) -> list[tuple[int, int]]:
+    """Width and height of every picture in a report, in page order."""
+    sizes = []
+    for b64 in PNG.findall(path.read_text(encoding="utf-8")):
+        png = base64.b64decode(b64)
+        assert png[:8] == b"\x89PNG\r\n\x1a\n"
+        sizes.append(struct.unpack(">II", png[16:24]))
+    return sizes
 
 
 def test_newbeam_peak_matches_references(tmp_path):
@@ -55,10 +72,34 @@ def test_newbeam_all_and_a_selection(tmp_path):
     assert every.stages() == list(range(60)) and len(every.sections) == 2 + 60 * 5
     for name, body in reference_sections("newbeam").items():
         assert every.sections[name] == body, name
-    some = solve(tmp_path, parse_stages("peak,0-2,59"), "some")
+    # with a report: pictures are taken at the peak, before paging to the other stages
+    some = solve(tmp_path, parse_stages("peak,0-2,59"), "some", report=tmp_path / "some.html")
     assert some.header["detail-stages"] == "0-2,56,59"
     for name, body in some.sections.items():
         assert every.sections[name] == body, name
+    assert len(report_pictures(tmp_path / "some.html")) == 8
+
+
+def test_report_leaves_the_record_unchanged(tmp_path):
+    html = tmp_path / "Newbeam.r2x.html"
+    rec = solve(tmp_path, PEAK, report=html)
+    assert rec.sections == reference_sections("newbeam")
+    sizes = report_pictures(html)
+    # main window, then two control charts and five detail views as Copy Chart Picture draws them
+    assert len(sizes) == 8 and sizes[0][0] > 1000
+    assert all(w == 900 and 500 < h < 800 for w, h in sizes[1:])
+    page = html.read_text(encoding="utf-8")
+    assert "Detail views at stage 56" in page and "No picture" not in page
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["Newbeam.r2x.html", "Newbeam.r2x.txt"]
+
+
+def test_report_axial_only(tmp_path):
+    """Both control charts are the same chart: the report shows it once, as the record does."""
+    html = tmp_path / "axial.html"
+    out = tmp_path / "axial.r2x.txt"
+    run_job(REF / "newbeam-axial-only" / "saved.r2t", out, Path(RESPONSE), PREFIX, report=html)
+    assert record.read(out).sections == reference_sections("newbeam-axial-only")
+    assert len(report_pictures(html)) == 7
 
 
 def test_shear_input_is_out_of_scope(tmp_path):

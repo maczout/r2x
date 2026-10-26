@@ -7,17 +7,20 @@ The worker drives Response-2000 under Wine on its own virtual display. It needs 
 
 ```bash
 sudo dpkg --add-architecture i386 && sudo apt-get update
-sudo apt-get install -y wine wine32:i386 wine64 xvfb mingw-w64 python3-venv
+sudo apt-get install -y wine wine32:i386 wine64 fonts-wine fonts-liberation xvfb mingw-w64 \
+    python3-venv
 ```
 
 From the repo (Response-2000 in `./Response`):
 
 ```bash
 python3 -m venv ~/.venvs/r2x && . ~/.venvs/r2x/bin/activate
-pip install -e '.[dev]'
+pip install -e '.[dev,server]'     # server: the image's packages, fontTools among them
 python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/Newbeam.r2x.txt --response-dir Response
 python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/all.r2x.txt --stage all --response-dir Response
 python -m r2x.worker --new /tmp/new.r2x.txt --response-dir Response       # no input: File > New
+python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/Newbeam.r2x.txt --report /tmp/Newbeam.html \
+    --response-dir Response
 R2X_RESPONSE_DIR=Response pytest        # includes the end-to-end Newbeam tests
 ```
 
@@ -60,10 +63,27 @@ Known heuristic: Wine gives no readable "solve finished" signal, so the solve co
 once the bottom control curve has not changed for 1 s (Response extends it about every 0.2 s
 while solving). Background in `docs/wine-spike.md`.
 
-The Wine prefix has `HKCU\Software\Wine\X11 Driver` `Managed=N` (the runner sets it if it is
-missing; the image sets it at build time). Xvfb has no window manager, and with managed windows
-Wine waits 2 s for one every time a dialog closes; unmanaged windows skip the wait. The exports
-are the same either way (the Wine tests pass with both).
+`prefix.py` prepares the Wine prefix: the runner checks it before every job, and the image runs
+it once at build time (`python -m r2x.worker.prefix`). It does two things beyond `wineboot`:
+
+- `HKCU\Software\Wine\X11 Driver` `Managed=N`. Xvfb has no window manager, and with managed
+  windows Wine waits 2 s for one every time a dialog closes; unmanaged windows skip the wait. The
+  exports are the same either way (the Wine tests pass with both).
+- `drive_c/windows/Fonts/r2x-symbol.ttf`, a copy of Wine's Symbol font with a Windows symbol
+  cmap (U+F020–U+F0FF) and a higher revision, so Wine prefers it. Response draws Greek letters
+  (εx, φ) as Symbol-font characters at those codes; without the map they are boxes. Only the
+  report's pictures change. It needs fontTools and Wine's fonts; without them the runner notes
+  that the Greek letters will be boxes and carries on.
+
+## Pictures for the report
+
+`--report` adds three helper commands: `snap` copies Response's main window from its own window
+DC into a BMP (the screen DC shows only the empty desktop under Wine, since each top-level window
+draws into its own surface); `clipemf` plays the clipboard's enhanced metafile, which **Copy Chart
+Picture** puts there (as on Windows, with a metafile picture and no bitmap), into a BMP of a given
+width; `clipformats` lists what is on the clipboard. `images.py` turns the BMPs into PNGs and
+`r2x/report.py` builds the page. Both run in the container; the pictures never enter the record.
+They are captured right after the peak is identified, before any paging (`export.py`).
 
 ## Container image
 

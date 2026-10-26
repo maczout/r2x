@@ -12,7 +12,7 @@ RUN apt-get update \
  && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends gcc-mingw-w64-i686 \
  && rm -rf /var/lib/apt/lists/*
 COPY src/r2x/worker/helper.c /build/helper.c
-RUN i686-w64-mingw32-gcc -O2 -o /build/helper.exe /build/helper.c -luser32
+RUN i686-w64-mingw32-gcc -O2 -o /build/helper.exe /build/helper.c -luser32 -lgdi32
 
 # --- runtime ----------------------------------------------------------------------------------
 FROM ${BASE}
@@ -28,6 +28,7 @@ RUN dpkg --add-architecture i386 \
  && apt-get install -y --no-install-recommends \
       wine=${WINE_VERSION} wine64=${WINE_VERSION} wine32:i386=${WINE_VERSION} \
       libwine=${WINE_VERSION} libwine:i386=${WINE_VERSION} \
+      fonts-wine=${WINE_VERSION} fonts-liberation \
       xvfb xauth python3 python3-venv ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
@@ -55,12 +56,11 @@ ENV PATH=/opt/r2x/venv/bin:$PATH \
     R2X_DATA=/home/r2x/data \
     WINEARCH=win32 WINEDEBUG=-all
 
-# Create the 32-bit Wine prefix now so jobs don't wait for it. Mono and Gecko are not needed.
-# Windows are unmanaged: with no window manager, Wine would wait 2 s whenever a dialog closes.
-RUN WINEPREFIX=$R2X_WINEPREFIX WINEDLLOVERRIDES="mscoree,mshtml=" xvfb-run -a wineboot -i \
- && WINEPREFIX=$R2X_WINEPREFIX xvfb-run -a wine reg add 'HKCU\Software\Wine\X11 Driver' \
-      /v Managed /d N /f \
- && WINEPREFIX=$R2X_WINEPREFIX wineserver -w
+# Create the 32-bit Wine prefix now so jobs don't wait for it (src/r2x/worker/prefix.py: windows
+# unmanaged, and a Symbol font Response's Greek letters can use). Mono and Gecko are not needed.
+# The fonts above only change how the report's pictures look: fonts-wine has Wine's own fonts
+# (Symbol among them), fonts-liberation has fonts with Arial's metrics.
+RUN WINEDLLOVERRIDES="mscoree,mshtml=" xvfb-run -a python -m r2x.worker.prefix
 
 WORKDIR /home/r2x
 CMD ["python", "-m", "r2x.worker", "--help"]

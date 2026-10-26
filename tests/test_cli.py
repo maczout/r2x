@@ -9,7 +9,7 @@ import pytest
 
 from r2x import __version__, record
 from r2x.cli import (build_parser, expand_inputs, join_pair_values, main, overall_status,
-                     record_path, UsageError, windows_to_wsl)
+                     record_path, report_path, UsageError, windows_to_wsl)
 from r2x.display import Display
 from r2x.progress import Event
 from r2x.stages import PEAK, parse_stages
@@ -64,15 +64,14 @@ def test_usage_errors_exit_2(argv, message, capsys):
 
 
 def test_help_matches_spec(capsys):
-    """`r2x solve --help` is the text agreed in docs/cli.md, plus two notes of its own."""
+    """`r2x solve --help` is the text agreed in docs/cli.md, plus a note of its own."""
     spec = (HERE.parent / "docs" / "cli.md").read_text(encoding="utf-8")
     spec = spec[spec.index("```\nusage: r2x solve") + 4:]
     spec = spec[:spec.index("```")]
     with pytest.raises(SystemExit):
         build_parser().parse_args(["solve", "--help"])
     text = capsys.readouterr().out
-    for note in ("\nNot available yet: --report.\n",
-                 "With several inputs, the most serious: 1, then 2, then 3.\n"):
+    for note in ("With several inputs, the most serious: 1, then 2, then 3.\n",):
         assert note in text
         text = text.replace(note, "")
     assert text == spec
@@ -103,6 +102,11 @@ def test_record_path_without_input():
     assert record_path(None, Path("res")) == Path("res/newbeam.r2x.txt")
 
 
+def test_report_path():
+    assert report_path(Path("res/Newbeam.r2x.txt")) == Path("res/Newbeam.r2x.html")
+    assert report_path(Path("a.r2x.txt.r2x.txt")) == Path("a.r2x.txt.r2x.html")
+
+
 def test_record_path():
     assert record_path(Path("cases/Newbeam.r2t"), None) == Path("cases/Newbeam.r2x.txt")
     assert record_path(Path("cases/Newbeam.r2t"), Path("res")) == Path("res/Newbeam.r2x.txt")
@@ -122,7 +126,8 @@ def cases(tmp_path, monkeypatch):
     d = tmp_path / "cases"
     d.mkdir()
     for name, text in [("beam", "ok"), ("bad", "fail"), ("shear", "shear"), ("crash", "crash"),
-                       ("noout", "noout"), ("slow1", "slow"), ("slow2", "slow")]:
+                       ("noout", "noout"), ("noreport", "noreport"), ("slow1", "slow"),
+                       ("slow2", "slow")]:
         (d / f"{name}.r2t").write_text(text)
     return d
 
@@ -172,6 +177,25 @@ def test_failures(cases, name, status, message):
     assert not (cases / f"{name}.r2x.txt").exists()
 
 
+def test_report(cases, tmp_path):
+    code, _, err = r2x("solve", str(cases / "beam.r2t"), "--report", "--stage", "all")
+    assert code == 0, err
+    assert record.read(cases / "beam.r2x.txt").stages() == list(range(10))
+    assert (cases / "beam.r2x.html").read_text(encoding="utf-8").startswith("<!doctype html>")
+    assert f"-> {cases / 'beam.r2x.txt'}, beam.r2x.html (" in err
+    # an existing report is a result too
+    (cases / "beam.r2x.txt").unlink()
+    code, _, err = r2x("solve", str(cases / "beam.r2t"), "--report")
+    assert code == 2 and "beam.r2x.html exists" in err
+    code, _, _ = r2x("solve", str(cases / "beam.r2t"))          # no report asked for: no clash
+    assert code == 0
+    code, _, _ = r2x("solve", str(cases / "beam.r2t"), "--report", "--overwrite",
+                     "--out", str(tmp_path / "res"))
+    assert code == 0 and (tmp_path / "res" / "beam.r2x.html").exists()
+    code, _, err = r2x("solve", str(cases / "noreport.r2t"), "--report")
+    assert code == 1 and "wrote no noreport.r2x.html" in err
+
+
 def test_stage_past_last_is_a_usage_error(cases):
     code, _, err = r2x("solve", str(cases / "beam.r2t"), "--stage", "12")
     assert code == 2 and "[beam] usage error: stage 12 is past the last stage, 9" in err
@@ -211,7 +235,7 @@ def test_stdout(cases):
 @pytest.mark.parametrize("argv, message", [
     (["slow*.r2t", "--stdout"], "--stdout takes one input; 2 given"),
     (["beam.r2t", "--stdout", "--out", "x"], "--out does not apply"),
-    (["beam.r2t", "--report", "--initial", "1,0"], "--report: not available yet"),
+    (["beam.r2t", "--stdout", "--report"], "--report does not apply"),
     (["nothing*.r2t"], "no files match"),
     (["beam.r2t", str(Path(".") / "beam.r2t"), "be*.r2t"], ""),  # same file thrice: once
 ])

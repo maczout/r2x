@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import hashlib
 import os
-import re
 import shutil
 import subprocess
 import tempfile
@@ -13,13 +12,14 @@ from contextlib import ExitStack
 from pathlib import Path
 from typing import Callable
 
-from r2x import __version__, record
+from r2x import __version__, record, report as html_report
 from r2x.progress import Event, note
 from r2x.settings import Settings
 from r2x.stages import PEAK, StageSpec, format_ranges
 from r2x.worker import dialogs
 from r2x.worker.export import export
-from r2x.worker.session import Helper, R2xError, Session, wait_until
+from r2x.worker.prefix import prepare_prefix
+from r2x.worker.session import Helper, R2xError, Session, wait_until, wine_path
 
 HELPER_SOURCE = Path(__file__).with_name("helper.c")
 
@@ -37,7 +37,7 @@ def ensure_helper(cache: Path) -> Path:
         cache.mkdir(parents=True, exist_ok=True)
         tmp = exe.with_suffix(".tmp")
         subprocess.run(["i686-w64-mingw32-gcc", "-O2", "-o", str(tmp), str(HELPER_SOURCE),
-                        "-luser32"], check=True)
+                        "-luser32", "-lgdi32"], check=True)
         tmp.replace(exe)
     return exe
 
@@ -67,28 +67,6 @@ def start_xvfb(first: int = 99, tries: int = 20) -> tuple[subprocess.Popen, str]
     raise R2xError("Xvfb did not start. " + " | ".join(errors[-2:]))
 
 
-# Without a window manager (Xvfb has none), Wine waits 2 s for one each time a managed window
-# such as a dialog closes. Unmanaged windows skip the wait; the exports are unchanged.
-X11_DRIVER_KEY = r"HKCU\Software\Wine\X11 Driver"
-_UNMANAGED = re.compile(r'\[Software\\\\Wine\\\\X11 Driver\][^\[]*"Managed"="N"')
-
-
-def prepare_prefix(prefix: Path, env: dict, on_event: Callable[[Event], None]):
-    """Create the Wine prefix if needed, and make sure it does not use window management."""
-    if not (prefix / "system.reg").exists():
-        on_event(note("creating Wine prefix (first run only)"))
-        subprocess.run(["wineboot", "-i"], env=env, check=True,
-                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    user_reg = prefix / "user.reg"
-    if not (user_reg.exists() and _UNMANAGED.search(user_reg.read_text(errors="replace"))):
-        subprocess.run(["wine", "reg", "add", X11_DRIVER_KEY, "/v", "Managed", "/d", "N", "/f"],
-                       env=env, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-
-
-def wine_path(p: Path) -> str:
-    return "Z:" + str(p.resolve()).replace("/", "\\")
-
-
 # A Response document with this name in the program folder is its template for new sections.
 TEMPLATE = "r2k.r2k"
 NEW_INPUT = "File > New"      # input-name in the record header when there is no input file
@@ -97,7 +75,8 @@ NEW_INPUT = "File > New"      # input-name in the record header when there is no
 def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path,
             display: str | None = None, stages: StageSpec = PEAK,
             settings: Settings = Settings(), cache: Path | None = None,
-            on_event: Callable[[Event], None] = lambda e: None) -> dict[str, str]:
+            on_event: Callable[[Event], None] = lambda e: None,
+            report: Path | None = None) -> dict[str, str]:
     """Solve input_file in Response-2000 and write its raw record to the file out.
 
     With no input file, Response starts empty and the section is defined by accepting every
@@ -105,7 +84,8 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
     Response's dialogs before solving, and the settings in effect are read back into the header.
     An input whose loading includes shear stops here (OutOfScope). The record is written only
     once the export is complete, under a temporary name first, so a failed job leaves no file
-    behind. Returns the record header.
+    behind. With report, an HTML report of the peak stage (r2x/report.py) is written there too,
+    before the record. Returns the record header.
     """
     input_file = Path(input_file) if input_file is not None else None
     out = Path(out)
@@ -113,8 +93,10 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
     exe = response_dir / "r2k.exe"
     if not exe.is_file():
         raise R2xError(f"no r2k.exe in {response_dir}")
-    if not out.parent.is_dir():
-        raise R2xError(f"no folder {out.parent} to write the record in")
+    report = Path(report) if report is not None else None
+    for path, what in ((out, "the record"), (report, "the report")):
+        if path is not None and not path.parent.is_dir():
+            raise R2xError(f"no folder {path.parent} to write {what} in")
     cache = cache or Path.home() / ".cache" / "r2x"
     helper_exe = ensure_helper(cache)
 
@@ -160,7 +142,11 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
         dialogs.apply(session, settings)
         effective = dialogs.read(session)
         dialogs.check_scope(effective)
-        result = export(session, stages, on_event)
+        pictures = None
+        if report is not None:
+            pictures = job / "pictures"
+            pictures.mkdir()
+        result = export(session, stages, on_event, pictures)
 
     wine_version = subprocess.run(["wine", "--version"], capture_output=True, text=True).stdout.strip()
     header = {
@@ -177,14 +163,26 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
         "detail-stages": format_ranges(result.stages),
     }
     data = record.encode(header, result.sections)
-    tmp = out.with_name(f".{out.name}.{os.getpid()}.tmp")
-    try:
-        tmp.write_bytes(data)
-        os.replace(tmp, out)
-    except PermissionError:
-        tmp.unlink(missing_ok=True)
-        raise R2xError(f"cannot write to {out.parent} (uid {os.getuid()} needs write access)")
-    except BaseException:
-        tmp.unlink(missing_ok=True)
-        raise
+    files = [(out, data)]
+    if report is not None:
+        page = html_report.build(record.decode(data), result.pictures)
+        files.insert(0, (report, page.encode("utf-8")))
+    write_files(files)
     return header
+
+
+def write_files(files: list[tuple[Path, bytes]]):
+    """Write each file under a temporary name, then rename them in order, so a reader never sees
+    a partial file and the last file (the record) appears only once the others are in place."""
+    tmps = [path.with_name(f".{path.name}.{os.getpid()}.tmp") for path, _ in files]
+    try:
+        for tmp, (_, data) in zip(tmps, files):
+            tmp.write_bytes(data)
+        for tmp, (path, _) in zip(tmps, files):
+            os.replace(tmp, path)
+    except PermissionError:
+        folder = next(path.parent for path, _ in files)
+        raise R2xError(f"cannot write to {folder} (uid {os.getuid()} needs write access)")
+    finally:
+        for tmp in tmps:
+            tmp.unlink(missing_ok=True)

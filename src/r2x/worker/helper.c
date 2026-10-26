@@ -1,6 +1,6 @@
 /* r2x helper: runs inside the same Wine prefix as Response-2000 and answers one command per line
  * on stdin. Every reply is one line starting with "ok" or "err"; "tree" replies "ok N" followed by
- * N lines. Build: i686-w64-mingw32-gcc -O2 -o helper.exe helper.c -luser32
+ * N lines. Build: i686-w64-mingw32-gcc -O2 -o helper.exe helper.c -luser32 -lgdi32
  *
  * Commands
  *   main                     handle and title of Response's visible main window
@@ -21,6 +21,10 @@
  *   click <hwnd>             post BM_CLICK to a button
  *   getcheck <hwnd>          a check box or radio button's state (0 or 1)
  *   alive <hwnd>             "ok 1" if the window exists and is visible, else "ok 0"
+ *   clipformats              clipboard format IDs, space-separated
+ *   clipemf <width> <hexpath>  render the clipboard's enhanced metafile (Copy Chart Picture) to a
+ *                            24-bit BMP file this wide, height from its aspect; "ok W H"
+ *   snap <hwnd> <hexpath>    the window as it is on screen, to a 24-bit BMP file; "ok W H"
  *   quit
  */
 #include <windows.h>
@@ -114,6 +118,105 @@ static void do_gettext(HWND h) {
     printf("ok ");
     for (const unsigned char *p = (const unsigned char *)buf; *p; p++) printf("%02x", *p);
     printf("\n");
+}
+
+static BOOL open_clipboard(void);
+
+static int unhex(const char *hex, char *out, size_t size) {
+    size_t n = 0;
+    for (; hex[0] && hex[1] && n < size - 1; hex += 2) {
+        int hi = hexval(hex[0]), lo = hexval(hex[1]);
+        if (hi < 0 || lo < 0) return 0;
+        out[n++] = (char)(hi * 16 + lo);
+    }
+    out[n] = 0;
+    return 1;
+}
+
+/* Write a bitmap selected out of any DC as a bottom-up 24-bit BMP file. */
+static int save_bmp(HBITMAP bmp, int w, int h, const char *path) {
+    BITMAPINFOHEADER bi;
+    BITMAPFILEHEADER bf;
+    int stride = (w * 3 + 3) & ~3;
+    DWORD size = (DWORD)stride * h;
+    unsigned char *px = malloc(size);
+    HDC dc = GetDC(NULL);
+    FILE *f;
+    int ok;
+    memset(&bi, 0, sizeof bi);
+    bi.biSize = sizeof bi; bi.biWidth = w; bi.biHeight = h; bi.biPlanes = 1;
+    bi.biBitCount = 24; bi.biCompression = BI_RGB;
+    ok = px && GetDIBits(dc, bmp, 0, h, px, (BITMAPINFO *)&bi, DIB_RGB_COLORS) == h;
+    ReleaseDC(NULL, dc);
+    if (ok && (f = fopen(path, "wb"))) {
+        memset(&bf, 0, sizeof bf);
+        bf.bfType = 0x4D42;
+        bf.bfOffBits = sizeof bf + sizeof bi;
+        bf.bfSize = bf.bfOffBits + size;
+        ok = fwrite(&bf, sizeof bf, 1, f) == 1 && fwrite(&bi, sizeof bi, 1, f) == 1 &&
+             fwrite(px, 1, size, f) == size;
+        ok = (fclose(f) == 0) && ok;
+    } else ok = 0;
+    free(px);
+    return ok;
+}
+
+static void do_clipformats(void) {
+    UINT fmt = 0;
+    if (!open_clipboard()) { printf("err open clipboard\n"); return; }
+    printf("ok");
+    while ((fmt = EnumClipboardFormats(fmt))) printf(" %u", fmt);
+    printf("\n");
+    CloseClipboard();
+}
+
+static void do_clipemf(int width, const char *hexpath) {
+    char path[MAX_PATH];
+    HENHMETAFILE emf, own;
+    ENHMETAHEADER hdr;
+    if (width <= 0 || !unhex(hexpath, path, sizeof path)) { printf("err bad arguments\n"); return; }
+    if (!open_clipboard()) { printf("err open clipboard\n"); return; }
+    emf = (HENHMETAFILE)GetClipboardData(CF_ENHMETAFILE);
+    own = emf ? CopyEnhMetaFileA(emf, NULL) : NULL;
+    CloseClipboard();
+    if (!own) { printf("err no metafile\n"); return; }
+    GetEnhMetaFileHeader(own, sizeof hdr, &hdr);
+    {
+        LONG fw = hdr.rclFrame.right - hdr.rclFrame.left, fh = hdr.rclFrame.bottom - hdr.rclFrame.top;
+        int height = fw > 0 ? (int)((double)width * fh / fw + 0.5) : width * 3 / 4;
+        HDC screen = GetDC(NULL), mem = CreateCompatibleDC(screen);
+        HBITMAP bmp = CreateCompatibleBitmap(screen, width, height);
+        HGDIOBJ old = SelectObject(mem, bmp);
+        RECT r = {0, 0, width, height};
+        PatBlt(mem, 0, 0, width, height, WHITENESS);
+        PlayEnhMetaFile(mem, own, &r);
+        SelectObject(mem, old);
+        if (save_bmp(bmp, width, height, path)) printf("ok %d %d\n", width, height);
+        else printf("err save\n");
+        DeleteObject(bmp); DeleteDC(mem); ReleaseDC(NULL, screen);
+    }
+    DeleteEnhMetaFile(own);
+}
+
+static void do_snap(HWND h, const char *hexpath) {
+    char path[MAX_PATH];
+    RECT r;
+    int w, ht;
+    if (!IsWindow(h) || !unhex(hexpath, path, sizeof path)) { printf("err bad arguments\n"); return; }
+    GetWindowRect(h, &r);
+    w = r.right - r.left; ht = r.bottom - r.top;
+    {
+        /* Copy from the window's own DC: Wine draws each top-level window into its own surface,
+         * and the screen DC only shows the (empty) desktop. */
+        HDC src = GetWindowDC(h), mem = CreateCompatibleDC(src);
+        HBITMAP bmp = CreateCompatibleBitmap(src, w, ht);
+        HGDIOBJ old = SelectObject(mem, bmp);
+        BitBlt(mem, 0, 0, w, ht, src, 0, 0, SRCCOPY);
+        SelectObject(mem, old);
+        if (save_bmp(bmp, w, ht, path)) printf("ok %d %d\n", w, ht);
+        else printf("err save\n");
+        DeleteObject(bmp); DeleteDC(mem); ReleaseDC(h, src);
+    }
 }
 
 static void do_settext(HWND h, const char *hex) {
@@ -239,6 +342,12 @@ int main(void) {
                                                    SEND_TIMEOUT_MS, &r))
                 printf("ok %d\n", r == BST_CHECKED ? 1 : 0);
             else printf("err getcheck\n");
+        } else if (!strcmp(cmd, "clipformats")) {
+            do_clipformats();
+        } else if (!strcmp(cmd, "clipemf") && a1 && a2) {
+            do_clipemf(atoi(a1), a2);
+        } else if (!strcmp(cmd, "snap") && a1 && a2) {
+            do_snap(parse_hwnd(a1), a2);
         } else if (!strcmp(cmd, "alive") && a1) {
             HWND t = parse_hwnd(a1);
             printf("ok %d\n", IsWindow(t) && IsWindowVisible(t) ? 1 : 0);

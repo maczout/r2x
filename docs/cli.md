@@ -1,10 +1,10 @@
 # Command line
 
 **Status:** agreed 2026-10-25. Implemented: the raw record (`docs/raw-format.md`), `--stage`,
-`--out`, `--stdout`, `--overwrite`, `--parallel`, `--quiet`, the exit statuses, and `--units`,
-`--factors`, `--initial` and `--increment` through Response's dialogs, and solving without an
-input. Not yet: `--report`; r2x accepts it but stops with a usage error. `r2x solve --help`
-matches the text below plus two notes, and `tests/test_cli.py` keeps them in step.
+`--out`, `--stdout`, `--overwrite`, `--parallel`, `--quiet`, the exit statuses, `--units`,
+`--factors`, `--initial` and `--increment` through Response's dialogs, solving without an input,
+and `--report`. `r2x solve --help` matches the text below plus one note, and
+`tests/test_cli.py` keeps them in step.
 
 A stage number past the last stage is a usage error (exit status 2), found once the solve has
 given the stage count. With several inputs, the exit status is the most serious outcome: 1, then
@@ -174,3 +174,26 @@ Response's own difference between a section defined in memory and one read back 
 and it shows on Windows too. With an `r2k.r2k` template in the program
 folder, Response loads it at start and the new section keeps the template's settings (with a
 saved CSA file as the template, the factors are CSA); the record header has its SHA-256.
+
+The report (Phase 5) is one self-contained HTML file, `NAME.r2x.html`, written next to the record
+and before it, so the record still appears last. The worker builds it in the container
+(`src/r2x/report.py`). Right after the solve, once the peak is identified and before any paging,
+it takes:
+
+- the main window as it is on screen (Wine's own drawing of it, title bar included);
+- **Copy Chart Picture** of each control chart (once when both are the same chart, as with an
+  axial-only increment) and of the five detail views. The picture is an enhanced metafile; the
+  helper plays it into a bitmap 900 pixels wide, kept in the report as PNG.
+
+Each chart's picture sits beside a table of its Copy Chart Data export at the peak, taken from the
+record, with Response's own text in a collapsed block below it. The settings in effect and the
+record header head and close the page. The record is the same bytes with or without `--report`
+(`tests/test_worker_wine.py`). `--report` is not allowed with `--stdout`, and an existing report
+needs `--overwrite` like an existing record; without `--report`, an existing report is left alone.
+
+Under Wine the pictures need fonts that a bare image lacks: Wine's own (`fonts-wine`, which has
+Symbol) and Arial's metrics (`fonts-liberation`). Response writes the Greek letters in chart titles
+(εx, φ) in the Symbol font at codes Windows maps to U+F0xx; Wine's Symbol font has the glyphs but
+not that map, so they showed as boxes. The prefix gets a copy of Wine's Symbol font with the map
+added (`src/r2x/worker/prefix.py`). Pictures are checked by eye against Windows; they are not
+byte-comparable.

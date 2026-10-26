@@ -41,6 +41,8 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--factors", choices=FACTORS, help="override the input's material factors")
     p.add_argument("--initial", metavar="N,M", help="override the initial load (units in effect)")
     p.add_argument("--increment", metavar="N,M", help="override the load increment")
+    p.add_argument("--report", type=Path, metavar="HTML",
+                   help="also write an HTML report of the peak stage to this file")
     p.add_argument("--response-dir", type=Path, default=os.environ.get("R2X_RESPONSE_DIR"),
                    help="Response-2000 program folder (default: $R2X_RESPONSE_DIR)")
     p.add_argument("--prefix", type=Path,
@@ -67,7 +69,7 @@ def main(argv: list[str] | None = None) -> int:
     t0 = time.monotonic()
     try:
         run_job(a.input, a.record, a.response_dir, Path(a.prefix), a.display, stages=stages,
-                settings=settings, on_event=report)
+                settings=settings, on_event=report, report=a.report)
     except OutOfScope as e:
         report(Event("out-of-scope", str(e)))
         return OUT_OF_SCOPE

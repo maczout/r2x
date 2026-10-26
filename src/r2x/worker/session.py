@@ -10,15 +10,20 @@ from __future__ import annotations
 import subprocess
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable
+
+from r2x.worker.images import bmp_to_png
 
 # Response-2000 main-menu command IDs (RT_MENU resource of r2k.exe 1.9.7).
 CMD_SECTIONAL_RESPONSE = 5092
 VK_PRIOR, VK_NEXT, VK_DOWN, VK_RETURN, VK_ESCAPE = 0x21, 0x22, 0x28, 0x0D, 0x1B
 IDOK, IDCANCEL = 1, 2
 
-# Position of "Copy Chart Data" in every chart's context menu (after "Copy Chart Picture").
+# Positions in every chart's context menu: Copy Chart Picture, then Copy Chart Data.
+COPY_CHART_PICTURE_DOWNS = 1
 COPY_CHART_DATA_DOWNS = 2
+PICTURE_WIDTH = 900       # pixels; Copy Chart Picture is a metafile, drawn at this width
 
 
 @dataclass(frozen=True)
@@ -125,6 +130,11 @@ class Helper:
             self.proc.kill()
 
 
+def wine_path(p: Path) -> str:
+    """A Linux path as programs in the Wine prefix see it (drive Z:)."""
+    return "Z:" + str(Path(p).resolve()).replace("/", "\\")
+
+
 def wait_until(predicate, timeout: float, what: str, interval: float = 0.01):
     t0 = time.monotonic()
     while True:
@@ -213,15 +223,12 @@ class Session:
         retry cannot pass off the wrong data: every export's title is checked, and the stage
         checks in export.py compare its contents with the control curve.
         """
-        for attempt in range(1, attempts + 1):
-            try:
-                data = self._copy_once(chart, timeout)
-                break
-            except WaitTimeout as e:
-                self._dismiss_popup()
-                if attempt == attempts:
-                    raise R2xError(f"Copy Chart Data of {chart.key} failed {attempts} times: {e}")
-                self.note(f"Copy Chart Data of {chart.key} got no reply ({e}); trying again")
+        def copy():
+            self._choose(chart, COPY_CHART_DATA_DOWNS, "chart data", timeout)
+            reply = wait_until(lambda: self.h.try_ask("clip"), timeout,
+                               f"clipboard text of {chart.key}", 0.01)
+            return bytes.fromhex(reply)
+        data = self._retrying(chart, "Copy Chart Data", copy, attempts)
         title = export_title(data)
         if chart.control is not None:
             if title in CONTROL_KEYS:
@@ -234,19 +241,55 @@ class Session:
             raise R2xError(f"{chart.key}: export title {title!r}, expected {chart.title!r}")
         return data
 
-    def _copy_once(self, chart: Chart, timeout: float) -> bytes:
+    def copy_picture(self, chart: Chart, scratch: Path, width: int = PICTURE_WIDTH,
+                     timeout: float = 5, attempts: int = 3) -> bytes:
+        """Right-click the chart, choose Copy Chart Picture, return it drawn as a PNG.
+
+        Response puts an enhanced metafile on the clipboard; the helper plays it into a bitmap
+        this many pixels wide, white behind, in a file under scratch.
+        """
+        bmp = Path(scratch) / f"{chart.key}.bmp"
+        command = f"clipemf {width} {wine_path(bmp).encode().hex()}"
+        def copy():
+            self._choose(chart, COPY_CHART_PICTURE_DOWNS, "chart picture", timeout)
+            wait_until(lambda: self.h.try_ask(command), timeout, f"the picture of {chart.key}",
+                       0.01)
+        self._retrying(chart, "Copy Chart Picture", copy, attempts)
+        try:
+            return bmp_to_png(bmp.read_bytes())
+        finally:
+            bmp.unlink(missing_ok=True)
+
+    def snapshot(self, scratch: Path) -> bytes:
+        """Response's main window as it is on screen, as a PNG."""
+        bmp = Path(scratch) / "main-window.bmp"
+        self.h.ask(f"snap {self.main_window()[0]} {wine_path(bmp).encode().hex()}")
+        try:
+            return bmp_to_png(bmp.read_bytes())
+        finally:
+            bmp.unlink(missing_ok=True)
+
+    def _retrying(self, chart: Chart, what: str, copy: Callable, attempts: int):
+        for attempt in range(1, attempts + 1):
+            try:
+                return copy()
+            except WaitTimeout as e:
+                self._dismiss_popup()
+                if attempt == attempts:
+                    raise R2xError(f"{what} of {chart.key} failed {attempts} times: {e}")
+                self.note(f"{what} of {chart.key} got no reply ({e}); trying again")
+
+    def _choose(self, chart: Chart, downs: int, what: str, timeout: float):
+        """Choose an item of the chart's context menu and wait until the clipboard changes."""
         hwnd = (self._charts or self.find_charts())[chart.key]
         self.h.ask("clipclear")
         seq = self.h.ask("clipseq")
         self.h.ask(f"rclick {hwnd}")
         wait_until(lambda: self.h.ask("popup") == "1", timeout, f"context menu of {chart.key}", 0.005)
-        for _ in range(COPY_CHART_DATA_DOWNS):
+        for _ in range(downs):
             self.h.ask(f"menukey {VK_DOWN:#x}")
         self.h.ask(f"menukey {VK_RETURN:#x}")
-        wait_until(lambda: self.h.ask("clipseq") != seq, timeout, f"chart data of {chart.key}", 0.005)
-        reply = wait_until(lambda: self.h.try_ask("clip"), timeout, f"clipboard text of {chart.key}",
-                           0.01)
-        return bytes.fromhex(reply)
+        wait_until(lambda: self.h.ask("clipseq") != seq, timeout, f"{what} of {chart.key}", 0.005)
 
     def _dismiss_popup(self, timeout: float = 2):
         """Close a context menu left open by a copy that got no reply."""

@@ -8,7 +8,8 @@ paths back to the host folders mounted there.
 FAKE_DOCKER_MODE=fake (default) imitates the worker without Wine. The input's text decides:
     fail   -> "failed", exit 1          shear  -> "out of scope", exit 3
     crash  -> a traceback, exit 1       noout  -> exit 0 without writing a record
-    slow   -> takes about a second      otherwise: 10 stages, peak 7
+    slow   -> takes about a second      noreport -> exit 0 without writing a report
+    otherwise: 10 stages, peak 7, and a stub report if one is asked for
 FAKE_DOCKER_MODE=wine runs the real worker on this machine instead, with its own copy of the Wine
 prefix as each container has, so that inputs can run in parallel (needs $R2X_RESPONSE_DIR).
 """
@@ -51,7 +52,8 @@ def host_path(mounts: dict[str, str], p: str) -> Path:
     return Path(mounts[folder]) / name
 
 
-def fake_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str]) -> int:
+def fake_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str],
+                report: Path | None) -> int:
     from r2x import record
     from r2x.progress import Event
     from r2x.stages import StageError, parse_stages
@@ -83,6 +85,8 @@ def fake_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str
     for k, i in enumerate(targets):
         sections.append((f"stage/{i}/longitudinal_strain", b"stage %d\r\n" % i))
         say(Event("stage", stage=i, done=k + 1, total=len(targets)))
+    if report is not None and "noreport" not in text:
+        report.write_text("<!doctype html>\n<title>fake report</title>\n", encoding="utf-8")
     if "noout" not in text:
         out.write_bytes(record.encode({"input-name": name, **settings, "stage-count": "10",
                                        "peak-stage": "7"}, sections))
@@ -90,7 +94,8 @@ def fake_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str
     return 0
 
 
-def wine_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str]) -> int:
+def wine_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str],
+                report: Path | None) -> int:
     template = Path(os.environ.get("R2X_WINEPREFIX", Path.home() / ".cache/r2x/prefix"))
     with tempfile.TemporaryDirectory(prefix="fake-docker-") as tmp:
         prefix = Path(tmp) / "prefix"
@@ -98,6 +103,7 @@ def wine_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str
             shutil.copytree(template, prefix, symlinks=True)
         env = dict(os.environ, R2X_WINEPREFIX=str(prefix))
         options = [f"--{k}={v}" for k, v in settings.items()]
+        options += ["--report", str(report)] if report is not None else []
         source = [str(inp)] if inp else ["--new"]
         return subprocess.run([sys.executable, "-m", "r2x.worker", *source, str(out),
                                "--stage", stage, *options], env=env).returncode
@@ -123,8 +129,9 @@ def main(argv: list[str]) -> int:
                 settings[key] = rest[i + 1]
             elif arg.startswith(f"--{key}="):
                 settings[key] = arg.split("=", 1)[1]
+    report = host_path(mounts, rest[rest.index("--report") + 1]) if "--report" in rest else None
     worker = wine_worker if os.environ.get("FAKE_DOCKER_MODE") == "wine" else fake_worker
-    return worker(inp, out, stage, settings)
+    return worker(inp, out, stage, settings, report)
 
 
 if __name__ == "__main__":

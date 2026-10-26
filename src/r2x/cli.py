@@ -30,6 +30,7 @@ from r2x.stages import StageError, StageSpec, parse_stages
 
 DEFAULT_IMAGE = "r2x"
 RECORD_SUFFIX = ".r2x.txt"
+REPORT_SUFFIX = ".r2x.html"
 NEW_NAME = "newbeam"     # record name without an input: Response's name for a new section
 
 
@@ -93,6 +94,11 @@ def record_path(inp: Path | None, out: Path | None) -> Path:
     return folder / f"{job_name(inp)}{RECORD_SUFFIX}"
 
 
+def report_path(record: Path) -> Path:
+    """The report goes next to the record: NAME.r2x.html."""
+    return record.with_name(record.name.removesuffix(RECORD_SUFFIX) + REPORT_SUFFIX)
+
+
 def overall_status(statuses: list[int]) -> int:
     """The most serious outcome: failed, then usage error, then out of scope, then solved."""
     for s in (FAILED, USAGE, OUT_OF_SCOPE):
@@ -103,8 +109,9 @@ def overall_status(statuses: list[int]) -> int:
 
 # -- one input ----------------------------------------------------------------------------------
 def container_command(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
-                      image: str) -> list[str]:
-    """docker run for one input; without an input the worker defines a new section (--new)."""
+                      image: str, report: Path | None = None) -> list[str]:
+    """docker run for one input; without an input the worker defines a new section (--new).
+    The report, if any, goes in the record's folder."""
     mounts = ["-v", f"{docker_path(inp)}:/in/{inp.name}:ro"] if inp is not None else []
     worker_input = [f"/in/{inp.name}"] if inp is not None else ["--new"]
     return docker_command() + [
@@ -112,13 +119,15 @@ def container_command(inp: Path | None, record: Path, stages: StageSpec, setting
         "-v", f"{docker_path(record.parent)}:/out",
         image, "python", "-m", "r2x.worker", *worker_input, f"/out/{record.name}",
         "--stage", str(stages), *settings.args(),
+        *(["--report", f"/out/{report.name}"] if report is not None else []),
     ]
 
 
 def run_container(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
-                  image: str, display: Display, job: Job) -> tuple[int, str]:
+                  image: str, display: Display, job: Job,
+                  report: Path | None = None) -> tuple[int, str]:
     """Solve one input in its own container; return its exit status and, if it failed, why."""
-    cmd = container_command(inp, record, stages, settings, image)
+    cmd = container_command(inp, record, stages, settings, image, report)
     display.start(job)
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -139,8 +148,9 @@ def run_container(inp: Path | None, record: Path, stages: StageSpec, settings: S
             display.event(job, e)
     code = proc.wait()
     if code == SOLVED:
-        if not record.is_file():
-            return FAILED, f"the container finished but wrote no {record.name}"
+        for path in (record, report):
+            if path is not None and not path.is_file():
+                return FAILED, f"the container finished but wrote no {path.name}"
         return SOLVED, ""
     if code in (FAILED, USAGE, OUT_OF_SCOPE) and reason:
         return code, reason
@@ -149,19 +159,14 @@ def run_container(inp: Path | None, record: Path, stages: StageSpec, settings: S
 
 
 # -- commands -----------------------------------------------------------------------------------
-NOT_YET = {"report": "--report"}
-
-
 def settings_from(a) -> Settings:
     return Settings(a.units, a.factors, a.initial, a.increment)
 
 
 def check_solve_args(a) -> None:
-    unavailable = [flag for attr, flag in NOT_YET.items() if getattr(a, attr) not in (None, False)]
-    if unavailable:
-        raise UsageError(f"{', '.join(unavailable)}: not available yet (see docs/cli.md)")
-    if a.stdout and a.out:
-        raise UsageError("--stdout writes no files, so --out does not apply")
+    for flag in ("out", "report"):
+        if a.stdout and getattr(a, flag):
+            raise UsageError(f"--stdout writes no files, so --{flag} does not apply")
 
 
 def cmd_solve(a) -> int:
@@ -174,25 +179,27 @@ def cmd_solve(a) -> int:
         return solve_to_stdout(inputs[0], a, live)
 
     records = [record_path(i, a.out) for i in inputs]
+    reports = [report_path(r) if a.report else None for r in records]
     clash = sorted({str(r) for r in records if records.count(r) > 1})
     if clash:
         raise UsageError(f"several inputs would write {clash[0]}")
-    existing = [r for r in records if r.exists()]
+    existing = [p for p in records + reports if p is not None and p.exists()]
     if existing and not a.overwrite:
         more = f" (and {len(existing) - 1} more)" if len(existing) > 1 else ""
         raise UsageError(f"{existing[0]} exists{more}; use --overwrite to replace")
     if a.out:
         a.out.mkdir(parents=True, exist_ok=True)
-    for r in existing:
-        r.unlink()
+    for p in existing:
+        p.unlink()
 
     with Display(sys.stderr, live, a.quiet) as display:
         jobs = [display.add(job_name(i)) for i in inputs]
 
         def solve(k: int) -> int:
             status, reason = run_container(inputs[k], records[k], a.stage, settings_from(a),
-                                           a.image, display, jobs[k])
-            display.finish(jobs[k], status, reason, str(records[k]))
+                                           a.image, display, jobs[k], reports[k])
+            where = str(records[k]) + (f", {reports[k].name}" if reports[k] else "")
+            display.finish(jobs[k], status, reason, where)
             return status
 
         with ThreadPoolExecutor(max_workers=a.parallel) as pool:
@@ -241,9 +248,7 @@ from its control charts and detail views.
 Scope: axial load and moment. Not M-N interaction or full-member analysis.
 r2x never edits the input file. Options override the input. Options you
 leave out keep the input's value, or Response's start-up default if the
-input has none.
-
-Not available yet: --report."""
+input has none."""
 
 SOLVE_EPILOG = """\
 Results (NAME is the input file name, or newbeam without one):

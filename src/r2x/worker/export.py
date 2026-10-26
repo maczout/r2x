@@ -3,14 +3,15 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable
 
 from r2x.progress import Event
 from r2x.record import control_section, stage_section
 from r2x.stages import StageSpec
 from r2x.worker.identify import StageKeys
-from r2x.worker.session import (CONTROL_KEYS, NO_SHEAR_CHARTS, VK_NEXT, VK_PRIOR, R2xError,
-                                Session, export_title, wait_until)
+from r2x.worker.session import (CONTROL_CHARTS, CONTROL_KEYS, NO_SHEAR_CHARTS, VK_NEXT, VK_PRIOR,
+                                R2xError, Session, export_title, wait_until)
 
 STRAIN = NO_SHEAR_CHARTS[0]
 assert STRAIN.key == "longitudinal_strain"
@@ -22,6 +23,9 @@ class Export:
     peak: int                     # the stage Response showed when the solve finished
     stages: list[int]             # stages whose detail views were exported, ascending
     sections: list[tuple[str, bytes]] = field(default_factory=list)  # in record order
+    # PNG pictures of the peak stage when asked for: "main-window", then each control chart by
+    # its section key and each detail view by its chart key, in screen order.
+    pictures: dict[str, bytes] = field(default_factory=dict)
 
 
 def control_exports(*exports: bytes) -> dict[str, bytes]:
@@ -41,13 +45,17 @@ def control_exports(*exports: bytes) -> dict[str, bytes]:
 
 
 def export(session: Session, spec: StageSpec,
-           on_event: Callable[[Event], None] = lambda e: None) -> Export:
+           on_event: Callable[[Event], None] = lambda e: None,
+           pictures: Path | None = None) -> Export:
     """Solve, then copy the control charts and the detail views of the stages in spec.
 
+    With a pictures folder (scratch space for the helper), also capture the main window and
+    every chart as pictures, at the peak, before any paging.
     Raises StageError (from spec.resolve) if spec names a stage past the last one.
     """
     on_event(Event("solving"))
-    controls = control_exports(*session.solve())
+    top, bottom = session.solve()
+    controls = control_exports(top, bottom)
     keys = StageKeys(controls)
     n = keys.count
     strain = session.copy_chart(STRAIN)
@@ -57,6 +65,8 @@ def export(session: Session, spec: StageSpec,
 
     result = Export(n, peak, targets)
     result.sections += [(control_section(key), data) for key, data in controls.items()]
+    if pictures is not None:
+        result.pictures = capture_pictures(session, (top, bottom), pictures)
 
     def export_stage(i: int, strain: bytes):
         result.sections.append((stage_section(i, STRAIN.key), strain))
@@ -89,6 +99,20 @@ def export(session: Session, spec: StageSpec,
         if session.copy_chart(STRAIN) != strain:
             raise R2xError(f"Response has more than the {n} stages on its control curves")
     return result
+
+
+def capture_pictures(session: Session, control_data: tuple[bytes, bytes],
+                     scratch: Path) -> dict[str, bytes]:
+    """The main window as it is now, then Copy Chart Picture of each chart. A control chart that
+    repeats the other (axial-only increment) is taken once, as in the record."""
+    out = {"main-window": session.snapshot(scratch)}
+    for chart, data in zip(CONTROL_CHARTS, control_data):
+        key = CONTROL_KEYS[export_title(data)]
+        if key not in out:
+            out[key] = session.copy_picture(chart, scratch)
+    for chart in NO_SHEAR_CHARTS:
+        out[chart.key] = session.copy_picture(chart, scratch)
+    return out
 
 
 def _strain_if_stage(session: Session, keys: StageKeys, i: int) -> bytes | None:

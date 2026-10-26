@@ -14,8 +14,9 @@ requires-python = ">=3.10"
 dependencies = []
 
 [project.optional-dependencies]
-# Server and worker dependencies; the CLI stays light.
-server = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9"]
+# What the image installs: the worker's (fontTools, for the report's Symbol font) and the
+# optional server's. The CLI stays light.
+server = ["fastapi>=0.110", "uvicorn>=0.29", "python-multipart>=0.0.9", "fonttools>=4.40"]
 dev = ["pytest", "httpx", "pefile"]
 
 [project.scripts]
