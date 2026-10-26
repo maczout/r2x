@@ -2,104 +2,130 @@
 
 Run Response-2000 from the command line.
 
-`r2x` drives an unmodified copy of Response-2000 (Bentz & Collins' MCFT sectional analysis program)
-in a Linux container under Wine and returns its exported data as raw text. It does not re-compute,
-filter or interpret anything.
+r2x drives an unmodified copy of Response-2000, Bentz and Collins' sectional analysis program for
+reinforced and prestressed concrete, under Wine in a Linux container. It returns Response's own
+exported data, byte for byte, and does not re-compute, filter or interpret anything.
 
-**Scope:** sectional moment-curvature response with no shear; results from the **No Shear** view.
-Input is any file Response-2000 opens (`.r2t`, `.rsp`).
-Tested with Response-2000 1.9.7. Early development.
+**Scope:** the sectional response to axial load and moment, without shear: both control charts
+and the five charts of the **No Shear** view that have a data export. Input is any file
+Response-2000 opens (`.r2t`, `.rsp`), or none, which gives the section File > New gives. Inputs
+whose loading includes shear stop with a reason. Not M–N interaction or full-member analysis.
 
 ```
-PS> r2x solve .\Newbeam.r2t                # writes .\Newbeam.r2x.txt: the peak stage
-PS> r2x solve .\Newbeam.r2t --stage all    # every load stage
+PS> r2x solve .\Newbeam.r2t --report
+[Newbeam] solved: 60 stages, peak 56 -> Newbeam.r2x.txt, Newbeam.r2x.html (6.2 s)
 ```
+
+## Results
+
+- **`NAME.r2x.txt`, the raw record**, one per input. Response's Copy Chart Data text for both
+  control charts (every load stage) and the five detail views (the peak stage by default), behind
+  a header with the r2x, Wine and Response versions, the input's SHA-256 and the settings in
+  effect. It is the result, and r2x's contract with whatever reads it: layout and a Python reader
+  in `docs/raw-format.md`.
+- **`NAME.r2x.html`, the report** (`--report`). The peak stage as Response shows it: the main
+  window straight after solving, then every control chart and detail view as **Copy Chart
+  Picture** draws it, each beside its data. For reading; the pictures are drawn under Wine.
+
+Panels that Response shows only as pictures (cross section, crack diagram, internal forces, N+M)
+have no data export, so they appear in the report's main-window picture and nowhere else.
+
+## Setup (Windows)
+
+1. WSL 2 with Ubuntu 24.04, and Docker Engine inside it: `sudo apt-get install docker.io
+   docker-buildx`, then add yourself to the `docker` group.
+2. Response-2000 is not included. Download it from its author (see below) and put its program
+   folder in `./Response/` in this repo.
+3. Build the image once, in Ubuntu from the repo folder: `docker build -t r2x .` The build pins
+   the Wine version and stops unless `Response/r2k.exe` has the verified SHA-256.
+4. Install the command line tool in Windows (Python 3.10+, no other dependencies):
+
+   ```powershell
+   py -m pip install https://github.com/maczout/r2x/archive/main.zip
+   ```
+
+`r2x health` shows the image's r2x, Wine and Response versions. On Linux, r2x calls `docker`
+directly.
+
+## Usage
+
+```powershell
+r2x solve                                    # no input: a new section, as File > New gives
+r2x solve .\Newbeam.r2t                      # one or more files, or a glob
+r2x solve .\Newbeam.r2t --stage all          # detail views at every stage (default: peak)
+r2x solve .\Newbeam.r2t --stage peak,0-5     # or at these stages; 0 is the initial load
+r2x solve .\Newbeam.r2t --report             # also the HTML report
+r2x solve .\col.rsp --units si --initial -2000,0 --increment 0,1
+r2x solve .\cases\*.r2t --out .\results --parallel 4
+r2x solve .\Newbeam.r2t --stdout | py parse.py   # the record on stdout, no files
+```
+
+- **Settings are overrides.** `--units`, `--factors`, `--initial` and `--increment` are applied
+  through Response's own dialogs; r2x never edits the input. An option left out keeps the input's
+  value, or Response's start-up default. The settings in effect are in the record header.
+- **Results** go next to each input, or to `--out`. An existing result is replaced only with
+  `--overwrite`.
+- **Progress** goes to stderr, with a status line when stderr is a terminal; `-q` shows errors
+  only.
+- **Exit status:** 0 solved, 1 failed, 2 usage error, 3 out of scope; with several inputs, the
+  most serious of these (1, then 2, then 3).
+- **Environment:** `R2X_IMAGE` (image name, default `r2x`), `R2X_DOCKER` (the command that runs
+  docker), `R2X_WSL_DISTRO` (the WSL distribution with Docker).
+
+`r2x solve --help` has the details. `docs/cli.md` is the full specification, with the decisions
+behind it and what was confirmed in Response on Windows.
 
 ## How it works
 
 ```
-r2x CLI (Windows)  ──docker run──▶  container (in WSL): Xvfb + Wine + Response-2000
+r2x (Windows)  ──docker run──▶  container in WSL: Xvfb + Wine + Response-2000 + helper.exe
 ```
 
-`r2x solve` runs the container once per input file, with the input mounted read-only and the
-record written straight to disk. Inside, Response opens the input and runs **Solve → Sectional
-Response**; the control charts and the detail views of the selected load stages are then read
-through **Copy Chart Data** from the clipboard of a virtual display. Every container has its own
-display and Wine prefix, so several can run at once (`--parallel`).
-
-## Setup (Windows)
-
-Needs WSL 2 with Ubuntu 24.04 and Docker Engine inside it (`sudo apt-get install docker.io
-docker-buildx`, then add yourself to the `docker` group). Response-2000 is not included: put its
-program folder in `./Response/` and build the image once, in Ubuntu from the repo folder:
-
-```bash
-docker build -t r2x .
-```
-
-The image pins the Wine version and refuses to build unless `r2k.exe` has the verified SHA-256.
-Then install the command line tool in Windows (Python 3.10+, no other dependencies):
-
-```powershell
-py -m pip install https://github.com/maczout/r2x/archive/main.zip
-```
-
-## Usage
-
-`r2x solve --help` has the details; the full interface, with the decisions behind it, is in
-`docs/cli.md`.
-
-```powershell
-r2x solve                                  # no input: a new section, as File > New gives
-r2x solve .\Newbeam.r2t                    # one or more files, or a glob
-r2x solve .\Newbeam.r2t --stage peak,0-5   # detail views at these stages (default: peak)
-r2x solve .\Newbeam.r2t --report           # also Newbeam.r2x.html: the peak, as Response draws it
-r2x solve .\cases\*.r2t --out .\results --parallel 2
-r2x solve .\col.rsp --units si --initial -2000,0 --increment 0,1
-r2x solve .\Newbeam.r2t --stdout | py parse.py   # the record on stdout, no files
-r2x health                                 # the image's r2x, Wine and Response-2000 versions
-```
-
-Results go next to each input unless `--out` is given; an existing record is only replaced with
-`--overwrite`. Progress goes to stderr, with a status line when stderr is a terminal; `-q` shows
-errors only. Exit status: 0 solved, 1 failed, 2 usage error, 3 out of scope (with several inputs,
-the most serious of these). `--units`, `--factors`, `--initial` and `--increment` override the
-input's settings through Response's own dialogs; the settings in effect are in the record header.
-On Linux `r2x` calls `docker` directly;
-`R2X_IMAGE`, `R2X_DOCKER` and `R2X_WSL_DISTRO` override the defaults.
-
-## Output
-
-One text file per input, `NAME.r2x.txt`: the raw record. It holds Response's Copy Chart Data
-text, byte for byte, for both control charts (every stage) and the five No Shear charts that have
-a data export, at the peak stage by default. A short header gives the r2x, Wine and Response
-versions, the input's SHA-256, the stage count and the peak stage. Layout and a Python reader:
-`docs/raw-format.md`.
-
-Panels that Response shows only as pictures (cross section, crack diagram, internal forces, N+M)
-have no data export and are not included. Inputs outside the scope (for example an analysis with
-shear) fail with a reason instead of producing output.
-
-## Server (optional, not used by the CLI)
-
-The repo also contains an HTTP server (`python -m r2x.server`) for running jobs on another
-machine: a token-protected API with a job queue and parallel workers. The CLI does not use it.
-See `docs/development.md`.
+`r2x solve` runs the container once per input, with the input mounted read-only and the results
+written straight to the output folder. Inside, a small Win32 helper drives Response on a virtual
+display: it applies the settings through Response's dialogs, runs **Solve → Sectional
+Response**, then reads every chart with **Copy Chart Data** from the clipboard, paging through
+the load stages and checking each one against the control curves. Every container has its own
+display and Wine prefix, so several run at once (`--parallel`). `docs/development.md` has the
+details and how to run it without Docker.
 
 ## Verification
 
-Exports must match reference cases solved in Response-2000 on Windows, byte for byte (ignoring line
-endings). Rerun on any change to Wine, the image or r2x.
+Each reference case was solved in Response-2000 on Windows and its charts copied by hand
+(`tests/reference/`). r2x's record matches every one byte for byte: the control charts at every
+stage and the five detail views at the peak.
 
-| Case | Result |
-|---|---|
-| Newbeam: 250 × 600 rectangle, 3–25M / 1–20M, moment only; both control curves (60 stages) and all five No Shear charts at peak | Identical |
+| Case | Settings | Stages, peak |
+|---|---|---|
+| Newbeam (250 × 600 rectangle, 3–25M / 1–20M) | none: moment increment | 60, peak 56 |
+| Newbeam, US units | `--units us` | 60, peak 56 |
+| Newbeam, CSA factors | `--factors csa` | 57, peak 46 |
+| Newbeam, axial load | `--initial -2000,0` | 46, peak 37 |
+| Newbeam, axial increment only | `--increment -1,0` | 35, peak 22 |
+| No input (File > New) | none | 60, peak 56 |
+
+Detail views at other stages rely on r2x's own checks: each stage is identified from its strain
+profile against the control curves before it is copied. The report's pictures are checked by
+eye against Windows. Rerun the tests (`docs/development.md`) on any change to Wine, the image or
+r2x.
+
+Two heuristics are worth knowing. Wine gives no "solve finished" signal, so the solve counts as
+finished once the bottom control curve has not changed for 1 s. Copy Chart Data and Copy Chart
+Picture are chosen by their position in each chart's right-click menu; every export's title is
+checked and every picture must be a metafile, so a change there fails loudly.
+
+## Server (optional, not used by the CLI)
+
+The repo also has an HTTP server (`python -m r2x.server`) for running jobs on another machine: a
+token-protected API with a job queue and parallel workers. See `docs/development.md`.
 
 ## Response-2000
 
-Free software by Evan C. Bentz and Michael P. Collins, available from its authors <!-- TODO: link -->.
-This project is not affiliated with or endorsed by them or the University of Toronto. Check the
-authors' terms before running it as a service for others.
+Response-2000 is free software by Evan C. Bentz and Michael P. Collins, available from Bentz's
+site, [hadrianworks.com](https://www.hadrianworks.com/). The authors ask that work using it cite
+Bentz's PhD thesis: E. C. Bentz, *Sectional Analysis of Reinforced Concrete Members*, University
+of Toronto, 2000. r2x is not affiliated with or endorsed by them or the University of Toronto.
+Check the authors' terms before running it as a service for others.
 
 ## Disclaimer
 

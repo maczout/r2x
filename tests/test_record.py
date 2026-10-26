@@ -8,7 +8,7 @@ from r2x.record import RecordError
 
 REF = Path(__file__).parent / "reference" / "newbeam"
 
-HEADER = {"r2x-version": "0.0.1", "input-name": "Bé am.r2t", "stage-count": "60",
+HEADER = {"r2x-version": "0.1.0", "input-name": "Bé am.r2t", "stage-count": "60",
           "peak-stage": "56", "detail-stages": "56"}
 
 

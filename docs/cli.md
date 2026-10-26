@@ -1,9 +1,7 @@
 # Command line
 
-**Status:** agreed 2026-10-25. Implemented: the raw record (`docs/raw-format.md`), `--stage`,
-`--out`, `--stdout`, `--overwrite`, `--parallel`, `--quiet`, the exit statuses, `--units`,
-`--factors`, `--initial` and `--increment` through Response's dialogs, solving without an input,
-and `--report`. `r2x solve --help` matches the text below plus one note, and
+**Status:** agreed 2026-10-25; implemented in full in r2x 0.1.0 (2026-10-25). Phases 3 to 5
+below record how. `r2x solve --help` matches the text below plus one note, and
 `tests/test_cli.py` keeps them in step.
 
 A stage number past the last stage is a usage error (exit status 2), found once the solve has

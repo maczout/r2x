@@ -29,7 +29,7 @@ breaks the lengths, and `record.read` then refuses the file.
 
 ```
 r2x-raw 1                                    format name and version
-r2x-version: 0.0.1                           header: one "key: value" per line
+r2x-version: 0.1.0                           header: one "key: value" per line
 response-exe-sha256: bbf4bc59…
 …
 units: si
@@ -59,7 +59,7 @@ end                                          end of record
 
 | Key | Example | Meaning |
 |---|---|---|
-| `r2x-version` | `0.0.1` | r2x version that wrote the record |
+| `r2x-version` | `0.1.0` | r2x version that wrote the record |
 | `response-exe-sha256` | `bbf4bc59…` | SHA-256 of `r2k.exe` |
 | `wine-version` | `wine-9.0 (Ubuntu 9.0~repack-4build3)` | output of `wine --version` |
 | `input-name` | `Newbeam.r2t` | input file name, or `File > New` when there is no input |

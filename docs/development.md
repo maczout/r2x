@@ -87,7 +87,7 @@ They are captured right after the peak is identified, before any paging (`export
 
 ## Container image
 
-`Dockerfile` builds the server image: Ubuntu 24.04, Wine pinned to `9.0~repack-4build3`, the
+`Dockerfile` builds the image: Ubuntu 24.04, Wine pinned to `9.0~repack-4build3`, the
 helper compiled in a build stage, and the 32-bit Wine prefix created at build time. The build
 fails unless `Response/r2k.exe` has the verified SHA-256 (build args `WINE_VERSION`,
 `R2K_SHA256` and `RESPONSE_DIR` override the defaults).

@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 # Not published to PyPI ("r2x" there is an unrelated NREL project); install from GitHub.
 name = "r2x"
-version = "0.0.1"
+version = "0.1.0"
 description = "Run Response-2000 from the command line"
 readme = "README.md"
 license = "MIT"
