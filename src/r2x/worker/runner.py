@@ -20,7 +20,7 @@ from r2x.views import ALL, format_views
 from r2x.worker import dialogs
 from r2x.worker.export import export
 from r2x.worker.prefix import prepare_prefix
-from r2x.worker.session import Helper, R2xError, Session, wait_until, wine_path
+from r2x.worker.session import Cpu, Helper, R2xError, Session, wait_until, wine_path
 
 HELPER_SOURCE = Path(__file__).with_name("helper.c")
 
@@ -77,18 +77,18 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
             display: str | None = None, stages: StageSpec = PEAK,
             settings: Settings = Settings(), cache: Path | None = None,
             on_event: Callable[[Event], None] = lambda e: None,
-            report: Path | None = None, views=ALL) -> dict[str, str]:
+            report: Path | None = None, views=ALL, more_detail: int | str = 0) -> dict[str, str]:
     """Solve input_file in Response-2000 and write its raw record to the file out.
 
     views: the detail views to capture (r2x.views), each at every stage in stages.
+    more_detail: Solve > More Detail presses after the solve, or "max" (r2x.settings).
 
     With no input file, Response starts empty and the section is defined by accepting every
     default of Quick Define, as File > New does (docs/cli.md). Settings are applied through
     Response's dialogs before solving, and the settings in effect are read back into the header.
-    An input whose loading includes shear stops here (OutOfScope). The record is written only
-    once the export is complete, under a temporary name first, so a failed job leaves no file
-    behind. With report, an HTML report of the peak stage (r2x/report.py) is written there too,
-    before the record. Returns the record header.
+    The record is written only once the export is complete, under a temporary name first, so a
+    failed job leaves no file behind. With report, an HTML report (r2x/report.py) of the inputs
+    and the peak stage is written there too, before the record. Returns the record header.
     """
     input_file = Path(input_file) if input_file is not None else None
     out = Path(out)
@@ -132,7 +132,7 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
         stack.callback(stop_response)
         helper = Helper(str(helper_exe), env)
         stack.callback(helper.close)
-        session = Session(helper, note=lambda text: on_event(note(text)))
+        session = Session(helper, note=lambda text: on_event(note(text)), cpu=Cpu(r2k.pid))
         if input_file is not None:
             session.wait_for_file(input_file.stem)
             time.sleep(0.2)
@@ -143,13 +143,14 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
             session.check_no_dialog()
             dialogs.quick_define(session)
         dialogs.apply(session, settings)
-        effective = dialogs.read(session)
-        dialogs.check_scope(effective)
-        pictures = None
+        pictures, inputs = None, {}
         if report is not None:
             pictures = job / "pictures"
             pictures.mkdir()
-        result = export(session, stages, views, on_event, pictures)
+            inputs["input/screen"] = session.snapshot(pictures, settled=True)
+        effective, shots = dialogs.read(session, pictures)
+        inputs.update(shots)
+        result = export(session, stages, views, on_event, pictures, more_detail)
 
     wine_version = subprocess.run(["wine", "--version"], capture_output=True, text=True).stdout.strip()
     header = {
@@ -161,6 +162,7 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
         **({"template-sha256": sha256(response_dir / TEMPLATE)}
            if input_file is None and (response_dir / TEMPLATE).is_file() else {}),
         **effective,
+        "more-detail": str(result.more_detail),
         "views": format_views(views),
         "stage-count": str(result.stage_count),
         "peak-stage": str(result.peak),
@@ -169,7 +171,7 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
     data = record.encode(header, result.sections)
     files = [(out, data)]
     if report is not None:
-        page = html_report.build(record.decode(data), result.pictures)
+        page = html_report.build(record.decode(data), {**inputs, **result.pictures})
         files.insert(0, (report, page.encode("utf-8")))
     write_files(files)
     return header

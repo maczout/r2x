@@ -7,24 +7,24 @@ on the clipboard.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import time
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from r2x.views import STRAIN_KEY, VIEWS, View
+from r2x.views import CONTROLS, STRAIN_KEY, VIEWS, View
 from r2x.worker.images import bmp_to_png
 
 # Response-2000 main-menu command IDs (RT_MENU resource of r2k.exe 1.9.7).
 CMD_SECTIONAL_RESPONSE = 5092
+CMD_MORE_DETAIL = 11845      # Solve > More Detail
 VK_PRIOR, VK_NEXT, VK_DOWN, VK_RETURN, VK_ESCAPE = 0x21, 0x22, 0x28, 0x0D, 0x1B
 IDOK, IDCANCEL = 1, 2
 
-# Positions in every chart's context menu: Copy Chart Picture, then Copy Chart Data.
-COPY_CHART_PICTURE_DOWNS = 1
+# Copy Chart Data's position in every data chart's context menu, after Copy Chart Picture.
 COPY_CHART_DATA_DOWNS = 2
-PICTURE_WIDTH = 900       # pixels; Copy Chart Picture is a metafile, drawn at this width
 
 
 @dataclass(frozen=True)
@@ -52,12 +52,11 @@ CONTROL_CHARTS = (
     Chart("control_top", None, None, 0),
     Chart("control_bottom", None, None, 1),
 )
-# Control-chart titles r2x knows, and the record section each becomes.
-CONTROL_KEYS = {
-    "Control : Moment - |e_x": "moment_ex",      # moment increment, top
-    "Control : Moment - |f": "moment_phi",       # moment increment, bottom
-    "Control : Axial Load - |e_x": "axial_ex",   # axial-only increment, top and bottom
-}
+# Control-chart titles r2x knows, and the record section each becomes (views.json). Which two
+# Response shows depends on the increment (docs/cli.md): with shear in it, Shear-γxy on top and
+# below it Moment-φ (with a moment), Axial Load-εx (with an axial load) or Shear-εx (shear
+# alone); without, Moment-εx and Moment-φ, or Axial Load-εx in both places (axial alone).
+CONTROL_KEYS = {c.title: c.key for c in CONTROLS}
 
 
 class R2xError(RuntimeError):
@@ -69,11 +68,36 @@ class WaitTimeout(R2xError):
 
 
 class OutOfScope(R2xError):
-    """The input asks for an analysis r2x does not cover, such as shear (exit status 3)."""
+    """The input asks for an analysis r2x does not cover (exit status 3). Reserved: since r2x
+    0.3.0 nothing raises it."""
 
 
-# Control-chart titles of analyses outside r2x's scope, and why.
-OUT_OF_SCOPE_TITLES = {"Control : Shear": "the loading includes shear"}
+class Cpu:
+    """Response's processor time, read from /proc on the Linux side of Wine.
+
+    Under Wine there is no readable "solving" flag, but a solving Response keeps its process
+    busy, and an idle one uses next to nothing.
+    """
+
+    def __init__(self, pid: int):
+        self.stat = Path(f"/proc/{pid}/stat")
+
+    def seconds(self) -> float | None:
+        try:
+            fields = self.stat.read_text().rsplit(")", 1)[1].split()
+        except (OSError, IndexError):
+            return None
+        return (int(fields[11]) + int(fields[12])) / os.sysconf("SC_CLK_TCK")
+
+    def share(self, window: float = 0.2) -> float | None:
+        """The share of one processor Response used over the next `window` seconds, or None if
+        its process cannot be read."""
+        t0, s0 = time.monotonic(), self.seconds()
+        time.sleep(window)
+        t1, s1 = time.monotonic(), self.seconds()
+        if s0 is None or s1 is None:
+            return None
+        return (s1 - s0) / (t1 - t0)
 
 
 @dataclass
@@ -179,9 +203,11 @@ def export_points(data: bytes) -> list[tuple[float, float]]:
 class Session:
     """A solved or solvable Response-2000 window, reached through a Helper."""
 
-    def __init__(self, helper: Helper, note: Callable[[str], None] = lambda s: None):
+    def __init__(self, helper: Helper, note: Callable[[str], None] = lambda s: None,
+                 cpu: Cpu | None = None):
         self.h = helper
         self.note = note
+        self.cpu = cpu
         self._charts: dict[str, str] | None = None   # chart key -> window, in the view on screen
         self._charts_view: View | None = None         # the view _charts was found in
         self._view_list: tuple[str, list[str]] | None = None  # drop-down window, its items
@@ -283,43 +309,23 @@ class Session:
         if chart.control is not None:
             if title in CONTROL_KEYS:
                 return data
-            for start, why in OUT_OF_SCOPE_TITLES.items():
-                if title and title.startswith(start):
-                    raise OutOfScope(f"{why} (Response's control chart is {title!r})")
             raise R2xError(f"{chart.key}: unknown control chart {title!r}")
         if title != chart.title:
             raise R2xError(f"{chart.key}: export title {title!r}, expected {chart.title!r}")
         return data
 
-    def copy_picture(self, chart: Chart, scratch: Path, width: int = PICTURE_WIDTH,
-                     timeout: float = 5, attempts: int = 3) -> bytes:
-        """Right-click the chart, choose Copy Chart Picture, return it drawn as a PNG.
-
-        Response puts an enhanced metafile on the clipboard; the helper plays it into a bitmap
-        this many pixels wide, white behind, in a file under scratch.
-        """
-        bmp = Path(scratch) / f"{chart.key}.bmp"
-        command = f"clipemf {width} {wine_path(bmp).encode().hex()}"
-        def copy():
-            self._choose(chart, COPY_CHART_PICTURE_DOWNS, "chart picture", timeout)
-            wait_until(lambda: self.h.try_ask(command), timeout, f"the picture of {chart.key}",
-                       0.01)
-        self._retrying(chart, "Copy Chart Picture", copy, attempts)
-        try:
-            return bmp_to_png(bmp.read_bytes())
-        finally:
-            bmp.unlink(missing_ok=True)
-
     def snapshot(self, scratch: Path, settled: bool = False, interval: float = 0.15,
-                 timeout: float = 5) -> bytes:
-        """Response's main window as it is on screen, as a PNG.
+                 timeout: float = 5, window: str | None = None) -> bytes:
+        """Response's main window, or another of its windows (a dialog), as it is on screen, as
+        a PNG.
 
         settled: take it until two in a row are the same, so that a view Response is still
         drawing is not caught half-drawn.
         """
-        bmp = Path(scratch) / "main-window.bmp"
+        bmp = Path(scratch) / "window.bmp"
         def snap() -> bytes:
-            self.h.ask(f"snap {self.main_window()[0]} {wine_path(bmp).encode().hex()}")
+            hwnd = window or self.main_window()[0]
+            self.h.ask(f"snap {hwnd} {wine_path(bmp).encode().hex()}")
             try:
                 return bmp.read_bytes()
             finally:
@@ -400,16 +406,17 @@ class Session:
             time.sleep(0.1)
 
     # -- solving ------------------------------------------------------------------------------
-    def solve(self, quiet: float = 1.0, timeout: float = 300) -> tuple[bytes, bytes]:
+    def solve(self, quiet: float = 1.0, timeout: float = 300,
+              on_count: Callable[[int], None] = lambda n: None) -> tuple[bytes, bytes]:
         """Solve -> Sectional Response; return the final exports of the top and bottom control
-        charts.
+        charts. on_count gets the number of stages solved so far, each time it grows.
 
         Under Wine there is no readable "finished" flag (the menu state lives in Response's
-        process), so the solve counts as finished when the bottom control curve has not changed
-        for `quiet` seconds. Response adds points about every 0.2 s while solving.
+        process), so the solve counts as finished once the bottom control curve has not changed
+        for `quiet` seconds and Response's process is idle (Cpu). Response adds points every
+        0.05 to 0.5 s while solving.
         """
         self.h.ask(f"cmd {CMD_SECTIONAL_RESPONSE}")
-        t0 = time.monotonic()
         def charts_ready():
             try:
                 return self.find_charts()
@@ -417,23 +424,52 @@ class Session:
                 self.check_no_dialog()
                 return None
         wait_until(charts_ready, 60, "the solution view's charts", 0.05)
-        # The top control chart's title tells an analysis with shear from one without; check it
-        # now rather than after the solve.
+        # The top chart first: the first control chart copied sets the width a data chart's
+        # context menu has (_check_data_menu).
         self.copy_chart(CONTROL_CHARTS[0])
-        last, since = None, time.monotonic()
+        bottom = self._settle(None, quiet, timeout, on_count)
+        return self.copy_chart(CONTROL_CHARTS[0]), bottom
+
+    def more_detail(self, bottom: bytes, quiet: float = 1.0, timeout: float = 300,
+                    on_count: Callable[[int], None] = lambda n: None) -> tuple[bytes, bytes] | None:
+        """Solve -> More Detail once, after a solve whose bottom control chart exported
+        `bottom`. Return the control charts' exports after it, or None if Response refined
+        nothing (it stops adding stages at 327, and then the command does nothing visible).
+        """
+        self.check_no_dialog()
+        self.h.ask(f"cmd {CMD_MORE_DETAIL}")
+        after = self._settle(bottom, quiet, timeout, on_count)
+        if after == bottom:
+            return None
+        return self.copy_chart(CONTROL_CHARTS[0]), after
+
+    def _settle(self, last: bytes | None, quiet: float, timeout: float,
+                on_count: Callable[[int], None]) -> bytes:
+        """Copy the bottom control chart until it has not changed for `quiet` seconds, has a
+        point, and Response is idle; return its export. Fails if Response adds no stage for
+        `timeout` seconds without finishing."""
+        since = time.monotonic()
         while True:
             self.check_no_dialog()
             data = self.copy_chart(CONTROL_CHARTS[1])
             now = time.monotonic()
             if data != last:
                 last, since = data, now
-            elif now - since >= quiet and len(export_points(data)) >= 2:
-                break
-            if now - t0 > timeout:
-                raise R2xError(f"solve did not settle within {timeout:.0f} s")
+                on_count(len(export_points(data)))
+            elif now - since >= quiet and export_points(data) and self._idle():
+                return data
+            if time.monotonic() - since > timeout:
+                raise R2xError(f"Response added no load stage for {timeout:.0f} s and did not "
+                               "finish")
             time.sleep(0.05)
-        top = self.copy_chart(CONTROL_CHARTS[0])
-        return top, last
+
+    def _idle(self, below: float = 0.1) -> bool:
+        """Response's process used less than `below` of a processor over a short wait (True if
+        its process cannot be read: the unchanged curve decides alone)."""
+        if self.cpu is None:
+            return True
+        share = self.cpu.share()
+        return share is None or share < below
 
     # -- dialogs ------------------------------------------------------------------------------
     def describe_dialog(self, hwnd: str, title: str) -> str:

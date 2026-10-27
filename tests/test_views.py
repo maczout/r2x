@@ -95,3 +95,12 @@ def test_raw_format_table_is_the_catalogue():
     rows = re.findall(r"^\| `stage/N/([a-z0-9_]+)` \| `([^`]+)` \| ([^|]+) \|$", text, re.M)
     assert rows == [(c.key, c.title, ", ".join(v.response for v in views_of(c.key)))
                     for c in record_order(ALL)]
+
+
+def test_raw_format_control_table_is_the_catalogue():
+    """docs/raw-format.md's control-chart table: every control chart the catalogue knows."""
+    from r2x.views import CONTROLS
+    text = (DOCS / "raw-format.md").read_text(encoding="utf-8")
+    rows = re.findall(r"^\| `control/([a-z0-9_]+)` \| `([^`]+)` \|$", text, re.M)
+    assert rows == [(c.key, c.title.replace("|", "\\|")) for c in CONTROLS]
+    assert len({c.key for c in CONTROLS}) == len({c.title for c in CONTROLS}) == len(CONTROLS)

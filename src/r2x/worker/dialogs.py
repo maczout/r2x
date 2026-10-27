@@ -1,5 +1,5 @@
-"""Response-2000's Preferences and Define Loading dialogs: apply r2x's settings, read back the
-settings in effect, and stop before solving if the loading includes shear.
+"""Response-2000's Preferences and Define Loading dialogs: apply r2x's settings and read back the
+settings in effect, with a picture of each dialog for the report when asked.
 
 Control IDs are from r2k.exe's RT_DIALOG resources (`python tools/dialogs.py r2k.exe`): dialog
 320 is the Preferences page, dialog 5 is Define Loading. Units are set before loads, because
@@ -8,8 +8,10 @@ switching units converts the loads already entered (docs/cli.md).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 from r2x.settings import Settings, format_number
-from r2x.worker.session import OutOfScope, R2xError, Session, wait_until
+from r2x.worker.session import R2xError, Session, wait_until
 
 # Main-menu commands (RT_MENU resource).
 CMD_PREFERENCES = 321          # Options > Preferences
@@ -43,18 +45,25 @@ def apply(session: Session, settings: Settings):
 
     if settings.initial is not None or settings.increment is not None:
         dlg = session.open_dialog(CMD_SECTIONAL_LOADS, LOADING)
-        for fields, pair in ((CONSTANT, settings.initial), (INCREMENT, settings.increment)):
-            if pair is not None:
-                for cid, value in zip(fields[:2], pair):
+        for fields, loads in ((CONSTANT, settings.initial), (INCREMENT, settings.increment)):
+            if loads is not None:
+                for cid, value in zip(fields, loads):
                     session.set_text(dlg, cid, format_number(value))
         session.close_dialog(dlg, ok=True)
 
 
-def read(session: Session) -> dict[str, str]:
-    """The settings in effect, as Response's dialogs show them, for the record header."""
+def read(session: Session, pictures: Path | None = None) -> tuple[dict[str, str], dict[str, bytes]]:
+    """The settings in effect, as Response's dialogs show them, for the record header.
+
+    With a pictures folder (scratch space for the helper), also each dialog as it is on screen,
+    for the report: "input/preferences" and "input/loading".
+    """
+    shots: dict[str, bytes] = {}
     dlg = session.open_dialog(CMD_PREFERENCES, PREFERENCES)
     units = [name for name, cid in UNIT_RADIOS.items() if session.is_checked(dlg, cid)]
     factors = [session.get_text(dlg, c) for c in FACTOR_FIELDS]
+    if pictures is not None:
+        shots["input/preferences"] = session.snapshot(pictures, settled=True, window=dlg)
     session.close_dialog(dlg, ok=False)
     if len(units) != 1:
         raise R2xError(f"Preferences shows {len(units)} unit systems selected")
@@ -62,21 +71,11 @@ def read(session: Session) -> dict[str, str]:
     dlg = session.open_dialog(CMD_SECTIONAL_LOADS, LOADING)
     constant = [session.get_text(dlg, c) for c in CONSTANT]
     increment = [session.get_text(dlg, c) for c in INCREMENT]
+    if pictures is not None:
+        shots["input/loading"] = session.snapshot(pictures, settled=True, window=dlg)
     session.close_dialog(dlg, ok=False)
-    return {"units": units[0], "factors": ",".join(factors),
-            "initial": ",".join(constant), "increment": ",".join(increment)}
-
-
-def check_scope(effective: dict[str, str]):
-    """Stop before solving if the loading includes shear, constant or increment."""
-    for key in ("initial", "increment"):
-        try:
-            shear = float(effective[key].split(",")[2])
-        except (ValueError, IndexError):
-            raise R2xError(f"cannot read the shear from the {key} load {effective[key]!r}")
-        if shear != 0:
-            shown = effective[key].split(",")[2]
-            raise OutOfScope(f"the loading includes shear ({key} V = {shown})")
+    return ({"units": units[0], "factors": ",".join(factors),
+             "initial": ",".join(constant), "increment": ",".join(increment)}, shots)
 
 
 # -- File > New ---------------------------------------------------------------------------------

@@ -1,5 +1,4 @@
 """The HTML report, the BMP-to-PNG conversion and the Symbol font fix (no Wine needed)."""
-import html
 import io
 import struct
 import zlib
@@ -8,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from r2x import record, report
-from r2x.views import ALL, BY_NAME, record_order
+from r2x.views import ALL, BY_NAME
 from r2x.worker.images import bmp_to_png
 from r2x.worker.prefix import install_symbol_font, symbol_encoded
 
@@ -73,95 +72,55 @@ def test_bmp_to_png():
 PNG = bmp_to_png(bmp(1, 1, [[(255, 255, 255)]]))
 
 
-@pytest.mark.parametrize("text, expected", [
-    ("|e_x Strain (mm/m)", "ε<sub>x</sub> Strain (mm/m)"),
-    ("Control : Moment - |f", "Control : Moment - φ"),
-    ("f_s_c_r_a_c_k (MPa)", "f<sub>scrack</sub> (MPa)"),
-    ("Curvature (rad/10^3inch)", "Curvature (rad/10<sup>3</sup>inch)"),
-    ("Shrinkage & Thermal Strain", "Shrinkage &amp; Thermal Strain"),
-    ("a | b", "a | b"),
-])
-def test_markup(text, expected):
-    assert report.markup(text) == expected
+def build(header=None, pictures=None, views=None):
+    """A report for Newbeam's reference record: its control charts, with views as given."""
+    rec = reference_record("newbeam", **({"views": views} if views else {}), **(header or {}))
+    return report.build(rec, PICTURES if pictures is None else pictures)
 
 
-def test_parse_export():
-    data = (REFS / "newbeam/stages/056/shrinkage_thermal_strain.txt").read_bytes()
-    chart = report.parse_export(data)
-    assert chart.title == "Shrinkage & Thermal Strain" and chart.y_title == "Beam Depth (mm)"
-    assert [t for t, _ in chart.series] == ["0", "4"]
-    from r2x.worker.session import export_points
-    points = [pt for _, pts in chart.series for pt in pts]
-    assert [pt for pt in points if pt] == [tuple(line.split()) for line in data.decode().splitlines()
-                                          if len(line.split()) == 2 and "Line" not in line]
-    assert len([pt for pt in points if pt]) == len(export_points(data))
-    assert points.count(None) == data.count(b"New Line") > 0
+INPUTS = ["input/screen", "input/preferences", "input/loading"]
+PICTURES = {k: PNG for k in INPUTS + [f"window/{v.name}" for v in ALL]}
 
 
-NO_SHEAR = [c.key for c in BY_NAME["no-shear"].charts]
-
-
-def test_report_has_every_picture_beside_its_data():
-    """A record from r2x 0.1.0 (no views key): the No Shear view, as 0.1.0 captured it."""
-    rec = reference_record("newbeam")
-    keys = ["window/no-shear", "moment_ex", "moment_phi", *NO_SHEAR]
-    page = report.build(rec, {k: PNG for k in keys})
+def test_report_is_screenshots_under_inputs_and_outputs():
+    page = build(views="general,cracking,reinforcement,no-shear")
     assert page.startswith("<!doctype html>") and page.endswith("</html>\n")
-    assert page.count('<img src="data:image/png;base64,') == 8 and "No picture" not in page
-    assert page.count('<article class="panel"') == 7
-    for name, body in rec.sections.items():         # every export, verbatim in its panel
-        assert html.escape(body.decode("latin-1")) in page, name
-    assert "<h1>Newbeam &lt;1&gt;.r2t</h1>" in page
-    assert "Peak stage 56 of 0–59" in page and "No Shear view at stage 56" in page
-    assert "concrete 0.65 · steel 0.85 · prestress 0.90" in page
-    assert "N -2000.00 kN · M 0.00 kN·m · V 0.00 kN" in page
-    assert "<script" not in page and "http" not in page.replace("http-equiv", "")  # self-contained
-    order = [page.index(f"<h3>{report.markup(report.parse_export(rec.sections[n]).title)}</h3>")
-             for n in ("control/moment_ex", "control/moment_phi",
-                       *(f"stage/56/{k}" for k in NO_SHEAR))]
-    assert order == sorted(order)
-
-
-def export_text(title: str) -> bytes:
-    return (f"Data from Graph\r\nTitle : {title}\r\nX Axis Title : x\r\nY Axis Title : y\r\n"
-            "Line type: 0\r\n1.0 2.0\r\n").encode("latin-1")
-
-
-def test_report_of_every_view():
-    """Each view: its window, then each chart not shown under an earlier view."""
-    sections = [("control/moment_ex", (REFS / "newbeam/control/moment_ex.txt").read_bytes())]
-    sections += [(f"stage/56/{c.key}", export_text(c.title)) for c in record_order(ALL)]
-    rec = record.decode(record.encode(dict(HEADER, views="general,cracking,reinforcement,"
-                                           "no-shear"), sections))
-    pictures = {f"window/{v.name}": PNG for v in ALL}
-    pictures.update({c.key: PNG for c in record_order(ALL)})
-    page = report.build(rec, pictures)
-    assert page.count('<article class="panel"') == 1 + 21
-    assert page.count('<img src="data:image/png;base64,') == 4 + 21 and "No picture" in page
-    heads = [page.index(f"<h2>{v.response} view at stage 56</h2>") for v in ALL]
+    assert page.count('<img src="data:image/png;base64,') == 3 + 4 and "No picture" not in page
+    assert "<h1>Newbeam &lt;1&gt;.r2t</h1>" in page and "Peak stage 56 of 0–59." in page
+    heads = [page.index(h) for h in ("<h2>Inputs</h2>", "<h3>Input screen</h3>",
+                                     "<h3>Units and material factors</h3>", "<h3>Loads</h3>",
+                                     "<h2>Outputs at stage 56</h2>", "<h3>General view</h3>",
+                                     "<h3>Cracking view</h3>", "<h3>Reinforcement view</h3>",
+                                     "<h3>No Shear view</h3>")]
     assert heads == sorted(heads)
-    no_shear = page[heads[-1]:]
-    assert no_shear.count('<article class="panel"') == 2       # the other three come earlier
-    assert ('Also in this view: <a href="#chart-longitudinal_strain">Longitudinal Strain</a> '
-            "(under General)") in no_shear
-    assert '<a href="#view-reinforcement">Reinforcement view</a>' in page
+    # no data: no tables, no export text, no record header, no chart pictures
+    assert "<table" not in page and "Data from Graph" not in page and "<pre" not in page
+    assert "input-sha256" not in page
+    assert "<script" not in page and "http" not in page.replace("http-equiv", "")  # self-contained
 
 
-def test_report_axial_only_and_us_units():
-    page = report.build(reference_record("newbeam-axial-only"), {})
-    assert page.count('<article class="panel"') == 6        # one control chart
-    assert "Control : Axial Load - ε<sub>x</sub>" in page
-    assert page.count("No picture") == 7
-    page = report.build(reference_record("newbeam-us", units="us"), {})
-    assert "US customary" in page and "M 1.00 kip·ft" in page
-    assert "Curvature (rad/10<sup>3</sup>inch)" in page
+def test_report_has_a_left_column_index():
+    page = build(views="general,no-shear")
+    nav = page[page.index('<nav class="index"'):page.index("</nav>")]
+    links = [a.split('"')[0] for a in nav.split('href="#')[1:]]
+    assert links == ["inputs", "in-screen", "in-preferences", "in-loading",
+                     "outputs", "out-general", "out-no-shear"]
+    for anchor in links:
+        assert f'id="{anchor}"' in page
+    assert "out-cracking" not in page                      # only the views the record has
 
 
-def test_report_needs_the_peak_stage():
-    rec = reference_record("newbeam")
-    rec.header["peak-stage"] = "12"
-    with pytest.raises(KeyError):
-        report.build(rec, {})
+def test_missing_pictures_and_old_records():
+    page = build(pictures={"window/no-shear": PNG})         # a record from r2x 0.1.0: No Shear
+    assert page.count('<img src="data:image/png;base64,') == 1
+    assert page.count("No picture") == 3 and "<h3>No Shear view</h3>" in page
+    assert "<h3>General view</h3>" not in page
+
+
+def test_report_says_when_more_detail_refined_the_solve():
+    assert "after More Detail" not in build()
+    assert "Peak stage 56 of 0–59 after More Detail twice." in build({"more-detail": "2"})
+    assert "after More Detail once." in build({"more-detail": "1"})
 
 
 # -- the Symbol font ------------------------------------------------------------------------------

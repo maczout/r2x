@@ -16,7 +16,7 @@ import time
 from pathlib import Path
 
 from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE, Event
-from r2x.settings import FACTORS, UNITS, Settings, parse_pair
+from r2x.settings import FACTORS, UNITS, Settings, parse_loads, parse_more_detail
 from r2x.stages import StageError, parse_stages
 from r2x.views import ViewError, parse_views
 from r2x.worker.runner import run_job
@@ -43,8 +43,11 @@ def main(argv: list[str] | None = None) -> int:
                         "no-shear (default: all)")
     p.add_argument("--units", choices=UNITS, help="override the input's units")
     p.add_argument("--factors", choices=FACTORS, help="override the input's material factors")
-    p.add_argument("--initial", metavar="N,M", help="override the initial load (units in effect)")
-    p.add_argument("--increment", metavar="N,M", help="override the load increment")
+    p.add_argument("--initial", metavar="N,M,V",
+                   help="override the initial load (units in effect)")
+    p.add_argument("--increment", metavar="N,M,V", help="override the load increment")
+    p.add_argument("--more-detail", default="0", metavar="N",
+                   help="Solve > More Detail presses after the solve, or max (default: 0)")
     p.add_argument("--report", type=Path, metavar="HTML",
                    help="also write an HTML report of the peak stage to this file")
     p.add_argument("--response-dir", type=Path, default=os.environ.get("R2X_RESPONSE_DIR"),
@@ -69,15 +72,17 @@ def main(argv: list[str] | None = None) -> int:
         p.error(f"--views: {e}")
     try:
         settings = Settings(a.units, a.factors,
-                            parse_pair(a.initial) if a.initial is not None else None,
-                            parse_pair(a.increment) if a.increment is not None else None)
+                            parse_loads(a.initial) if a.initial is not None else None,
+                            parse_loads(a.increment) if a.increment is not None else None)
+        more_detail = parse_more_detail(a.more_detail)
     except ValueError as e:
         p.error(str(e))
 
     t0 = time.monotonic()
     try:
         run_job(a.input, a.record, a.response_dir, Path(a.prefix), a.display, stages=stages,
-                settings=settings, on_event=report, report=a.report, views=views)
+                settings=settings, on_event=report, report=a.report, views=views,
+                more_detail=more_detail)
     except OutOfScope as e:
         report(Event("out-of-scope", str(e)))
         return OUT_OF_SCOPE

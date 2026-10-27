@@ -6,8 +6,18 @@
     "name: r2x's name for the view (--views). response: its name in Response's view list.",
     "grid: [row, column] in the nine-chart grid. key: record section name, from the title.",
     "title: the export's 'Title :' line. Cells not listed are pictures only (Cross Section,",
-    "Crack Diagram, Internal Forces, N+M). Response's list also has Mohr's Circles: deferred.",
-    "Found under Wine on 2026-10-26 (Newbeam at its peak); see docs/cli.md, All detail views."
+    "Crack Diagram, Internal Forces, N+M). Response's list also has Mohr's Circles: not captured.",
+    "Found under Wine on 2026-10-26 (Newbeam at its peak); see docs/cli.md, All detail views.",
+    "controls: the control charts Response can show above and below the view list, each with",
+    "its record key (section control/KEY) and title; which two depends on the increment",
+    "(docs/cli.md, Shear and More Detail). Shear's found under Wine on 2026-10-27."
+  ],
+  "controls": [
+    {"key": "moment_ex", "title": "Control : Moment - |e_x"},
+    {"key": "moment_phi", "title": "Control : Moment - |f"},
+    {"key": "axial_ex", "title": "Control : Axial Load - |e_x"},
+    {"key": "shear_gxy", "title": "Control : Shear - |g_x_y"},
+    {"key": "shear_ex", "title": "Control : Shear - |e_x"}
   ],
   "views": [
     {

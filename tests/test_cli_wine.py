@@ -37,19 +37,20 @@ def test_report_through_the_command_line(tmp_path):
     assert code == 0, err
     assert_matches(record.read(tmp_path / "input.r2x.txt"), "newbeam")
     page = (tmp_path / "input.r2x.html").read_text(encoding="utf-8")
-    assert page.count("data:image/png;base64,") == 2 + 4 + CHARTS
+    assert page.count("data:image/png;base64,") == 3 + 4       # inputs, then each view
 
 
-def test_parallel_with_an_out_of_scope_input(tmp_path):
+def test_parallel_with_a_shear_input(tmp_path):
     shear = Path(os.environ["R2X_RESPONSE_DIR"]) / "dm-n1n.rsp"
     if not shear.is_file():
         pytest.skip("no dm-n1n.rsp in the Response folder")
     code, _, err = r2x("solve", str(REF / "newbeam" / "input.r2t"), str(shear), "-p", "2",
-                       "--out", str(tmp_path))
-    assert code == 3, err
-    assert "[dm-n1n] out of scope: the loading includes shear" in err
-    assert_matches(record.read(tmp_path / "input.r2x.txt"), "newbeam")
-    assert not (tmp_path / "dm-n1n.r2x.txt").exists()
+                       "--out", str(tmp_path), "--more-detail", "1")
+    assert code == 0, err
+    assert "[dm-n1n] solved: " in err and "r2x: 2 of 2 solved" in err
+    assert record.read(tmp_path / "dm-n1n.r2x.txt").header["more-detail"] == "1"
+    newbeam = record.read(tmp_path / "input.r2x.txt")
+    assert newbeam.header["stage-count"] == "116" and newbeam.header["peak-stage"] == "112"
 
 
 def test_no_input(tmp_path):

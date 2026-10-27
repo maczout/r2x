@@ -10,22 +10,27 @@ from dataclasses import dataclass
 
 UNITS = ("si", "us", "kgcm")
 FACTORS = ("none", "csa")
+MORE_DETAIL_MAX = "max"   # --more-detail max: press More Detail until Response stops refining
+
+Loads = tuple[float, float, float]   # N, M, V, as the Define Loading dialog has them
 
 
 @dataclass(frozen=True)
 class Settings:
-    units: str | None = None                       # one of UNITS
-    factors: str | None = None                     # one of FACTORS
-    initial: tuple[float, float] | None = None     # N, M in the units in effect
-    increment: tuple[float, float] | None = None   # N, M; only signs and ratio matter
+    units: str | None = None             # one of UNITS
+    factors: str | None = None           # one of FACTORS
+    initial: Loads | None = None         # N, M, V in the units in effect
+    increment: Loads | None = None       # N, M, V; only signs and ratio matter; 0,0,0 allowed
 
     def __post_init__(self):
         if self.units is not None and self.units not in UNITS:
             raise ValueError(f"units must be one of {', '.join(UNITS)}")
         if self.factors is not None and self.factors not in FACTORS:
             raise ValueError(f"factors must be one of {', '.join(FACTORS)}")
-        if self.increment is not None and self.increment == (0, 0):
-            raise ValueError("the increment cannot be 0,0")
+        for name in ("initial", "increment"):
+            value = getattr(self, name)
+            if value is not None and len(value) != 3:
+                raise ValueError(f"{name} must be N,M,V")
 
     def args(self) -> list[str]:
         """The worker's command-line options for these settings."""
@@ -35,24 +40,41 @@ class Settings:
         if self.factors:
             out += ["--factors", self.factors]
         if self.initial is not None:
-            out += [f"--initial={format_pair(self.initial)}"]
+            out += [f"--initial={format_loads(self.initial)}"]
         if self.increment is not None:
-            out += [f"--increment={format_pair(self.increment)}"]
+            out += [f"--increment={format_loads(self.increment)}"]
         return out
 
 
-def parse_pair(text: str) -> tuple[float, float]:
-    """'N,M' -> (N, M). Raises ValueError."""
+def parse_loads(text: str) -> Loads:
+    """'N,M,V' -> (N, M, V). Raises ValueError; two values ask for V to be added."""
     parts = str(text).split(",")
+    if len(parts) == 2:
+        raise ValueError(f"{text!r}: loads are N,M,V since r2x 0.3.0; add V, e.g. "
+                         f"{text},0")
     try:
-        if len(parts) != 2:
+        if len(parts) != 3:
             raise ValueError
-        n, m = float(parts[0]), float(parts[1])
+        loads = tuple(float(p) for p in parts)
     except ValueError:
-        raise ValueError(f"{text!r}: expected N,M, e.g. -2000,0") from None
-    if n != n or m != m or abs(n) == float("inf") or abs(m) == float("inf"):
+        raise ValueError(f"{text!r}: expected N,M,V, e.g. -2000,0,0") from None
+    if any(x != x or abs(x) == float("inf") for x in loads):
         raise ValueError(f"{text!r}: expected finite numbers")
-    return n, m
+    return loads
+
+
+def parse_more_detail(text: str) -> int | str:
+    """--more-detail: a number of presses (0 or more), or 'max'. Raises ValueError."""
+    text = str(text).strip().lower()
+    if text == MORE_DETAIL_MAX:
+        return MORE_DETAIL_MAX
+    try:
+        n = int(text)
+    except ValueError:
+        n = -1
+    if n < 0:
+        raise ValueError(f"{text!r}: expected a whole number of presses (0 or more), or max")
+    return n
 
 
 def format_number(x: float) -> str:
@@ -62,5 +84,5 @@ def format_number(x: float) -> str:
     return f"{x:.10f}".rstrip("0").rstrip(".")
 
 
-def format_pair(pair: tuple[float, float]) -> str:
-    return f"{format_number(pair[0])},{format_number(pair[1])}"
+def format_loads(loads: Loads) -> str:
+    return ",".join(format_number(x) for x in loads)

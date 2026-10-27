@@ -5,7 +5,7 @@ import pytest
 from r2x.settings import Settings
 from r2x.worker import dialogs
 from r2x.worker.dialogs import CONSTANT, FACTOR_FIELDS, INCREMENT, UNIT_RADIOS
-from r2x.worker.session import OutOfScope, R2xError, Session, Window
+from r2x.worker.session import R2xError, Session, Window
 
 # kN and kNm per kip and kip-ft (US) or ton and ton-m (kg/cm), as Response converts.
 PER_UNIT = {"si": (1.0, 1.0), "us": (4.448222, 1.355818), "kgcm": (9.80665, 9.80665)}
@@ -100,7 +100,9 @@ class FakeResponse:
 def apply_and_read(fake, settings):
     session = Session(fake)
     dialogs.apply(session, settings)
-    return dialogs.read(session)
+    effective, pictures = dialogs.read(session)
+    assert pictures == {}                       # pictures only with a folder for them
+    return effective
 
 
 def test_defaults_are_read_back_and_nothing_is_changed():
@@ -121,7 +123,8 @@ def test_input_settings_are_kept():
 def test_units_are_set_before_loads():
     """--initial is in the units in effect: set after --units, it is not converted again."""
     fake = FakeResponse()
-    eff = apply_and_read(fake, Settings(units="us", initial=(-449.62, 0), increment=(-1, 0)))
+    eff = apply_and_read(fake, Settings(units="us", initial=(-449.62, 0, 0),
+                                        increment=(-1, 0, 0)))
     assert eff["units"] == "us"
     assert eff["initial"] == "-449.62,0.00,0.00" and eff["increment"] == "-1.00,0.00,0.00"
     assert fake.loads["c"][0] == pytest.approx(-2000, abs=0.1)        # kN inside Response
@@ -132,27 +135,28 @@ def test_factors_and_overrides():
     assert eff["factors"] == "1.00,1.00,1.00"
     eff = apply_and_read(FakeResponse(), Settings(factors="csa", units="kgcm"))
     assert eff["factors"] == "0.65,0.85,0.90" and eff["units"] == "kgcm"
-    eff = apply_and_read(FakeResponse(constant=(-100, 5, 0)), Settings(initial=(0, 20)))
-    assert eff["initial"] == "0.00,20.00,0.00"
+    eff = apply_and_read(FakeResponse(constant=(-100, 5, 7)), Settings(initial=(0, 20, 0)))
+    assert eff["initial"] == "0.00,20.00,0.00"      # all three loads are set
 
 
-def test_shear_is_out_of_scope_before_solving():
-    dialogs.check_scope({"initial": "0.00,0.00,0.00", "increment": "0.00,1.00,0.00"})
-    for eff in ({"initial": "0.00,0.00,5.00", "increment": "0.00,1.00,0.00"},
-                {"initial": "0.00,0.00,0.00", "increment": "0.00,1.00,1.00"}):
-        with pytest.raises(OutOfScope, match="the loading includes shear"):
-            dialogs.check_scope(eff)
-    with pytest.raises(R2xError, match="cannot read the shear"):
-        dialogs.check_scope({"initial": "0.00,0.00", "increment": "0,1,0"})
+def test_shear_is_set_like_the_other_loads():
+    """Since r2x 0.3.0 shear is in scope: V goes into Define Loading with N and M."""
+    fake = FakeResponse(constant=(-100, 5, 7))
+    eff = apply_and_read(fake, Settings(increment=(0, 1, 1)))
+    assert eff["initial"] == "-100.00,5.00,7.00" and eff["increment"] == "0.00,1.00,1.00"
+    eff = apply_and_read(fake, Settings(units="us", initial=(0, 0, 50), increment=(0, 0, 0)))
+    assert eff["initial"] == "0.00,0.00,50.00" and eff["increment"] == "0.00,0.00,0.00"
+    assert fake.loads["c"][2] == pytest.approx(50 * 4.448222)       # kips, kept in kN
 
 
 def test_a_message_box_instead_of_closing_is_an_error():
     with pytest.raises(R2xError, match="Response shows a dialog 'Error': Not a number"):
-        apply_and_read(FakeResponse(reject=True), Settings(initial=(1, 1)))
+        apply_and_read(FakeResponse(reject=True), Settings(initial=(1, 1, 0)))
 
 
 def test_settings_args_round_trip():
-    s = Settings(units="us", factors="csa", initial=(-2000.0, 0.0), increment=(0.0, -1.5))
-    assert s.args() == ["--units", "us", "--factors", "csa", "--initial=-2000,0",
-                        "--increment=0,-1.5"]
+    s = Settings(units="us", factors="csa", initial=(-2000.0, 0.0, 0.0),
+                 increment=(0.0, -1.5, 2.0))
+    assert s.args() == ["--units", "us", "--factors", "csa", "--initial=-2000,0,0",
+                        "--increment=0,-1.5,2"]
     assert Settings().args() == []

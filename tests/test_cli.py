@@ -40,12 +40,15 @@ def test_defaults():
 
 def test_options():
     a = parse("a.r2t", "--stage", "peak,0-5", "--out", "res", "-p", "4", "-q", "--overwrite",
-              "--units", "US", "--factors", "csa", "--initial", "-2000,0", "--increment",
-              "0,-1.5")
+              "--units", "US", "--factors", "csa", "--initial", "-2000,0,0", "--increment",
+              "0,-1.5,1", "--more-detail", "3")
     assert a.stage == parse_stages("peak,0-5") and a.out == Path("res") and a.parallel == 4
     assert a.quiet and a.overwrite and a.units == "us" and a.factors == "csa"
-    assert a.initial == (-2000.0, 0.0) and a.increment == (0.0, -1.5)
-    assert parse("--initial=-5,1", "x.r2t").initial == (-5.0, 1.0)
+    assert a.initial == (-2000.0, 0.0, 0.0) and a.increment == (0.0, -1.5, 1.0)
+    assert a.more_detail == 3 and parse("x.r2t").more_detail == 0
+    assert parse("x.r2t", "--more-detail", "MAX").more_detail == "max"
+    assert parse("--initial=-5,1,2", "x.r2t").initial == (-5.0, 1.0, 2.0)
+    assert parse("x.r2t", "--increment", "0,0,0").increment == (0, 0, 0)   # the initial load alone
     assert parse("x.r2t", "--views", "No-Shear,cracking").views == parse_views("cracking,no-shear")
 
 
@@ -55,8 +58,11 @@ def test_options():
     (["--stage", "1,,2"], "empty item"),
     (["-p", "0"], "1 or more"),
     (["--parallel", "two"], "1 or more"),
-    (["--initial", "5"], "expected N,M"),
-    (["--increment", "0,0"], "cannot be 0,0"),
+    (["--initial", "5"], "expected N,M,V"),
+    (["--increment", "0,1"], "add V, e.g. 0,1,0"),
+    (["--initial", "-2000,0"], "add V, e.g. -2000,0,0"),
+    (["--more-detail", "-1"], "whole number of presses"),
+    (["--more-detail", "some"], "whole number of presses"),
     (["--units", "imperial"], "invalid choice"),
     (["--views", "mohr"], "'mohr' in 'mohr': use all, or any of general"),
     (["--views", ""], "an empty item"),
@@ -130,7 +136,7 @@ def cases(tmp_path, monkeypatch):
     monkeypatch.delenv("FAKE_DOCKER_MODE", raising=False)
     d = tmp_path / "cases"
     d.mkdir()
-    for name, text in [("beam", "ok"), ("bad", "fail"), ("shear", "shear"), ("crash", "crash"),
+    for name, text in [("beam", "ok"), ("bad", "fail"), ("scope", "outofscope"), ("crash", "crash"),
                        ("noout", "noout"), ("noreport", "noreport"), ("slow1", "slow"),
                        ("slow2", "slow")]:
         (d / f"{name}.r2t").write_text(text)
@@ -182,7 +188,7 @@ def test_existing_record_needs_overwrite(cases):
 
 @pytest.mark.parametrize("name, status, message", [
     ("bad", 1, "[bad] failed: Response shows a dialog 'Invalid File'"),
-    ("shear", 3, "[shear] out of scope: the loading includes shear"),
+    ("scope", 3, "[scope] out of scope: an analysis r2x does not cover"),
     ("crash", 1, "[crash] failed: exit status 1: Traceback (most recent call last): / "
                  "RuntimeError: boom"),
     ("noout", 1, "[noout] failed: the container finished but wrote no noout.r2x.txt"),
@@ -218,11 +224,11 @@ def test_stage_past_last_is_a_usage_error(cases):
 
 
 def test_several_inputs_and_summary(cases):
-    code, _, err = r2x("solve", str(cases / "beam.r2t"), str(cases / "shear.r2t"),
+    code, _, err = r2x("solve", str(cases / "beam.r2t"), str(cases / "scope.r2t"),
                        str(cases / "bad.r2t"), "-p", "3")
     assert code == 1
     assert "r2x: 1 of 3 solved, 1 failed, 1 out of scope" in err
-    code, _, err = r2x("solve", str(cases / "beam.r2t"), str(cases / "shear.r2t"), "--overwrite")
+    code, _, err = r2x("solve", str(cases / "beam.r2t"), str(cases / "scope.r2t"), "--overwrite")
     assert code == 3
 
 
@@ -233,9 +239,9 @@ def test_glob_and_parallel(cases):
 
 
 def test_quiet_shows_errors_only(cases):
-    code, _, err = r2x("solve", str(cases / "beam.r2t"), str(cases / "shear.r2t"), "-q")
+    code, _, err = r2x("solve", str(cases / "beam.r2t"), str(cases / "scope.r2t"), "-q")
     assert code == 3 and err.strip().splitlines() == [
-        "[shear] out of scope: the loading includes shear"]
+        "[scope] out of scope: an analysis r2x does not cover"]
 
 
 def test_stdout(cases):
@@ -286,13 +292,15 @@ def test_no_input_means_a_new_section(cases, monkeypatch):
 
 def test_settings_reach_the_worker(cases):
     code, out, err = r2x("solve", str(cases / "beam.r2t"), "--stdout", "--units", "US",
-                         "--factors", "csa", "--initial", "-2000,0", "--increment", "0,-1.5")
+                         "--factors", "csa", "--initial", "-2000,0,0", "--increment",
+                         "0,-1.5,2", "--more-detail", "max")
     assert code == 0, err
     h = record.decode(out).header
-    assert (h["units"], h["factors"], h["initial"], h["increment"]) == (
-        "us", "csa", "-2000,0", "0,-1.5")
+    assert (h["units"], h["factors"], h["initial"], h["increment"], h["more-detail"]) == (
+        "us", "csa", "-2000,0,0", "0,-1.5,2", "max")
     code, out, _ = r2x("solve", str(cases / "beam.r2t"), "--stdout")
-    assert "units" not in record.decode(out).header      # nothing given, nothing passed
+    h = record.decode(out).header
+    assert "units" not in h and h["more-detail"] == "0"   # nothing given, nothing passed
 
 
 def test_health(cases):
@@ -313,16 +321,27 @@ def test_display_live():
     d.tick()
     assert d.status_line() == "/ 0/2 done  [Newbeam] stage 56 (1/1), 0 s  [Cm4] starting, 0 s"
     d.finish(a, 0, where="Newbeam.r2x.txt")
-    d.finish(b, 3, "the loading includes shear")
+    d.finish(b, 3, "an analysis r2x does not cover")
     d.summary()
     d._clear()
     text = s.getvalue()
     lines = [seg.rsplit("\r", 1)[-1] for seg in text.split("\n")]
     assert lines[0].startswith("[Newbeam] solved: 60 stages, peak 56 -> Newbeam.r2x.txt (")
-    assert lines[1] == "[Cm4] out of scope: the loading includes shear"
+    assert lines[1] == "[Cm4] out of scope: an analysis r2x does not cover"
     assert lines[2] == "r2x: 1 of 2 solved, 1 out of scope"
     assert text.endswith("\n") or text.rstrip(" \r").endswith("\n")
     assert "\x1b" not in text                   # no escape codes
+
+
+def test_display_shows_stages_solved_so_far():
+    d = Display(io.StringIO(), live=True)
+    j = d.add("Cm4")
+    d.start(j)
+    for e, shown in ((Event("solving"), "solving"), (Event("solving", count=1), "solving: 1 stage"),
+                     (Event("solving", count=12), "solving: 12 stages"),
+                     (Event("refining", count=80, done=1), "more detail 1: 80 stages")):
+        d.event(j, e)
+        assert d.status_line().endswith(f"[Cm4] {shown}, 0 s")
 
 
 def test_display_not_live_has_no_carriage_returns():

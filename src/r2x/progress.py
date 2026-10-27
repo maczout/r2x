@@ -4,6 +4,8 @@ Every line the worker writes for the command line starts with "r2x: " and has a 
 
     r2x: note: creating Wine prefix (first run only)
     r2x: solving
+    r2x: solving: 12 stages              stages solved so far
+    r2x: more detail 1: 80 stages        Solve > More Detail, the first press, stages so far
     r2x: solved: 60 stages, peak 56
     r2x: stage 56 (1/1)                  stage 56 exported, the first of one
     r2x: wrote /out/Newbeam.r2x.txt in 9.1 s
@@ -28,18 +30,21 @@ SOLVED, FAILED, USAGE, OUT_OF_SCOPE = 0, 1, 2, 3
 
 @dataclass(frozen=True)
 class Event:
-    kind: str                  # note solving solved stage wrote failed usage out-of-scope
+    kind: str                  # note solving refining solved stage wrote failed usage
+                               # out-of-scope
     text: str = ""             # note, wrote (path), failed, usage, out-of-scope
-    count: int | None = None   # solved: number of stages
+    count: int | None = None   # solving, refining: stages so far; solved: number of stages
     stage: int | None = None   # solved: peak stage; stage: the stage exported
-    done: int | None = None    # stage: how many exported so far
+    done: int | None = None    # stage: how many exported so far; refining: which press
     total: int | None = None   # stage: how many to export
     seconds: float | None = None  # wrote
 
     def line(self) -> str:
         k = self.kind
         if k == "solving":
-            body = "solving"
+            body = "solving" if self.count is None else f"solving: {_stages(self.count)}"
+        elif k == "refining":
+            body = f"more detail {self.done}: {_stages(self.count)}"
         elif k == "solved":
             body = f"solved: {self.count} stages, peak {self.stage}"
         elif k == "stage":
@@ -58,8 +63,14 @@ _TEXT_KINDS = {"note": "note", "failed": "failed", "usage": "usage error",
 _TEXT_LABELS = {label: kind for kind, label in _TEXT_KINDS.items()}
 
 _SOLVED = re.compile(r"solved: (\d+) stages, peak (\d+)")
+_SOLVING = re.compile(r"solving: (\d+) stages?")
+_REFINING = re.compile(r"more detail (\d+): (\d+) stages?")
 _STAGE = re.compile(r"stage (\d+) \((\d+)/(\d+)\)")
 _WROTE = re.compile(r"wrote (.+) in (\d+(?:\.\d+)?) s")
+
+
+def _stages(n: int) -> str:
+    return f"{n} stage" if n == 1 else f"{n} stages"
 
 
 def _one_line(text: str) -> str:
@@ -78,6 +89,10 @@ def parse(line: str) -> Event | None:
     body = line[len(PREFIX):]
     if body == "solving":
         return Event("solving")
+    if m := _SOLVING.fullmatch(body):
+        return Event("solving", count=int(m.group(1)))
+    if m := _REFINING.fullmatch(body):
+        return Event("refining", count=int(m.group(2)), done=int(m.group(1)))
     if m := _SOLVED.fullmatch(body):
         return Event("solved", count=int(m.group(1)), stage=int(m.group(2)))
     if m := _STAGE.fullmatch(body):

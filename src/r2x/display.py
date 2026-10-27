@@ -13,7 +13,7 @@ import time
 from dataclasses import dataclass, field
 from typing import TextIO
 
-from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE, Event
+from r2x.progress import FAILED, OUT_OF_SCOPE, PREFIX, SOLVED, USAGE, Event
 
 SPINNER = "|/-\\"
 TICK = 0.1
@@ -76,7 +76,9 @@ class Display:
     def event(self, job: Job, e: Event):
         with self.lock:
             if e.kind == "solving":
-                job.state = "solving"
+                job.state = "solving" if e.count is None else e.line().removeprefix(PREFIX)
+            elif e.kind == "refining":
+                job.state = e.line().removeprefix(PREFIX)
             elif e.kind == "solved":
                 job.solved = e
                 job.state = f"solved: {e.count} stages, peak {e.stage}"

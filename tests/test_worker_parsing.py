@@ -202,12 +202,19 @@ def test_wrong_title_is_an_error_not_a_retry():
     assert not isinstance(e.value, OutOfScope) and notes == []
 
 
-def test_shear_control_chart_is_out_of_scope():
-    shear = read("control/moment_ex.txt").replace(b"Control : Moment - |e_x",
-                                                  b"Control : Shear - |g_x_y")
-    s, _ = session_with({"control_top": shear, "longitudinal_strain": shear})
-    with pytest.raises(OutOfScope, match="loading includes shear"):
-        s.copy_chart(CONTROL_CHARTS[0], timeout=0.2)
+def retitled(data: bytes, title: str) -> bytes:
+    return data.replace(export_title(data).encode("latin-1"), title.encode("latin-1"), 1)
+
+
+def test_shear_control_charts_are_known():
+    """Since r2x 0.3.0 shear is in scope: Shear-γxy and Shear-εx are control charts like the
+    others."""
+    gxy = retitled(read("control/moment_ex.txt"), "Control : Shear - |g_x_y")
+    ex = retitled(read("control/moment_ex.txt"), "Control : Shear - |e_x")
+    s, _ = session_with({"control_top": gxy, "control_bottom": ex, "longitudinal_strain": gxy})
+    assert s.copy_chart(CONTROL_CHARTS[0], timeout=0.2) == gxy
+    assert s.copy_chart(CONTROL_CHARTS[1], timeout=0.2) == ex
+    assert list(control_exports(gxy, ex)) == ["shear_gxy", "shear_ex"]
     with pytest.raises(R2xError) as e:            # a detail view with that title is just wrong
         s.copy_chart(NO_SHEAR_CHARTS[0], timeout=0.2)
     assert not isinstance(e.value, OutOfScope)
@@ -252,3 +259,52 @@ def test_a_chart_not_in_the_view_on_screen_is_an_error():
     s, _ = session_with({"control_top": read("control/moment_ex.txt")})
     with pytest.raises(R2xError, match="transverse_strain is not in the view on screen"):
         s.copy_chart(view_charts(BY_NAME["general"])[1], timeout=0.2)
+
+
+# -- stage keys with shear --------------------------------------------------------------------------
+def test_shear_with_moment_identifies_by_curvature_alone():
+    """With V and M in the increment the control charts are Shear-γxy and Moment-φ: curvature
+    is the only key (γxy needs the section's widths, docs/cli.md)."""
+    controls, _, _ = case("newbeam")
+    gxy = retitled(controls["moment_ex"], "Control : Shear - |g_x_y")
+    keys = StageKeys(control_exports(gxy, controls["moment_phi"]))
+    assert keys.ex is None and keys.phi is not None and keys.count == 60
+    for stage, folder in stage_folders("newbeam"):
+        strain = (folder / "longitudinal_strain.txt").read_bytes()
+        assert keys.candidates(strain) == [stage]
+        assert keys.describe(strain)[1] == pytest.approx(keys.phi[stage], abs=0.002)
+
+
+def test_shear_alone_identifies_by_ex():
+    """With V alone in the increment the bottom control chart is Shear-εx."""
+    controls, peak, strain = case("newbeam-axial-only")
+    ex = retitled(controls["axial_ex"], "Control : Shear - |e_x")
+    gxy = retitled(controls["axial_ex"], "Control : Shear - |g_x_y")
+    keys = StageKeys(control_exports(gxy, ex))
+    assert keys.phi is None and keys.ex is not None
+    assert keys.identify(strain) == peak
+
+
+def test_repeated_control_points_and_several_candidates():
+    """An increment of 0,0,0: two stages, both the initial load."""
+    controls, _, strain = case("newbeam")
+    def first_two(data):
+        lines = data.split(b"\r\n")
+        start = next(i for i, l in enumerate(lines) if l.startswith(b"Line type")) + 1
+        return b"\r\n".join(lines[:start] + [lines[start], lines[start]] + [b""])
+    keys = StageKeys({k: first_two(v) for k, v in controls.items()})
+    assert keys.count == 2 and keys.repeats == [1]
+    zero = (REF / "stages/036/longitudinal_strain.txt").read_bytes()
+    keys.ex, keys.phi = [strain_at_axis(zero)] * 2, [strain_curvature(zero, "mrad/m")] * 2
+    assert keys.candidates(zero) == [0, 1]
+    assert StageKeys(controls).repeats == []
+
+
+def test_control_curves_must_have_the_same_stages():
+    controls, _, _ = case("newbeam")
+    short = controls["moment_phi"].rsplit(b"\r\n", 2)[0] + b"\r\n"
+    with pytest.raises(R2xError, match="control curves disagree"):
+        StageKeys({"moment_ex": controls["moment_ex"], "moment_phi": short})
+    gxy = retitled(controls["moment_ex"], "Control : Shear - |g_x_y")
+    with pytest.raises(R2xError, match="no control chart with εx or curvature"):
+        StageKeys({"shear_gxy": gxy})

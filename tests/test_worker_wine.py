@@ -17,7 +17,7 @@ from r2x.settings import Settings
 from r2x.stages import ALL, PEAK, parse_stages
 from r2x.views import ALL as ALL_VIEWS, BY_NAME, parse_views, record_order
 from r2x.worker.runner import run_job
-from r2x.worker.session import OutOfScope
+from r2x.worker.session import export_points
 
 NO_SHEAR = parse_views("no-shear")
 NO_SHEAR_KEYS = [c.key for c in BY_NAME["no-shear"].charts]
@@ -46,10 +46,13 @@ def reference_sections(case, stages=None, keys=None):
     return out
 
 
-def solve(tmp_path, stages, name="Newbeam", report=None, views=ALL_VIEWS):
+def solve(tmp_path, stages, name="Newbeam", report=None, views=ALL_VIEWS, settings=Settings(),
+          more_detail=0, source=None, events=None):
     out = tmp_path / f"{name}.r2x.txt"
-    header = run_job(REF / "newbeam" / "input.r2t", out, Path(RESPONSE), PREFIX, stages=stages,
-                     report=report, views=views)
+    header = run_job(source or REF / "newbeam" / "input.r2t", out, Path(RESPONSE), PREFIX,
+                     stages=stages, report=report, views=views, settings=settings,
+                     more_detail=more_detail, on_event=(events.append if events is not None
+                                                        else lambda e: None))
     rec = record.read(out)
     assert rec.header == header
     return rec
@@ -108,8 +111,8 @@ def test_newbeam_all_and_a_selection(tmp_path):
     assert some.header["views"] == "cracking,no-shear"
     for name, body in some.sections.items():
         assert every.sections[name] == body, name
-    # the control charts, then each view's window and the charts not already shown
-    assert len(report_pictures(tmp_path / "some.html")) == 2 + 2 + 7 + 4
+    # the three inputs, then each view's window
+    assert len(report_pictures(tmp_path / "some.html")) == 3 + 2
 
 
 def test_report_leaves_the_record_unchanged(tmp_path):
@@ -119,32 +122,36 @@ def test_report_leaves_the_record_unchanged(tmp_path):
     assert rec.sections == plain.sections
     assert_matches(rec, "newbeam")
     sizes = report_pictures(html)
-    # two control charts, then each view: its window and its charts not shown already
-    windows = [s for s in sizes if s[0] > 1000]
-    assert len(sizes) == 2 + 4 + CHARTS and len(windows) == 4
-    assert all(w == 900 and 500 < h < 800 for w, h in sizes if (w, h) not in windows)
+    # the input screen and two dialogs, then Response's window in each view
+    assert len(sizes) == 3 + 4
+    assert sizes[0][0] > 1000 and all(w < 600 and h < 500 for w, h in sizes[1:3])
+    assert all(s == sizes[0] for s in sizes[3:])             # every window the same size
     page = html.read_text(encoding="utf-8")
-    assert "No Shear view at stage 56" in page and "No picture" not in page
+    assert "<h2>Outputs at stage 56</h2>" in page and "No picture" not in page
     assert sorted(p.name for p in tmp_path.iterdir()) == ["Newbeam.r2x.html", "Newbeam.r2x.txt"]
 
 
 def test_report_axial_only(tmp_path):
-    """Both control charts are the same chart: the report shows it once, as the record does."""
+    """One view asked for: the inputs and one window."""
     html = tmp_path / "axial.html"
     out = tmp_path / "axial.r2x.txt"
     run_job(REF / "newbeam-axial-only" / "saved.r2t", out, Path(RESPONSE), PREFIX, report=html,
             views=NO_SHEAR)
     assert record.read(out).sections == reference_sections("newbeam-axial-only")
-    assert len(report_pictures(html)) == 7
+    assert len(report_pictures(html)) == 3 + 1
 
 
-def test_shear_input_is_out_of_scope(tmp_path):
+def test_a_shear_example_solves(tmp_path):
+    """Since r2x 0.3.0 shear is in scope: one of Response's own shear examples."""
     shear = Path(RESPONSE) / "dm-n1n.rsp"
     if not shear.is_file():
         pytest.skip("no dm-n1n.rsp in the Response folder")
-    with pytest.raises(OutOfScope, match="shear"):
-        run_job(shear, tmp_path / "dm.r2x.txt", Path(RESPONSE), PREFIX)
-    assert list(tmp_path.iterdir()) == []
+    rec = solve(tmp_path, PEAK, "dm", source=shear)
+    assert rec.header["increment"] == "0.00,1.50,1.00"
+    assert (rec.header["stage-count"], rec.header["peak-stage"]) == ("30", "25")
+    assert [n for n in rec.sections if n.startswith("control/")] == [
+        "control/shear_gxy", "control/moment_phi"]
+    assert len(rec.sections) == 2 + CHARTS
 
 
 @pytest.mark.parametrize("case", ["newbeam-axial", "newbeam-axial-only", "newbeam-csa"])
@@ -163,10 +170,10 @@ FLAGS = [
     ("newbeam-csa", Settings(factors="csa"),
      {"units": "si", "factors": "0.65,0.85,0.90", "initial": "0.00,0.00,0.00",
       "increment": "0.00,1.00,0.00"}),
-    ("newbeam-axial", Settings(initial=(-2000, 0)),
+    ("newbeam-axial", Settings(initial=(-2000, 0, 0)),
      {"units": "si", "factors": "1.00,1.00,1.00", "initial": "-2000.00,0.00,0.00",
       "increment": "0.00,1.00,0.00"}),
-    ("newbeam-axial-only", Settings(increment=(-1, 0)),
+    ("newbeam-axial-only", Settings(increment=(-1, 0, 0)),
      {"units": "si", "factors": "1.00,1.00,1.00", "initial": "0.00,0.00,0.00",
       "increment": "-1.00,0.00,0.00"}),
 ]
@@ -226,3 +233,83 @@ def test_new_section_records_the_template(tmp_path):
     assert header["template-sha256"] == __import__("hashlib").sha256(
         (response / "r2k.r2k").read_bytes()).hexdigest()
     assert header["factors"] == "0.65,0.85,0.90"      # Response loads the template at start
+
+
+# -- shear and More Detail (r2x 0.3.0) -----------------------------------------------------------
+# No hand captures yet (tests/reference gains them in Step 3 of the 0.3.0 plan); these rely on
+# r2x's own checks: every stage identified from its strain profile, recurring charts the same
+# bytes in every view, and each solve's numbers as found under Wine on 2026-10-27.
+SHEAR = Settings(increment=(0, 1, 1))
+
+
+def test_shear_with_moment(tmp_path):
+    """Newbeam with M/V = 1 m: Shear-γxy above Moment-φ, opening on its peak shear."""
+    events = []
+    peak = solve(tmp_path, PEAK, "peak", settings=SHEAR, events=events)
+    h = peak.header
+    assert (h["increment"], h["stage-count"], h["peak-stage"]) == ("0.00,1.00,1.00", "43", "30")
+    assert list(peak.sections)[:2] == ["control/shear_gxy", "control/moment_phi"]
+    assert len(peak.sections) == 2 + CHARTS and not [e for e in events if e.kind == "note"]
+    every = solve(tmp_path, ALL, "all", settings=SHEAR)
+    assert every.stages() == list(range(43)) and len(every.sections) == 2 + 43 * CHARTS
+    for name, body in peak.sections.items():
+        assert every.sections[name] == body, name
+    gxy = export_points(every.control("shear_gxy"))
+    assert max(range(43), key=lambda i: gxy[i][1]) == 30          # the peak shear
+
+
+def test_shear_alone(tmp_path):
+    """V alone: Shear-εx below Shear-γxy, and the strain profile stays the same for the first
+    stages, so r2x pages by the General view's Shear Strain too (not recorded here)."""
+    rec = solve(tmp_path, parse_stages("0-12,peak"), settings=Settings(increment=(0, 0, 1)),
+                views=NO_SHEAR)
+    h = rec.header
+    assert (h["stage-count"], h["peak-stage"], h["detail-stages"]) == ("52", "16", "0-12,16")
+    assert list(rec.sections)[:2] == ["control/shear_gxy", "control/shear_ex"]
+    assert not [n for n in rec.sections if n.endswith("/shear_strain")]
+    assert rec.stage(1, "longitudinal_strain") == rec.stage(9, "longitudinal_strain")
+
+
+def test_a_peak_its_strain_profile_cannot_tell(tmp_path):
+    """Marshall.rsp's curvature at its peak matches four other stages; r2x pages from stage 0
+    to tell which it is."""
+    source = Path(RESPONSE) / "Marshall.rsp"
+    if not source.is_file():
+        pytest.skip("no Marshall.rsp in the Response folder")
+    events = []
+    rec = solve(tmp_path, PEAK, "marshall", source=source, views=NO_SHEAR, events=events)
+    assert (rec.header["stage-count"], rec.header["peak-stage"]) == ("40", "34")
+    assert [e.text for e in events if e.kind == "note"] == [
+        "the stage on screen could be any of stages 34-35,37-39; paging from stage 0 to tell "
+        "which"]
+
+
+def test_an_increment_of_zero(tmp_path):
+    """0,0,0 solves the initial load alone: two control points, both that load."""
+    rec = solve(tmp_path, ALL, settings=Settings(initial=(0, 100, 0), increment=(0, 0, 0)))
+    h = rec.header
+    assert (h["increment"], h["stage-count"], h["peak-stage"]) == ("0.00,0.00,0.00", "2", "1")
+    phi = export_points(rec.control("moment_phi"))
+    assert phi[0] == phi[1] and phi[0][1] == 100.0
+    assert rec.stages() == [0, 1]
+
+
+def test_more_detail(tmp_path):
+    """Each press puts a stage between every two up to the peak, keeping the others byte for
+    byte; Response stops at 327 stages."""
+    plain = solve(tmp_path, PEAK, "plain", views=NO_SHEAR)
+    twice = solve(tmp_path, PEAK, "twice", views=NO_SHEAR, more_detail=2)
+    h = twice.header
+    assert (h["more-detail"], h["stage-count"], h["peak-stage"]) == ("2", "228", "224")
+    old = plain.control("moment_phi").split(b"\r\n")
+    new = iter(twice.control("moment_phi").split(b"\r\n"))
+    assert all(any(line == other for other in new) for line in old)    # in order, unchanged
+    assert twice.stage(224, "longitudinal_strain") == plain.stage(56, "longitudinal_strain")
+    events = []
+    most = solve(tmp_path, PEAK, "most", views=NO_SHEAR, more_detail=5, events=events)
+    assert (most.header["more-detail"], most.header["stage-count"]) == ("3", "327")
+    assert [e.text for e in events if e.kind == "note"] == [
+        "More Detail refined the solve 3 of the 5 times asked: Response refines it no further "
+        "than 327 stages"]
+    assert solve(tmp_path, PEAK, "max", views=NO_SHEAR, more_detail="max").sections == \
+        most.sections

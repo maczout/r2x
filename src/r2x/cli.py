@@ -25,7 +25,7 @@ from pathlib import Path, PureWindowsPath
 from r2x import __version__, progress
 from r2x.display import Display, Job
 from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE
-from r2x.settings import FACTORS, UNITS, Settings, parse_pair
+from r2x.settings import FACTORS, UNITS, Settings, parse_loads, parse_more_detail
 from r2x.stages import StageError, StageSpec, parse_stages
 from r2x.views import ViewError, format_views, parse_views
 
@@ -110,7 +110,8 @@ def overall_status(statuses: list[int]) -> int:
 
 # -- one input ----------------------------------------------------------------------------------
 def container_command(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
-                      image: str, report: Path | None = None, views=None) -> list[str]:
+                      image: str, report: Path | None = None, views=None,
+                      more_detail: int | str = 0) -> list[str]:
     """docker run for one input; without an input the worker defines a new section (--new).
     The report, if any, goes in the record's folder."""
     mounts = ["-v", f"{docker_path(inp)}:/in/{inp.name}:ro"] if inp is not None else []
@@ -121,15 +122,17 @@ def container_command(inp: Path | None, record: Path, stages: StageSpec, setting
         image, "python", "-m", "r2x.worker", *worker_input, f"/out/{record.name}",
         "--stage", str(stages), *(["--views", format_views(views)] if views else []),
         *settings.args(),
+        *(["--more-detail", str(more_detail)] if more_detail else []),
         *(["--report", f"/out/{report.name}"] if report is not None else []),
     ]
 
 
 def run_container(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
                   image: str, display: Display, job: Job,
-                  report: Path | None = None, views=None) -> tuple[int, str]:
+                  report: Path | None = None, views=None,
+                  more_detail: int | str = 0) -> tuple[int, str]:
     """Solve one input in its own container; return its exit status and, if it failed, why."""
-    cmd = container_command(inp, record, stages, settings, image, report, views)
+    cmd = container_command(inp, record, stages, settings, image, report, views, more_detail)
     display.start(job)
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -199,7 +202,8 @@ def cmd_solve(a) -> int:
 
         def solve(k: int) -> int:
             status, reason = run_container(inputs[k], records[k], a.stage, settings_from(a),
-                                           a.image, display, jobs[k], reports[k], a.views)
+                                           a.image, display, jobs[k], reports[k], a.views,
+                                           a.more_detail)
             where = str(records[k]) + (f", {reports[k].name}" if reports[k] else "")
             display.finish(jobs[k], status, reason, where)
             return status
@@ -217,7 +221,8 @@ def solve_to_stdout(inp: Path | None, a, live: bool) -> int:
         with Display(sys.stderr, live, a.quiet) as display:
             job = display.add(job_name(inp))
             status, reason = run_container(inp, record, a.stage, settings_from(a), a.image,
-                                           display, job, views=a.views)
+                                           display, job, views=a.views,
+                                           more_detail=a.more_detail)
             display.finish(job, status, reason, "stdout")
         if status == SOLVED:
             # The binary buffer, so that Windows cannot rewrite the record's line endings.
@@ -247,7 +252,8 @@ SOLVE_DESCRIPTION = """\
 Run a full sectional response in Response-2000 1.9.7 and capture the data
 from its control charts and detail views.
 
-Scope: axial load and moment. Not M-N interaction or full-member analysis.
+Scope: axial load, moment and shear. Not interaction diagrams or member
+response.
 r2x never edits the input file. Options override the input. Options you
 leave out keep the input's value, or Response's start-up default if the
 input has none."""
@@ -266,7 +272,8 @@ Examples:
   r2x solve beam.r2t --report
   r2x solve beam.r2t --stage all
   r2x solve beam.r2t --views cracking,no-shear
-  r2x solve col.rsp --units si --initial -2000,0 --increment 0,1
+  r2x solve beam.r2t --increment 0,1,1 --more-detail 2
+  r2x solve col.rsp --units si --initial -2000,0,0 --increment 0,1,0
   r2x solve cases\\*.r2t --out results --parallel 4
   r2x solve beam.r2t --stdout | py parse.py"""
 
@@ -300,18 +307,18 @@ def views_spec(text: str):
         raise argparse.ArgumentTypeError(str(e))
 
 
-def load_pair(text: str) -> tuple[float, float]:
+def loads(text: str) -> tuple[float, float, float]:
     try:
-        return parse_pair(text)
+        return parse_loads(text)
     except ValueError as e:
         raise argparse.ArgumentTypeError(str(e))
 
 
-def increment_pair(text: str) -> tuple[float, float]:
-    n, m = load_pair(text)
-    if n == 0 and m == 0:
-        raise argparse.ArgumentTypeError("the increment cannot be 0,0")
-    return n, m
+def more_detail_spec(text: str) -> int | str:
+    try:
+        return parse_more_detail(text)
+    except ValueError as e:
+        raise argparse.ArgumentTypeError(str(e))
 
 
 def positive_int(text: str) -> int:
@@ -325,7 +332,8 @@ def positive_int(text: str) -> int:
 
 
 def join_pair_values(argv: list[str]) -> list[str]:
-    """--initial -2000,0 -> --initial=-2000,0, so argparse does not take -2000,0 for an option."""
+    """--initial -2000,0,0 -> --initial=-2000,0,0, so argparse does not take -2000,0,0 for an
+    option."""
     out, it = [], iter(argv)
     for arg in it:
         if arg in ("--initial", "--increment"):
@@ -364,13 +372,18 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("--factors", choices=FACTORS, type=str.lower,
                    help="Material reduction factors.\n"
                         "Default: input's, else none.")
-    g.add_argument("--initial", type=load_pair, metavar="N,M",
+    g.add_argument("--initial", type=loads, metavar="N,M,V",
                    help="Initial load, in the units in effect.\n"
-                        "Default: input's, else 0,0.")
-    g.add_argument("--increment", type=increment_pair, metavar="N,M",
+                        "Default: input's, else 0,0,0.")
+    g.add_argument("--increment", type=loads, metavar="N,M,V",
                    help="Load increment; only signs and ratio matter.\n"
-                        "Default: input's, else 0,1.\n"
+                        "0,0,0 solves the initial load alone.\n"
+                        "Default: input's, else 0,1,0.\n"
                         "N: tension positive. M: compression on top positive.")
+    g.add_argument("--more-detail", type=more_detail_spec, default=0, metavar="N",
+                   help="Refine the solve with Solve > More Detail, N times,\n"
+                        "or max: until Response refines no further.\n"
+                        "Default: 0.")
 
     g = s.add_argument_group("Output")
     g.add_argument("--stage", type=stage_spec, default=stage_spec("peak"), metavar="STAGES",
@@ -382,8 +395,8 @@ def build_parser() -> argparse.ArgumentParser:
                    help="Detail views: all, or any of general, cracking,\n"
                         "reinforcement, no-shear. Default: all.")
     g.add_argument("--report", action="store_true",
-                   help="Also write an HTML report of the peak stage.\n"
-                        "Default: off.")
+                   help="Also write an HTML report: screenshots of the\n"
+                        "inputs and of the peak stage. Default: off.")
     g.add_argument("--out", type=Path, metavar="DIR",
                    help="Folder for results. Default: next to each input.")
     g.add_argument("--stdout", action="store_true",

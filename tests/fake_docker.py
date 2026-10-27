@@ -6,7 +6,7 @@ It reads the `docker run` command the command line builds and maps the container
 paths back to the host folders mounted there.
 
 FAKE_DOCKER_MODE=fake (default) imitates the worker without Wine. The input's text decides:
-    fail   -> "failed", exit 1          shear  -> "out of scope", exit 3
+    fail   -> "failed", exit 1          outofscope -> "out of scope", exit 3
     crash  -> a traceback, exit 1       noout  -> exit 0 without writing a record
     slow   -> takes about a second      noreport -> exit 0 without writing a report
     otherwise: 10 stages, peak 7, and a stub report if one is asked for
@@ -73,8 +73,8 @@ def fake_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str
     if "fail" in text:
         say(Event("failed", "Response shows a dialog 'Invalid File': Not a valid file format"))
         return 1
-    if "shear" in text:
-        say(Event("out-of-scope", "the loading includes shear"))
+    if "outofscope" in text:
+        say(Event("out-of-scope", "an analysis r2x does not cover"))
         return 3
     say(Event("solved", count=10, stage=7))
     try:
@@ -89,6 +89,7 @@ def fake_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str
     if report is not None and "noreport" not in text:
         report.write_text("<!doctype html>\n<title>fake report</title>\n", encoding="utf-8")
     if "noout" not in text:
+        settings.setdefault("more-detail", "0")
         out.write_bytes(record.encode({"input-name": name, **settings,
                                        "views": format_views(parse_views(views)),
                                        "stage-count": "10", "peak-stage": "7"}, sections))
@@ -128,7 +129,7 @@ def main(argv: list[str]) -> int:
     settings = {}                       # --units us, --initial=-2000,0 ... as the worker gets them
     rest = command[5:]
     for i, arg in enumerate(rest):
-        for key in ("units", "factors", "initial", "increment"):
+        for key in ("units", "factors", "initial", "increment", "more-detail"):
             if arg == f"--{key}":
                 settings[key] = rest[i + 1]
             elif arg.startswith(f"--{key}="):

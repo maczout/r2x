@@ -36,6 +36,12 @@ class ViewChart:
 
 
 @dataclass(frozen=True)
+class ControlChart:
+    key: str               # record section name: control/KEY
+    title: str             # the export's "Title :" line
+
+
+@dataclass(frozen=True)
 class View:
     name: str                       # r2x's name, as --views takes it
     response: str                   # its name in Response's view list
@@ -48,15 +54,16 @@ def key_for(title: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", title.lower()).strip("_")
 
 
-def _load() -> tuple[View, ...]:
+def _load() -> tuple[tuple[View, ...], tuple[ControlChart, ...]]:
     data = json.loads(Path(__file__).with_name("views.json").read_text(encoding="utf-8"))
-    return tuple(View(v["name"], v["response"],
-                      tuple(ViewChart(c["key"], c["title"], tuple(c["grid"]))
-                            for c in v["charts"]))
-                 for v in data["views"])
+    views = tuple(View(v["name"], v["response"],
+                       tuple(ViewChart(c["key"], c["title"], tuple(c["grid"]))
+                             for c in v["charts"]))
+                  for v in data["views"])
+    return views, tuple(ControlChart(c["key"], c["title"]) for c in data["controls"])
 
 
-VIEWS: tuple[View, ...] = _load()
+VIEWS, CONTROLS = _load()   # the detail views; the control charts Response can show
 BY_NAME = {v.name: v for v in VIEWS}
 ALL = VIEWS
 

@@ -7,10 +7,13 @@ EVENTS = [
     Event("solved", count=60, stage=56),
     Event("stage", stage=56, done=1, total=1),
     Event("wrote", text="/out/Liping LB1.r2x.txt", seconds=9.1),
+    Event("solving", count=12),
+    Event("solving", count=1),
+    Event("refining", count=116, done=1),
     note("creating Wine prefix (first run only)"),
     Event("failed", "Response shows a dialog 'Invalid File': Not a valid file format"),
     Event("usage", "stage 80 is past the last stage, 59"),
-    Event("out-of-scope", "the loading includes shear (Response's control chart is 'x')"),
+    Event("out-of-scope", "an analysis r2x does not cover"),
 ]
 
 
@@ -27,6 +30,8 @@ def test_lines_are_readable():
         "r2x: stage 56 (1/1)",
         "r2x: wrote /out/Liping LB1.r2x.txt in 9.1 s",
     ]
+    assert [e.line() for e in EVENTS[4:7]] == [
+        "r2x: solving: 12 stages", "r2x: solving: 1 stage", "r2x: more detail 1: 116 stages"]
     assert Event("failed", "two\nlines").line() == "r2x: failed: two lines"
 
 
