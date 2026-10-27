@@ -6,8 +6,9 @@ r2x drives an unmodified copy of Response-2000, Bentz and Collins' sectional ana
 reinforced and prestressed concrete, under Wine in a Linux container. It returns Response's own
 exported data, byte for byte, and does not re-compute, filter or interpret anything.
 
-**Scope:** the sectional response to axial load and moment, without shear: both control charts
-and the five charts of the **No Shear** view that have a data export. Input is any file
+**Scope:** the sectional response to axial load and moment, without shear: both control charts,
+and every chart with a data export in four detail views, **General**, **Cracking**,
+**Reinforcement** and **No Shear** (21 charts in all). Input is any file
 Response-2000 opens (`.r2t`, `.rsp`), or none, which gives the section File > New gives. Inputs
 whose loading includes shear stop with a reason. Not M–N interaction or full-member analysis.
 
@@ -19,16 +20,19 @@ PS> r2x solve .\Newbeam.r2t --report
 ## Results
 
 - **`NAME.r2x.txt`, the raw record**, one per input. Response's Copy Chart Data text for both
-  control charts (every load stage) and the five detail views (the peak stage by default), behind
+  control charts (every load stage) and the detail views' charts (the peak stage by default),
+  each chart once even where it appears in several views, behind
   a header with the r2x, Wine and Response versions, the input's SHA-256 and the settings in
   effect. It is the result, and r2x's contract with whatever reads it: layout and a Python reader
   in `docs/raw-format.md`.
-- **`NAME.r2x.html`, the report** (`--report`). The peak stage as Response shows it: the main
-  window straight after solving, then every control chart and detail view as **Copy Chart
-  Picture** draws it, each beside its data. For reading; the pictures are drawn under Wine.
+- **`NAME.r2x.html`, the report** (`--report`). The peak stage as Response shows it: the control
+  charts, then each detail view: Response's window in that view, and each of its charts as
+  **Copy Chart Picture** draws it, beside its data. For reading; the pictures are drawn under
+  Wine.
 
-Panels that Response shows only as pictures (cross section, crack diagram, internal forces, N+M)
-have no data export, so they appear in the report's main-window picture and nowhere else.
+Charts that Response shows only as pictures (cross section, crack diagram, internal forces, N+M)
+have no data export, so they appear in the report's window pictures and nowhere else. Not
+captured: the Load Deformation Plot (a whole-member result) and Mohr's Circles (deferred).
 
 ## Setup (Windows)
 
@@ -54,6 +58,7 @@ r2x solve                                    # no input: a new section, as File 
 r2x solve .\Newbeam.r2t                      # one or more files, or a glob
 r2x solve .\Newbeam.r2t --stage all          # detail views at every stage (default: peak)
 r2x solve .\Newbeam.r2t --stage peak,0-5     # or at these stages; 0 is the initial load
+r2x solve .\Newbeam.r2t --views no-shear     # only these detail views (default: all four)
 r2x solve .\Newbeam.r2t --report             # also the HTML report
 r2x solve .\col.rsp --units si --initial -2000,0 --increment 0,1
 r2x solve .\cases\*.r2t --out .\results --parallel 4
@@ -85,7 +90,8 @@ r2x (Windows)  ──docker run──▶  container in WSL: Xvfb + Wine + Respon
 written straight to the output folder. Inside, a small Win32 helper drives Response on a virtual
 display: it applies the settings through Response's dialogs, runs **Solve → Sectional
 Response**, then reads every chart with **Copy Chart Data** from the clipboard, paging through
-the load stages and checking each one against the control curves. Every container has its own
+the load stages and checking each one against the control curves. At each stage it goes through
+the detail views with Response's view list. Every container has its own
 display and Wine prefix, so several run at once (`--parallel`). `docs/development.md` has the
 details and how to run it without Docker.
 
@@ -93,7 +99,8 @@ details and how to run it without Docker.
 
 Each reference case was solved in Response-2000 on Windows and its charts copied by hand
 (`tests/reference/`). r2x's record matches every one byte for byte: the control charts at every
-stage and the five detail views at the peak.
+stage and the five No Shear charts at the peak. Hand captures of Newbeam's other three views
+are next; until then those 16 charts rest on r2x's own checks below.
 
 | Case | Settings | Stages, peak |
 |---|---|---|
@@ -105,14 +112,16 @@ stage and the five detail views at the peak.
 | No input (File > New) | none | 60, peak 56 |
 
 Detail views at other stages rely on r2x's own checks: each stage is identified from its strain
-profile against the control curves before it is copied. The report's pictures are checked by
+profile against the control curves before it is copied, and Longitudinal Strain, which every
+view shows, must export the same bytes in each view, as must any other chart two views share. The report's pictures are checked by
 eye against Windows. Rerun the tests (`docs/development.md`) on any change to Wine, the image or
 r2x.
 
 Two heuristics are worth knowing. Wine gives no "solve finished" signal, so the solve counts as
 finished once the bottom control curve has not changed for 1 s. Copy Chart Data and Copy Chart
 Picture are chosen by their position in each chart's right-click menu; every export's title is
-checked and every picture must be a metafile, so a change there fails loudly.
+checked, every picture must be a metafile, and r2x opens a menu item only if the menu is a data
+chart's (charts that are only pictures have a different menu), so a change there fails loudly.
 
 ## Server (optional, not used by the CLI)
 

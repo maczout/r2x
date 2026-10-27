@@ -4,44 +4,99 @@
 #
 #   powershell -ExecutionPolicy Bypass -File ..\capture.ps1              # detail views: stages\peak
 #   powershell -ExecutionPolicy Bypass -File ..\capture.ps1 -Stage 056   # or a known stage number
+#   powershell -ExecutionPolicy Bypass -File ..\capture.ps1 -Views no-shear,cracking
+#
+# The detail views and their charts come from r2x's catalogue, src\r2x\views.json. The script
+# asks for each view in turn (switch Response's view list, under "Nine Graphs", when it says),
+# then for each chart in it with a data export; a chart that recurs in several views is asked for
+# once. Files that already exist are kept and not asked for again, so the script can be rerun to
+# fill gaps. Change views with the list only: paging (PgUp/PgDn) changes the stage.
 #
 # Response shows no stage number. Detail views of the stage it opens on after solving go to
 # stages\peak; that folder is renamed to the stage number once its curvature has been matched to
 # the Moment-phi curve.
-param([string]$Stage = "peak")
+param(
+    [string]$Stage = "peak",
+    [string[]]$Views = @("all")
+)
 
-$files = [ordered]@{
-    "control\moment_ex.txt"                         = "Control : Moment - ex   (top-left control chart)"
-    "control\moment_phi.txt"                        = "Control : Moment - phi  (bottom-left control chart)"
-    "stages\$Stage\longitudinal_strain.txt"          = "Longitudinal Strain"
-    "stages\$Stage\shrinkage_thermal_strain.txt"     = "Shrinkage & Thermal Strain"
-    "stages\$Stage\long_reinforcement_stress.txt"    = "Long. Reinforcement Stress"
-    "stages\$Stage\long_reinf_stress_at_crack.txt"   = "Long. Reinf Stress at Crack"
-    "stages\$Stage\longitudinal_concrete_stress.txt" = "Longitudinal Concrete Stress"
+$catalogue = Join-Path $PSScriptRoot "..\..\src\r2x\views.json"
+$known = (Get-Content -Raw -Encoding UTF8 $catalogue | ConvertFrom-Json).views
+$names = @($Views | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim().ToLower() })
+if ($names -contains "all") { $names = @($known | ForEach-Object { $_.name }) }
+foreach ($n in $names) {
+    if (-not ($known | Where-Object { $_.name -eq $n })) {
+        throw "Unknown view '$n': use all, or any of $(($known | ForEach-Object { $_.name }) -join ', ')"
+    }
 }
 
-$previous = $null
-foreach ($path in $files.Keys) {
+$script:previous = $null
+
+# Ask for one chart until the clipboard holds new chart data (with this title, if one is given),
+# then save it. Returns $false if the user skips it.
+function Save-Chart([string]$path, [string]$label, [string]$title) {
     while ($true) {
-        $answer = Read-Host "Copy Chart Data from '$($files[$path])', then press Enter (s to skip)"
+        $answer = Read-Host "Copy Chart Data from '$label', then press Enter (s to skip)"
         if ($answer -eq "s") {
             Write-Warning "skipped $path"
-            break
+            return $false
         }
         $text = Get-Clipboard -Raw
         if (-not $text -or -not $text.Contains("Data from Graph")) {
             Write-Warning "Clipboard does not look like chart data; copy it again"
             continue
         }
-        if ($text -ceq $previous) {
+        if ($text -ceq $script:previous) {
             Write-Warning "Clipboard is unchanged since the last chart (did Copy Chart Data run?); copy it again"
             continue
         }
-        $previous = $text
-        $title = ($text -split "`r?`n" | Where-Object { $_ -match "^\s*Title\s*:" } | Select-Object -First 1)
+        $line = ($text -split "`r?`n" | Where-Object { $_ -match "^\s*Title\s*:" } | Select-Object -First 1)
+        $got = "$line" -replace "^\s*Title\s*:\s*", ""
+        if ($title -and $got.Trim() -cne $title) {
+            Write-Warning "That is '$($got.Trim())', not '$title' (wrong chart, or the view list not switched?); copy it again"
+            continue
+        }
+        $script:previous = $text
         New-Item -ItemType Directory -Force -Path (Split-Path $path) | Out-Null
         [System.IO.File]::WriteAllText((Join-Path (Get-Location) $path), $text, [System.Text.Encoding]::ASCII)
-        Write-Host "  saved $path   [$("$title".Trim())]"
-        break
+        Write-Host "  saved $path   [$($got.Trim())]"
+        return $true
+    }
+}
+
+function Test-Have([string]$path) {
+    if (Test-Path $path) {
+        Write-Host "  have  $path"
+        return $true
+    }
+    return $false
+}
+
+# Control charts: their titles depend on the loading, so they are shown, not checked.
+$controls = [ordered]@{
+    "control\moment_ex.txt"  = "Control : Moment - ex   (top-left control chart)"
+    "control\moment_phi.txt" = "Control : Moment - phi  (bottom-left control chart)"
+}
+foreach ($path in $controls.Keys) {
+    if (-not (Test-Have $path)) { Save-Chart $path $controls[$path] $null | Out-Null }
+}
+
+# Detail views, in the catalogue's order.
+$asked = @{}
+foreach ($view in $known) {
+    if ($names -notcontains $view.name) { continue }
+    $todo = @()
+    foreach ($chart in $view.charts) {
+        if ($asked.ContainsKey($chart.key)) { continue }
+        $asked[$chart.key] = $true
+        $path = "stages\$Stage\$($chart.key).txt"
+        if (-not (Test-Have $path)) { $todo += , @($path, $chart) }
+    }
+    if ($todo.Count -eq 0) { continue }
+    Read-Host "Switch Response's view list to '$($view.response)', then press Enter" | Out-Null
+    foreach ($item in $todo) {
+        $chart = $item[1]
+        $label = "$($chart.title)  (row $($chart.grid[0]), column $($chart.grid[1]))"
+        Save-Chart $item[0] $label $chart.title | Out-Null
     }
 }
