@@ -14,6 +14,9 @@ them.
 | `newbeam-csa` | CSA material factors | 46 of 0–56 | yes |
 | `newbeam-us` | US Customary units | 56 of 0–59 | no: values rounded on save |
 | `newbeam-filenew` | no input: File > New, Quick Define's defaults | 56 of 0–59 | (no input file) |
+| `newbeam-shear` | increment 0,1,1 (M/V = 1 m); every view, peak and peak-10 | to be captured (Wine: 30 of 0–42) | |
+| `newbeam-shear-only` | increment 0,0,1; every view at the peak | to be captured (Wine: 16 of 0–51) | |
+| `newbeam-moredetail` | none, then More Detail twice; No Shear at the peak | to be captured (Wine: 224 of 0–227) | (More Detail is not saved) |
 
 Cases with settings keep `input.r2t` as given and say in their README how the settings were
 applied. `saved.r2t`, where present, is Response's own Save As after applying them.
@@ -32,14 +35,16 @@ already there, so it can be rerun to fill gaps.
    **Save As** `saved.r2t` somewhere outside the case folder, and run **Solve → Sectional
    Response** without changing the load stage. Screenshot the window, status bar included.
 3. From **inside** the case folder (the script writes to the current folder):
-   `powershell -ExecutionPolicy Bypass -File ..\capture.ps1`. It asks for both control charts,
-   then for each detail view in turn: when it says, switch Response's view list (under "Nine
+   `powershell -ExecutionPolicy Bypass -File ..\capture.ps1`. It asks for both control charts
+   (top, then bottom) and names each file from its title, then for each detail view in turn: when it says, switch Response's view list (under "Nine
    Graphs", above the control charts) to that view, then copy each chart it names. It asks again
    if the clipboard is not new chart data, or not the chart it named. `-Views no-shear` (or a
    list, `-Views no-shear,cracking`) limits it to those views. PgUp and PgDn page the stage even
    right after using the view list.
 4. Detail views land in `stages\peak`. That folder is renamed to the stage number (e.g.
    `stages\056`) once the Longitudinal Strain export has been matched to the control curves:
-   by curvature against Moment–φ (mind the units), and by εx, the strain at mid-depth.
+   by curvature against Moment–φ (mind the units), and by εx, the strain at mid-depth, against
+   an εx curve, whichever the case has. With shear there is one of them, and where several
+   stages match, the case's other exports decide (docs/cli.md, *Shear and More Detail*).
 5. Write the case's `README.md`: what the case is, the settings applied and how, the status bar
    at the captured stage, and the capture details (date, Windows and Response versions, by whom).

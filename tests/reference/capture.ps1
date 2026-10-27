@@ -6,22 +6,27 @@
 #   powershell -ExecutionPolicy Bypass -File ..\capture.ps1 -Stage 056   # or a known stage number
 #   powershell -ExecutionPolicy Bypass -File ..\capture.ps1 -Views no-shear,cracking
 #
-# The detail views and their charts come from r2x's catalogue, src\r2x\views.json. The script
-# asks for each view in turn (switch Response's view list, under "Nine Graphs", when it says),
+# The control charts, the detail views and their charts come from r2x's catalogue,
+# src\r2x\views.json. The script asks for the two control charts first and names each file by
+# its title (control\moment_phi.txt, control\shear_gxy.txt, ...), then for each view in turn
+# (switch Response's view list, under "Nine Graphs", when it says),
 # then for each chart in it with a data export; a chart that recurs in several views is asked for
 # once. Files that already exist are kept and not asked for again, so the script can be rerun to
 # fill gaps. Change views with the list only: paging (PgUp/PgDn) changes the stage.
 #
 # Response shows no stage number. Detail views of the stage it opens on after solving go to
-# stages\peak; that folder is renamed to the stage number once its curvature has been matched to
-# the Moment-phi curve.
+# stages\peak; that folder is renamed to the stage number once its strain profile has been
+# matched to the control curves (curvature to Moment-phi, or ex to an ex curve).
 param(
     [string]$Stage = "peak",
     [string[]]$Views = @("all")
 )
 
 $catalogue = Join-Path $PSScriptRoot "..\..\src\r2x\views.json"
-$known = (Get-Content -Raw -Encoding UTF8 $catalogue | ConvertFrom-Json).views
+$data = Get-Content -Raw -Encoding UTF8 $catalogue | ConvertFrom-Json
+$known = $data.views
+$controlKeys = @{}
+foreach ($c in $data.controls) { $controlKeys[$c.title] = $c.key }
 $names = @($Views | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim().ToLower() })
 if ($names -contains "all") { $names = @($known | ForEach-Object { $_.name }) }
 foreach ($n in $names) {
@@ -72,13 +77,55 @@ function Test-Have([string]$path) {
     return $false
 }
 
-# Control charts: their titles depend on the loading, so they are shown, not checked.
-$controls = [ordered]@{
-    "control\moment_ex.txt"  = "Control : Moment - ex   (top-left control chart)"
-    "control\moment_phi.txt" = "Control : Moment - phi  (bottom-left control chart)"
+# Control charts: which two Response shows depends on the increment (Moment-ex and Moment-phi,
+# Shear-gxy above Moment-phi, ...), so each file is named from the title it exports. With an axial
+# load alone both are Axial Load-ex, kept once.
+function Save-Control([string]$position, [string]$top) {
+    while ($true) {
+        $answer = Read-Host "Copy Chart Data from the $position control chart (left of the view), then press Enter (s to skip)"
+        if ($answer -eq "s") {
+            Write-Warning "skipped the $position control chart"
+            return $null
+        }
+        $text = Get-Clipboard -Raw
+        if (-not $text -or -not $text.Contains("Data from Graph")) {
+            Write-Warning "Clipboard does not look like chart data; copy it again"
+            continue
+        }
+        $line = ($text -split "`r?`n" | Where-Object { $_ -match "^\s*Title\s*:" } | Select-Object -First 1)
+        $got = ("$line" -replace "^\s*Title\s*:\s*", "").Trim()
+        if (-not $controlKeys.ContainsKey($got)) {
+            Write-Warning "'$got' is not a control chart r2x knows ($(($controlKeys.Keys) -join '; ')); copy it again"
+            continue
+        }
+        $key = $controlKeys[$got]
+        if ($top -and $key -eq $top) {
+            if ($text -ceq $script:previous) {
+                Write-Host "  same chart as the top one ($key): one file"
+                return $key
+            }
+            Write-Warning "Both control charts are '$got' but their data differ; copy the $position one again"
+            continue
+        }
+        if ($text -ceq $script:previous) {
+            Write-Warning "Clipboard is unchanged since the last chart (did Copy Chart Data run?); copy it again"
+            continue
+        }
+        $path = "control\$key.txt"
+        $script:previous = $text
+        New-Item -ItemType Directory -Force -Path "control" | Out-Null
+        [System.IO.File]::WriteAllText((Join-Path (Get-Location) $path), $text, [System.Text.Encoding]::ASCII)
+        Write-Host "  saved $path   [$got]"
+        return $key
+    }
 }
-foreach ($path in $controls.Keys) {
-    if (-not (Test-Have $path)) { Save-Chart $path $controls[$path] $null | Out-Null }
+
+$haveControls = @(Get-ChildItem -Path "control" -Filter "*.txt" -ErrorAction SilentlyContinue | ForEach-Object { $_.BaseName })
+if ($haveControls.Count -ge 2 -or ($haveControls.Count -eq 1 -and $haveControls[0] -eq "axial_ex")) {
+    Write-Host "  have  control\ ($($haveControls -join ', '))"
+} else {
+    $top = Save-Control "top" $null
+    Save-Control "bottom" $top | Out-Null
 }
 
 # Detail views, in the catalogue's order.
