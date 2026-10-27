@@ -3,12 +3,12 @@
 Each case is a folder holding the input `.r2t` and exports produced by Response-2000 running
 natively on Windows: `control/` for the control charts, `stages/NNN/` for the detail views'
 charts at stage NNN, one file per record key (`docs/raw-format.md`). Every case has the five No
-Shear charts at its peak; `newbeam` is to have every view's (see its README). These files are stored byte-for-byte (see `.gitattributes`); never edit or re-save
+Shear charts at its peak; `newbeam` has every view's charts, at its peak (56) and at stage 36. These files are stored byte-for-byte (see `.gitattributes`); never edit or re-save
 them.
 
 | Case | Settings applied by hand | Peak stage | `saved.r2t` reproduces it |
 |---|---|---|---|
-| `newbeam` | none (moment only) | 56 of 0–59 | (no `saved.r2t`; `input.r2t` does) |
+| `newbeam` | none (moment only); every view, stages 36 and 56 | 56 of 0–59 | (no `saved.r2t`; `input.r2t` does) |
 | `newbeam-axial` | constant N −2000 kN, moment increment | 37 of 0–45 | yes |
 | `newbeam-axial-only` | axial increment only | 22 of 0–34 | yes |
 | `newbeam-csa` | CSA material factors | 46 of 0–56 | yes |

@@ -244,3 +244,6 @@ Found under Wine on 2026-10-26, with Newbeam at its peak; how r2x 0.2.0 follows 
   pictures, and again until two in a row are the same, so a view is never caught half-drawn.
 - **Time.** Newbeam with `--stage all`: 37 s for all four views (1,262 sections), 10 s for No
   Shear alone (0.1.0: 9.5 s), in the cloud environment.
+- **Checked on Windows** (2026-10-26). All four views' 21 charts, captured by hand at stage 56
+  and at stage 36 (`tests/reference/newbeam`), match r2x's record byte for byte. The report
+  matched Response by eye, and the Framework's container wrote the same record as the cloud's.

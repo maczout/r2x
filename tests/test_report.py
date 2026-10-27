@@ -20,14 +20,16 @@ HEADER = {"r2x-version": "0.1.0", "input-name": "Newbeam <1>.r2t", "units": "si"
 
 
 def reference_record(case, **header):
+    """A record as r2x 0.1.0 wrote it (no views key: the No Shear charts) from a case's
+    captures at its peak, the highest stage captured."""
     root = REFS / case
-    sections = []
-    for p in sorted(root.rglob("*.txt")):
-        parts = p.relative_to(root).parts
-        name = f"control/{p.stem}" if parts[0] == "control" else f"stage/{int(parts[1])}/{p.stem}"
-        sections.append((name, p.read_bytes()))
-    stage = next((root / "stages").iterdir()).name
-    h = dict(HEADER, **{"peak-stage": str(int(stage)), "detail-stages": str(int(stage))}, **header)
+    stage = max(int(d.name) for d in (root / "stages").iterdir())
+    sections = [(f"control/{p.stem}", p.read_bytes())
+                for p in sorted((root / "control").glob("*.txt"))]
+    sections += [(f"stage/{stage}/{c.key}",
+                  (root / f"stages/{stage:03d}/{c.key}.txt").read_bytes())
+                 for c in BY_NAME["no-shear"].charts]
+    h = dict(HEADER, **{"peak-stage": str(stage), "detail-stages": str(stage)}, **header)
     return record.decode(record.encode(h, sections))
 
 

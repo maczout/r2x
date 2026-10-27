@@ -2,13 +2,15 @@
 
 250 × 600 rectangle, 3–25M bottom / 1–20M top, moment only.
 
-Exports: both control curves, and the five No Shear charts at the stage Response opens on after
-solving (maximum moment, M = 336.8 kNm). The Wine spike identified that stage as 56 of 0–59 by
-matching curvature to the Moment–φ curve, so the charts are filed under `stages/056/`.
+Exports: both control curves, and every view's 21 charts (General, Cracking, Reinforcement, No
+Shear) at two stages:
 
-To come for r2x 0.2.0 (*The other views* below): the 16 charts of the General, Cracking and
-Reinforcement views at stage 56, and optionally every view's 21 charts 20 stages below the peak
-in `stages/peak-20/`, renamed to the stage number once r2x has identified it.
+- `stages/056/`: the stage Response opens on after solving (maximum moment, M = 336.8 kNm). The
+  Wine spike identified it as 56 of 0–59 by matching curvature to the Moment–φ curve. The five No
+  Shear charts were captured on 2026-10-24, the other 16 on 2026-10-26 (*The other views*).
+- `stages/036/`: 20 stages below the peak (PgDn 20 times; M = 305.6 kNm), captured on 2026-10-26
+  as `stages/peak-20/`. Its strain profile matches stage 36 of the control curves (εx and
+  curvature), and so does M (305.573 kNm), so it was renamed.
 
 ## How these were made
 
@@ -44,8 +46,11 @@ in `stages/peak-20/`, renamed to the stage number once r2x has identified it.
 
 | Captured | Notes |
 |---|---|
-| Date | |
-| Windows version | |
-| Response version (Help → About) | |
-| Status bar at peak-20 (M) | |
-| By | |
+| Date | October 26 2026 |
+| Windows version | Windows 11 Pro (as on 2026-10-24) |
+| Response version (Help → About) | 1.9.7 (as on 2026-10-24) |
+| Status bar at peak-20 (M) | 305.6 kNm: stage 36 |
+| By | Jamie McIntyre |
+
+All 37 files matched r2x 0.2.0's record of `--stage all` byte for byte, and the record from the
+Framework's container matched the cloud's (SHA-256 `8f94ae63…31a0`).

@@ -20,6 +20,7 @@ from r2x.worker.runner import run_job
 from r2x.worker.session import OutOfScope
 
 NO_SHEAR = parse_views("no-shear")
+NO_SHEAR_KEYS = [c.key for c in BY_NAME["no-shear"].charts]
 CHARTS = len(record_order(ALL_VIEWS))       # detail-view sections per stage with every view
 
 REF = Path(__file__).parent / "reference"
@@ -31,15 +32,17 @@ pytestmark = pytest.mark.skipif(
     reason="needs $R2X_RESPONSE_DIR, wine, Xvfb and mingw-w64")
 
 
-def reference_sections(case):
-    """Reference files as record sections: stages/056/x.txt -> stage/56/x, and so on."""
+def reference_sections(case, stages=None, keys=None):
+    """Reference files as record sections: stages/056/x.txt -> stage/56/x, and so on; with
+    stages or keys, only the detail charts of those stages or record keys."""
     root = REF / case
     out = {}
     for p in sorted(root.rglob("*.txt")):
         parts = p.relative_to(root).parts
-        name = (f"control/{p.stem}" if parts[0] == "control"
-                else f"stage/{int(parts[1])}/{p.stem}")
-        out[name] = p.read_bytes()
+        if parts[0] == "control":
+            out[f"control/{p.stem}"] = p.read_bytes()
+        elif (stages is None or int(parts[1]) in stages) and (keys is None or p.stem in keys):
+            out[f"stage/{int(parts[1])}/{p.stem}"] = p.read_bytes()
     return out
 
 
@@ -53,12 +56,12 @@ def solve(tmp_path, stages, name="Newbeam", report=None, views=ALL_VIEWS):
 
 
 def assert_matches(rec, case):
-    """Every hand-captured export of the case is in the record, byte for byte, and each detail
-    stage has the charts of the record's views."""
-    ref = reference_sections(case)
+    """Every hand-captured export of the case at the record's stages and in its views is in the
+    record, byte for byte, and each detail stage has the charts of the record's views."""
+    keys = [c.key for c in record_order(parse_views(rec.header["views"]))]
+    ref = reference_sections(case, rec.stages(), keys)
     for name, body in ref.items():
         assert rec.sections.get(name) == body, name
-    keys = [c.key for c in record_order(parse_views(rec.header["views"]))]
     controls = [n for n in ref if n.startswith("control/")]
     assert list(rec.sections) == controls + [f"stage/{i}/{k}" for i in rec.stages() for k in keys]
 
@@ -87,7 +90,7 @@ def test_newbeam_peak_matches_references(tmp_path):
 def test_no_shear_alone_is_what_r2x_0_1_0_wrote(tmp_path):
     rec = solve(tmp_path, PEAK, views=NO_SHEAR)
     assert rec.header["views"] == "no-shear"
-    assert rec.sections == reference_sections("newbeam")   # all 7, nothing else
+    assert rec.sections == reference_sections("newbeam", [56], NO_SHEAR_KEYS)  # 7, no more
     assert list(rec.sections) == ["control/moment_ex", "control/moment_phi", *(
         f"stage/56/{c.key}" for c in BY_NAME["no-shear"].charts)]
 
@@ -95,7 +98,8 @@ def test_no_shear_alone_is_what_r2x_0_1_0_wrote(tmp_path):
 def test_newbeam_all_and_a_selection(tmp_path):
     every = solve(tmp_path, ALL, "all")
     assert every.stages() == list(range(60)) and len(every.sections) == 2 + 60 * CHARTS
-    assert_matches(every, "newbeam")
+    assert_matches(every, "newbeam")      # every view at stages 56 and 36, paged to
+    assert len(reference_sections("newbeam")) == 2 + 2 * CHARTS
     # with a report: pictures are taken at the peak, before paging to the other stages; and
     # views in another order, or fewer, give the same exports
     some = solve(tmp_path, parse_stages("peak,0-2,59"), "some", report=tmp_path / "some.html",

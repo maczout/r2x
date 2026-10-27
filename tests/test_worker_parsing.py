@@ -20,12 +20,18 @@ def read(rel):
     return (REF / rel).read_bytes()
 
 
+def stage_folders(name):
+    """A case's captured stages, ascending: [(stage number, folder)]."""
+    return sorted((int(d.name), d) for d in (REFS / name / "stages").iterdir())
+
+
 def case(name):
-    """(control exports by record key, peak stage number, Longitudinal Strain export at it)."""
+    """(control exports by record key, peak stage number, Longitudinal Strain export at it). The
+    peak is the highest stage captured in every case."""
     d = REFS / name
     controls = control_exports(*[f.read_bytes() for f in sorted((d / "control").glob("*.txt"))])
-    stage = next((d / "stages").iterdir())
-    return controls, int(stage.name), (stage / "longitudinal_strain.txt").read_bytes()
+    stage, folder = stage_folders(name)[-1]
+    return controls, stage, (folder / "longitudinal_strain.txt").read_bytes()
 
 
 def test_titles_match_chart_table():
@@ -45,14 +51,27 @@ def test_control_curves_have_60_points():
 @pytest.mark.parametrize("name", ["newbeam", "newbeam-axial", "newbeam-axial-only", "newbeam-csa",
                                   "newbeam-us", "newbeam-filenew"])
 def test_every_reference_stage_is_identified(name):
-    controls, stage, strain = case(name)
+    controls, _, _ = case(name)
     keys = StageKeys(controls)
-    assert keys.identify(strain) == stage
-    keys.check(strain, stage)
-    for other in (stage - 1, stage + 1):
-        if 0 <= other < keys.count:
-            with pytest.raises(R2xError):
-                keys.check(strain, other)
+    for stage, folder in stage_folders(name):
+        strain = (folder / "longitudinal_strain.txt").read_bytes()
+        assert keys.identify(strain) == stage
+        keys.check(strain, stage)
+        for other in (stage - 1, stage + 1):
+            if 0 <= other < keys.count:
+                with pytest.raises(R2xError):
+                    keys.check(strain, other)
+
+
+def test_newbeam_has_every_view_at_two_stages():
+    """Hand captures of every view's charts at the peak and 20 stages below it (2026-10-26)."""
+    from r2x.views import ALL, record_order
+    keys = sorted(c.key for c in record_order(ALL))
+    assert [s for s, _ in stage_folders("newbeam")] == [36, 56]
+    for _, folder in stage_folders("newbeam"):
+        assert sorted(p.stem for p in folder.glob("*.txt")) == keys
+        for chart in record_order(ALL):
+            assert export_title((folder / f"{chart.key}.txt").read_bytes()) == chart.title
 
 
 def test_strain_features():

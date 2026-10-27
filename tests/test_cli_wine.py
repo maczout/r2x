@@ -9,8 +9,8 @@ import pytest
 
 from r2x import record
 
-from test_worker_wine import (CHARTS, REF, assert_matches, pytestmark,  # noqa: F401
-                              reference_sections)
+from test_worker_wine import (CHARTS, NO_SHEAR_KEYS, REF, assert_matches,  # noqa: F401
+                              pytestmark, reference_sections)
 
 HERE = Path(__file__).parent
 
@@ -28,7 +28,7 @@ def test_stdout_matches_references():
     code, out, err = r2x("solve", str(REF / "newbeam" / "input.r2t"), "--stdout", "--views",
                          "no-shear")
     assert code == 0, err
-    assert record.decode(out).sections == reference_sections("newbeam")
+    assert record.decode(out).sections == reference_sections("newbeam", [56], NO_SHEAR_KEYS)
 
 
 def test_report_through_the_command_line(tmp_path):

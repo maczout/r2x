@@ -99,19 +99,19 @@ details and how to run it without Docker.
 
 Each reference case was solved in Response-2000 on Windows and its charts copied by hand
 (`tests/reference/`). r2x's record matches every one byte for byte: the control charts at every
-stage and the five No Shear charts at the peak. Hand captures of Newbeam's other three views
-are next; until then those 16 charts rest on r2x's own checks below.
+stage and the five No Shear charts at the peak in every case, and for Newbeam all 21 charts of
+the four views at the peak and 20 stages below it.
 
 | Case | Settings | Stages, peak |
 |---|---|---|
-| Newbeam (250 × 600 rectangle, 3–25M / 1–20M) | none: moment increment | 60, peak 56 |
+| Newbeam (250 × 600 rectangle, 3–25M / 1–20M) | none: moment increment; every view at stages 56 and 36 | 60, peak 56 |
 | Newbeam, US units | `--units us` | 60, peak 56 |
 | Newbeam, CSA factors | `--factors csa` | 57, peak 46 |
 | Newbeam, axial load | `--initial -2000,0` | 46, peak 37 |
 | Newbeam, axial increment only | `--increment -1,0` | 35, peak 22 |
 | No input (File > New) | none | 60, peak 56 |
 
-Detail views at other stages rely on r2x's own checks: each stage is identified from its strain
+Other stages, and other cases' views, rely on r2x's own checks: each stage is identified from its strain
 profile against the control curves before it is copied, and Longitudinal Strain, which every
 view shows, must export the same bytes in each view, as must any other chart two views share. The report's pictures are checked by
 eye against Windows. Rerun the tests (`docs/development.md`) on any change to Wine, the image or
