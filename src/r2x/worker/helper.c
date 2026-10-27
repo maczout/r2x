@@ -11,6 +11,7 @@
  *   key <hwnd> <vk>          post WM_KEYDOWN/WM_KEYUP
  *   rclick <hwnd>            post a right-click at the window's client centre
  *   popup                    "ok 1" if a context menu is open, else "ok 0"
+ *   popuprect                the open context menu's screen rectangle: "ok L T R B"
  *   menukey <vk>             post a key to the open context menu
  *   clipseq                  clipboard sequence number
  *   clipclear                empty the clipboard
@@ -21,6 +22,9 @@
  *   click <hwnd>             post BM_CLICK to a button
  *   getcheck <hwnd>          a check box or radio button's state (0 or 1)
  *   alive <hwnd>             "ok 1" if the window exists and is visible, else "ok 0"
+ *   cbitems <hwnd>           a combo box's items: "ok N", then N lines, each hex-encoded
+ *   cbget <hwnd>             a combo box's selected index (-1: none)
+ *   cbselect <hwnd> <index>  select a combo box item and notify its parent (CBN_SELCHANGE, sent)
  *   clipformats              clipboard format IDs, space-separated
  *   clipemf <width> <hexpath>  render the clipboard's enhanced metafile (Copy Chart Picture) to a
  *                            24-bit BMP file this wide, height from its aspect; "ok W H"
@@ -131,6 +135,46 @@ static int unhex(const char *hex, char *out, size_t size) {
     }
     out[n] = 0;
     return 1;
+}
+
+/* A combo box's items: "ok N", then one line per item, hex-encoded. */
+static void do_cbitems(HWND h) {
+    DWORD_PTR n = 0;
+    if (!IsWindow(h) || !SendMessageTimeoutA(h, CB_GETCOUNT, 0, 0, SMTO_ABORTIFHUNG,
+                                             SEND_TIMEOUT_MS, &n) || (LRESULT)n < 0) {
+        printf("err cbitems\n");
+        return;
+    }
+    printf("ok %d\n", (int)n);
+    for (int i = 0; i < (int)n; i++) {
+        /* Wide characters: Wine passes the item text across processes as UTF-16. */
+        WCHAR wbuf[256] = L"";
+        char buf[512] = "";
+        DWORD_PTR len = 0;
+        if (SendMessageTimeoutW(h, CB_GETLBTEXTLEN, i, 0, SMTO_ABORTIFHUNG, SEND_TIMEOUT_MS, &len)
+            && (LRESULT)len >= 0 && len < sizeof wbuf / sizeof wbuf[0])
+            SendMessageTimeoutW(h, CB_GETLBTEXT, i, (LPARAM)wbuf, SMTO_ABORTIFHUNG,
+                                SEND_TIMEOUT_MS, &len);
+        WideCharToMultiByte(1252, 0, wbuf, -1, buf, sizeof buf, NULL, NULL);
+        for (const unsigned char *p = (const unsigned char *)buf; *p; p++) printf("%02x", *p);
+        printf("\n");
+    }
+}
+
+/* Select a combo box item as the user would: set it, then tell the parent it changed. The
+ * notification is sent, as a combo box sends it, so the reply comes once the parent has handled
+ * it (for Response's view list: once the new view's charts are in place). */
+static void do_cbselect(HWND h, int index) {
+    DWORD_PTR r = 0;
+    if (!IsWindow(h) || !SendMessageTimeoutA(h, CB_SETCURSEL, index, 0, SMTO_ABORTIFHUNG,
+                                             SEND_TIMEOUT_MS, &r) || (LRESULT)r != index) {
+        printf("err cbselect\n");
+        return;
+    }
+    printf(SendMessageTimeoutA(GetParent(h), WM_COMMAND,
+                               MAKEWPARAM(GetDlgCtrlID(h), CBN_SELCHANGE), (LPARAM)h,
+                               SMTO_ABORTIFHUNG, SEND_TIMEOUT_MS, &r)
+           ? "ok\n" : "err notify\n");
 }
 
 /* Write a bitmap selected out of any DC as a bottom-up 24-bit BMP file. */
@@ -306,6 +350,12 @@ int main(void) {
         } else if (!strcmp(cmd, "popup")) {
             HWND p = FindWindowA("#32768", NULL);
             printf("ok %d\n", p && IsWindowVisible(p) ? 1 : 0);
+        } else if (!strcmp(cmd, "popuprect")) {
+            HWND p = FindWindowA("#32768", NULL);
+            RECT r;
+            if (p && IsWindowVisible(p) && GetWindowRect(p, &r))
+                printf("ok %ld %ld %ld %ld\n", r.left, r.top, r.right, r.bottom);
+            else printf("err no popup\n");
         } else if (!strcmp(cmd, "menukey") && a1) {
             HWND p = FindWindowA("#32768", NULL);
             if (!p) { printf("err no popup\n"); }
@@ -348,6 +398,17 @@ int main(void) {
             do_clipemf(atoi(a1), a2);
         } else if (!strcmp(cmd, "snap") && a1 && a2) {
             do_snap(parse_hwnd(a1), a2);
+        } else if (!strcmp(cmd, "cbitems") && a1) {
+            do_cbitems(parse_hwnd(a1));
+        } else if (!strcmp(cmd, "cbget") && a1) {
+            DWORD_PTR r = 0;
+            HWND t = parse_hwnd(a1);
+            if (IsWindow(t) && SendMessageTimeoutA(t, CB_GETCURSEL, 0, 0, SMTO_ABORTIFHUNG,
+                                                   SEND_TIMEOUT_MS, &r))
+                printf("ok %d\n", (int)(LRESULT)r);
+            else printf("err cbget\n");
+        } else if (!strcmp(cmd, "cbselect") && a1 && a2) {
+            do_cbselect(parse_hwnd(a1), atoi(a2));
         } else if (!strcmp(cmd, "alive") && a1) {
             HWND t = parse_hwnd(a1);
             printf("ok %d\n", IsWindow(t) && IsWindowVisible(t) ? 1 : 0);

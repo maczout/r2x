@@ -1,8 +1,9 @@
 """The optional HTML report (--report): the peak stage as Response shows it, next to its data.
 
-One self-contained file: the main window straight after solving, then every control chart and
-detail view as Copy Chart Picture draws it, each beside a table of its Copy Chart Data export.
-The pictures are rendered under Wine and live only here; the raw record stays text-only.
+One self-contained file: the control charts, then each detail view captured: Response's window
+in that view, and each of its charts as Copy Chart Picture draws it, beside a table of its Copy
+Chart Data export. A chart that recurs in several views is shown under the first. The pictures
+are rendered under Wine and live only here; the raw record stays text-only.
 Standard library only.
 """
 
@@ -14,11 +15,14 @@ import re
 from dataclasses import dataclass, field
 
 from r2x.record import Record
+from r2x.views import parse_views
 
-# Detail views of the No Shear set, in the order the record lists them.
-DETAIL_VIEWS = ("longitudinal_strain", "shrinkage_thermal_strain", "long_reinforcement_stress",
-                "long_reinf_stress_at_crack", "longitudinal_concrete_stress")
-MAIN_WINDOW = "main-window"
+OLD_VIEWS = "no-shear"     # records from r2x 0.1.0 have no views key
+
+
+def window_key(view) -> str:
+    """The pictures key of Response's window in a view."""
+    return f"window/{view.name}"
 
 LOAD_UNITS = {"si": ("kN", "kN·m"), "us": ("kip", "kip·ft"), "kgcm": ("ton", "ton·m")}
 UNIT_NAMES = {"si": "SI", "us": "US customary", "kgcm": "kg/cm metric"}
@@ -90,9 +94,11 @@ def _numbers(line: str) -> bool:
 
 def build(rec: Record, pictures: dict[str, bytes]) -> str:
     """The report for a record whose peak stage has detail views. pictures holds PNG bytes:
-    MAIN_WINDOW, control-chart section keys and detail-view keys; any may be missing."""
+    control-chart section keys, window_key(view) for each view, and chart keys; any may be
+    missing."""
     h = rec.header
     peak = int(h["peak-stage"])
+    views = parse_views(h.get("views", OLD_VIEWS))
     controls = [name.split("/", 1)[1] for name in rec.sections if name.startswith("control/")]
     name = h.get("input-name", "")
     parts = [_HEAD.format(title=html.escape(f"{name} · r2x report"), css=_CSS)]
@@ -101,26 +107,42 @@ def build(rec: Record, pictures: dict[str, bytes]) -> str:
                  f'<p class="sub">Peak stage {peak} of {_stage_range(h)}. '
                  f"Pictures as Response draws them; data as it exports it.</p></header><main>")
     parts.append(_settings(h))
+    links = [("control", "Control charts")] + [(_anchor(v), f"{v.response} view") for v in views]
+    parts.append('<nav class="toc">' + " · ".join(
+        f'<a href="#{a}">{html.escape(t)}</a>' for a, t in links) + "</nav>")
 
-    parts.append('<section><h2>After solving</h2>')
-    parts.append(_figure(pictures.get(MAIN_WINDOW), "Response-2000's main window straight after "
-                         "the solve, before any paging", wide=True))
-    parts.append("</section>")
-
-    parts.append('<section><h2>Control charts</h2><p class="note">Every stage, 0 to '
-                 f'{int(h["stage-count"]) - 1}.</p>')
+    parts.append('<section id="control"><h2>Control charts</h2><p class="note">Every stage, 0 '
+                 f'to {int(h["stage-count"]) - 1}.</p>')
     for key in controls:
         parts.append(_panel(rec.control(key), pictures.get(key)))
     parts.append("</section>")
 
-    parts.append(f'<section><h2>Detail views at stage {peak}</h2>')
-    for key in DETAIL_VIEWS:
-        parts.append(_panel(rec.stage(peak, key), pictures.get(key)))
-    parts.append("</section>")
+    shown: dict[str, str] = {}      # chart key -> the view it is shown under
+    for view in views:
+        parts.append(f'<section id="{_anchor(view)}"><h2>{html.escape(view.response)} view at '
+                     f"stage {peak}</h2>")
+        parts.append(_figure(pictures.get(window_key(view)),
+                             f"Response-2000's window in the {view.response} view at stage "
+                             f"{peak}", wide=True))
+        again = [f'<a href="#{_anchor(c)}">{html.escape(c.title)}</a> '
+                 f"(under {html.escape(shown[c.key])})" for c in view.charts if c.key in shown]
+        if again:
+            parts.append(f'<p class="note">Also in this view: {"; ".join(again)}.</p>')
+        for chart in view.charts:
+            if chart.key not in shown:
+                shown[chart.key] = view.response
+                parts.append(_panel(rec.stage(peak, chart.key), pictures.get(chart.key),
+                                    _anchor(chart)))
+        parts.append("</section>")
 
     parts.append(_provenance(h))
     parts.append("</main></body></html>\n")
     return "".join(parts)
+
+
+def _anchor(item) -> str:
+    """An id for a view or a chart in the page."""
+    return f"view-{item.name}" if hasattr(item, "response") else f"chart-{item.key}"
 
 
 # -- pieces -------------------------------------------------------------------------------------
@@ -166,7 +188,7 @@ def _figure(png: bytes | None, caption: str, wide: bool = False) -> str:
     return f'<figure class="{cls}">{body}<figcaption>{html.escape(caption)}</figcaption></figure>'
 
 
-def _panel(data: bytes, png: bytes | None) -> str:
+def _panel(data: bytes, png: bytes | None, anchor: str | None = None) -> str:
     chart = parse_export(data)
     title = markup(chart.title)
     rows = []
@@ -185,7 +207,8 @@ def _panel(data: bytes, png: bytes | None) -> str:
            f"<pre>{html.escape(data.decode('latin-1'))}</pre></details>")
     picture = (f'<img src="{_png(png)}" alt="{html.escape(_plain(chart.title))}, as Response '
                f'draws it">' if png else '<div class="missing">No picture</div>')
-    return (f'<article class="panel"><h3>{title}</h3><div class="pair">'
+    ident = f' id="{anchor}"' if anchor else ""
+    return (f'<article class="panel"{ident}><h3>{title}</h3><div class="pair">'
             f'<div class="pic">{picture}</div><div class="numbers">{table}{raw}</div>'
             f"</div></article>")
 
@@ -233,6 +256,9 @@ h1 { margin: 4px 0 4px; font-size: 30px; line-height: 1.2; overflow-wrap: anywhe
 h2 { font-size: 20px; margin: 40px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--rule); }
 h3 { font-size: 16px; margin: 0 0 10px; }
 .note { color: var(--muted); margin: -4px 0 14px; }
+.toc { margin: 18px 0 0; color: var(--muted); }
+a { color: var(--accent); }
+section > .shot { margin-bottom: 16px; }
 .settings { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;
   margin: 20px 0 0; }
 .settings div { background: var(--panel); border-radius: 8px; padding: 10px 14px; }

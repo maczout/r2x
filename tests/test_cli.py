@@ -13,6 +13,7 @@ from r2x.cli import (build_parser, expand_inputs, join_pair_values, main, overal
 from r2x.display import Display
 from r2x.progress import Event
 from r2x.stages import PEAK, parse_stages
+from r2x.views import ALL as ALL_VIEWS, parse_views
 
 HERE = Path(__file__).parent
 FAKE_DOCKER = f'"{sys.executable}" "{HERE / "fake_docker.py"}"'
@@ -34,6 +35,7 @@ def test_defaults():
     assert a.inputs == ["a.r2t", "b.rsp"] and a.stage == PEAK and a.parallel == 1
     assert a.out is None and not (a.stdout or a.overwrite or a.quiet or a.report)
     assert a.units is None and a.initial is None and a.image == "r2x"
+    assert a.views == ALL_VIEWS
 
 
 def test_options():
@@ -44,6 +46,7 @@ def test_options():
     assert a.quiet and a.overwrite and a.units == "us" and a.factors == "csa"
     assert a.initial == (-2000.0, 0.0) and a.increment == (0.0, -1.5)
     assert parse("--initial=-5,1", "x.r2t").initial == (-5.0, 1.0)
+    assert parse("x.r2t", "--views", "No-Shear,cracking").views == parse_views("cracking,no-shear")
 
 
 @pytest.mark.parametrize("argv, message", [
@@ -55,6 +58,8 @@ def test_options():
     (["--initial", "5"], "expected N,M"),
     (["--increment", "0,0"], "cannot be 0,0"),
     (["--units", "imperial"], "invalid choice"),
+    (["--views", "mohr"], "'mohr' in 'mohr': use all, or any of general"),
+    (["--views", ""], "an empty item"),
     (["--stag", "all"], "unrecognized arguments"),       # no abbreviations
 ])
 def test_usage_errors_exit_2(argv, message, capsys):
@@ -146,6 +151,17 @@ def test_solve_writes_record_next_to_input(cases):
     assert rec.stages() == [7] and rec.header["input-name"] == "beam.r2t"
     assert f"[beam] solved: 10 stages, peak 7 -> {cases / 'beam.r2x.txt'}" in err
     assert "\r" not in err                     # no spinner when stderr is not a terminal
+
+
+def test_views_reach_the_worker(cases):
+    """--views goes into the container's command line; the fake worker writes it back."""
+    status, _, _ = r2x("solve", str(cases / "beam.r2t"))
+    assert status == 0 and record.read(cases / "beam.r2x.txt").header["views"] == \
+        "general,cracking,reinforcement,no-shear"
+    status, _, _ = r2x("solve", str(cases / "beam.r2t"), "--views", "no-shear,general",
+                       "--overwrite")
+    assert status == 0 and record.read(cases / "beam.r2x.txt").header["views"] == \
+        "general,no-shear"
 
 
 def test_stage_and_out(cases, tmp_path):

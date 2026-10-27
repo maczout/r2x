@@ -16,6 +16,7 @@ from r2x import __version__, record, report as html_report
 from r2x.progress import Event, note
 from r2x.settings import Settings
 from r2x.stages import PEAK, StageSpec, format_ranges
+from r2x.views import ALL, format_views
 from r2x.worker import dialogs
 from r2x.worker.export import export
 from r2x.worker.prefix import prepare_prefix
@@ -76,8 +77,10 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
             display: str | None = None, stages: StageSpec = PEAK,
             settings: Settings = Settings(), cache: Path | None = None,
             on_event: Callable[[Event], None] = lambda e: None,
-            report: Path | None = None) -> dict[str, str]:
+            report: Path | None = None, views=ALL) -> dict[str, str]:
     """Solve input_file in Response-2000 and write its raw record to the file out.
+
+    views: the detail views to capture (r2x.views), each at every stage in stages.
 
     With no input file, Response starts empty and the section is defined by accepting every
     default of Quick Define, as File > New does (docs/cli.md). Settings are applied through
@@ -146,7 +149,7 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
         if report is not None:
             pictures = job / "pictures"
             pictures.mkdir()
-        result = export(session, stages, on_event, pictures)
+        result = export(session, stages, views, on_event, pictures)
 
     wine_version = subprocess.run(["wine", "--version"], capture_output=True, text=True).stdout.strip()
     header = {
@@ -158,6 +161,7 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
         **({"template-sha256": sha256(response_dir / TEMPLATE)}
            if input_file is None and (response_dir / TEMPLATE).is_file() else {}),
         **effective,
+        "views": format_views(views),
         "stage-count": str(result.stage_count),
         "peak-stage": str(result.peak),
         "detail-stages": format_ranges(result.stages),

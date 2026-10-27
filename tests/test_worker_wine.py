@@ -15,8 +15,12 @@ import pytest
 from r2x import record
 from r2x.settings import Settings
 from r2x.stages import ALL, PEAK, parse_stages
+from r2x.views import ALL as ALL_VIEWS, BY_NAME, parse_views, record_order
 from r2x.worker.runner import run_job
 from r2x.worker.session import OutOfScope
+
+NO_SHEAR = parse_views("no-shear")
+CHARTS = len(record_order(ALL_VIEWS))       # detail-view sections per stage with every view
 
 REF = Path(__file__).parent / "reference"
 RESPONSE = os.environ.get("R2X_RESPONSE_DIR")
@@ -39,13 +43,24 @@ def reference_sections(case):
     return out
 
 
-def solve(tmp_path, stages, name="Newbeam", report=None):
+def solve(tmp_path, stages, name="Newbeam", report=None, views=ALL_VIEWS):
     out = tmp_path / f"{name}.r2x.txt"
     header = run_job(REF / "newbeam" / "input.r2t", out, Path(RESPONSE), PREFIX, stages=stages,
-                     report=report)
+                     report=report, views=views)
     rec = record.read(out)
     assert rec.header == header
     return rec
+
+
+def assert_matches(rec, case):
+    """Every hand-captured export of the case is in the record, byte for byte, and each detail
+    stage has the charts of the record's views."""
+    ref = reference_sections(case)
+    for name, body in ref.items():
+        assert rec.sections.get(name) == body, name
+    keys = [c.key for c in record_order(parse_views(rec.header["views"]))]
+    controls = [n for n in ref if n.startswith("control/")]
+    assert list(rec.sections) == controls + [f"stage/{i}/{k}" for i in rec.stages() for k in keys]
 
 
 PNG = re.compile(r'<img src="data:image/png;base64,([A-Za-z0-9+/=]+)"')
@@ -64,32 +79,48 @@ def report_pictures(path: Path) -> list[tuple[int, int]]:
 def test_newbeam_peak_matches_references(tmp_path):
     rec = solve(tmp_path, PEAK)
     assert rec.header["stage-count"] == "60" and rec.header["peak-stage"] == "56"
+    assert rec.header["views"] == "general,cracking,reinforcement,no-shear"
+    assert_matches(rec, "newbeam")
+    assert len(rec.sections) == 2 + CHARTS
+
+
+def test_no_shear_alone_is_what_r2x_0_1_0_wrote(tmp_path):
+    rec = solve(tmp_path, PEAK, views=NO_SHEAR)
+    assert rec.header["views"] == "no-shear"
     assert rec.sections == reference_sections("newbeam")   # all 7, nothing else
+    assert list(rec.sections) == ["control/moment_ex", "control/moment_phi", *(
+        f"stage/56/{c.key}" for c in BY_NAME["no-shear"].charts)]
 
 
 def test_newbeam_all_and_a_selection(tmp_path):
     every = solve(tmp_path, ALL, "all")
-    assert every.stages() == list(range(60)) and len(every.sections) == 2 + 60 * 5
-    for name, body in reference_sections("newbeam").items():
-        assert every.sections[name] == body, name
-    # with a report: pictures are taken at the peak, before paging to the other stages
-    some = solve(tmp_path, parse_stages("peak,0-2,59"), "some", report=tmp_path / "some.html")
+    assert every.stages() == list(range(60)) and len(every.sections) == 2 + 60 * CHARTS
+    assert_matches(every, "newbeam")
+    # with a report: pictures are taken at the peak, before paging to the other stages; and
+    # views in another order, or fewer, give the same exports
+    some = solve(tmp_path, parse_stages("peak,0-2,59"), "some", report=tmp_path / "some.html",
+                 views=parse_views("no-shear,cracking"))
     assert some.header["detail-stages"] == "0-2,56,59"
+    assert some.header["views"] == "cracking,no-shear"
     for name, body in some.sections.items():
         assert every.sections[name] == body, name
-    assert len(report_pictures(tmp_path / "some.html")) == 8
+    # the control charts, then each view's window and the charts not already shown
+    assert len(report_pictures(tmp_path / "some.html")) == 2 + 2 + 7 + 4
 
 
 def test_report_leaves_the_record_unchanged(tmp_path):
     html = tmp_path / "Newbeam.r2x.html"
     rec = solve(tmp_path, PEAK, report=html)
-    assert rec.sections == reference_sections("newbeam")
+    plain = solve(tmp_path / "..", PEAK, name=f"{tmp_path.name}-plain")
+    assert rec.sections == plain.sections
+    assert_matches(rec, "newbeam")
     sizes = report_pictures(html)
-    # main window, then two control charts and five detail views as Copy Chart Picture draws them
-    assert len(sizes) == 8 and sizes[0][0] > 1000
-    assert all(w == 900 and 500 < h < 800 for w, h in sizes[1:])
+    # two control charts, then each view: its window and its charts not shown already
+    windows = [s for s in sizes if s[0] > 1000]
+    assert len(sizes) == 2 + 4 + CHARTS and len(windows) == 4
+    assert all(w == 900 and 500 < h < 800 for w, h in sizes if (w, h) not in windows)
     page = html.read_text(encoding="utf-8")
-    assert "Detail views at stage 56" in page and "No picture" not in page
+    assert "No Shear view at stage 56" in page and "No picture" not in page
     assert sorted(p.name for p in tmp_path.iterdir()) == ["Newbeam.r2x.html", "Newbeam.r2x.txt"]
 
 
@@ -97,7 +128,8 @@ def test_report_axial_only(tmp_path):
     """Both control charts are the same chart: the report shows it once, as the record does."""
     html = tmp_path / "axial.html"
     out = tmp_path / "axial.r2x.txt"
-    run_job(REF / "newbeam-axial-only" / "saved.r2t", out, Path(RESPONSE), PREFIX, report=html)
+    run_job(REF / "newbeam-axial-only" / "saved.r2t", out, Path(RESPONSE), PREFIX, report=html,
+            views=NO_SHEAR)
     assert record.read(out).sections == reference_sections("newbeam-axial-only")
     assert len(report_pictures(html)) == 7
 
@@ -117,7 +149,7 @@ def test_saved_settings_match_references(tmp_path, case):
     solving that file gives the hand-captured exports. See tests/reference/<case>/README.md."""
     out = tmp_path / f"{case}.r2x.txt"
     run_job(REF / case / "saved.r2t", out, Path(RESPONSE), PREFIX, stages=PEAK)
-    assert record.read(out).sections == reference_sections(case)
+    assert_matches(record.read(out), case)
 
 
 FLAGS = [
@@ -144,7 +176,7 @@ def test_settings_match_references(tmp_path, case, settings, effective):
     header = run_job(REF / "newbeam" / "input.r2t", out, Path(RESPONSE), PREFIX,
                      settings=settings)
     assert {k: header[k] for k in effective} == effective
-    assert record.read(out).sections == reference_sections(case)
+    assert_matches(record.read(out), case)
 
 
 def same_points(a: bytes, b: bytes, tol: float = 0.0011) -> bool:
@@ -163,7 +195,7 @@ def test_new_section_matches_file_new(tmp_path):
     header = run_job(None, out, Path(RESPONSE), PREFIX)
     assert header["input-name"] == "File > New"
     assert "input-sha256" not in header and "template-sha256" not in header
-    assert record.read(out).sections == reference_sections("newbeam-filenew")
+    assert_matches(record.read(out), "newbeam-filenew")
 
 
 def test_new_section_with_factors(tmp_path):
@@ -174,7 +206,7 @@ def test_new_section_with_factors(tmp_path):
     out = tmp_path / "newbeam.r2x.txt"
     run_job(None, out, Path(RESPONSE), PREFIX, settings=Settings(factors="csa"))
     rec, ref = record.read(out), reference_sections("newbeam-csa")
-    assert rec.sections.keys() == ref.keys()
+    assert set(ref) <= set(rec.sections)
     for name, body in ref.items():
         if name.startswith("control/"):
             assert rec.sections[name] == body, name

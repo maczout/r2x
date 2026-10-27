@@ -1,7 +1,7 @@
 # Command line
 
-**Status:** agreed 2026-10-25; implemented in full in r2x 0.1.0 (2026-10-25). Phases 3 to 5
-below record how. `r2x solve --help` matches the text below plus one note, and
+**Status:** agreed 2026-10-25; implemented in full in r2x 0.1.0 (2026-10-25). `--views` added
+in r2x 0.2.0 (2026-10-26). Phases 3 to 5 and *All detail views* below record how. `r2x solve --help` matches the text below plus one note, and
 `tests/test_cli.py` keeps them in step.
 
 A stage number past the last stage is a usage error (exit status 2), found once the solve has
@@ -27,6 +27,12 @@ given the stage count. With several inputs, the exit status is the most serious 
   than shipping a copy of Newbeam, so the default follows the installed program (including an
   `r2k.r2k` template file, if one is present). The record is `newbeam.r2x.txt`, Response's name
   for a new section, in the current folder unless `--out` is given.
+- **Detail views.** Every chart with a data export in four of Response's nine-chart views:
+  General, Cracking, Reinforcement and No Shear, chosen with `--views` (default all). A chart that
+  recurs in several views (Longitudinal Strain is in all four) is one section. Not captured: the
+  Load Deformation Plot, a whole-member result whose curves are mostly per-stage maxima the
+  toolbox can derive from `--stage all`; Mohr's Circles, deferred; and the charts that are
+  pictures only (cross section, crack diagram, internal forces, N+M).
 - **Stages.** Control charts always cover every stage; `--stage` selects the stages exported for
   the detail views. Stage 0 is the initial load. `peak` is the stage Response shows when the solve
   finishes. A stage number past the last stage is an error.
@@ -74,6 +80,8 @@ Output:
                         and ranges (0,10,20-30 or peak,0-5). 0 is the
                         initial load. Control charts always cover every
                         stage. Default: peak.
+  --views VIEWS         Detail views: all, or any of general, cracking,
+                        reinforcement, no-shear. Default: all.
   --report              Also write an HTML report of the peak stage.
                         Default: off.
   --out DIR             Folder for results. Default: next to each input.
@@ -96,6 +104,7 @@ Examples:
   r2x solve
   r2x solve beam.r2t --report
   r2x solve beam.r2t --stage all
+  r2x solve beam.r2t --views cracking,no-shear
   r2x solve col.rsp --units si --initial -2000,0 --increment 0,1
   r2x solve cases\*.r2t --out results --parallel 4
   r2x solve beam.r2t --stdout | py parse.py
@@ -195,3 +204,43 @@ Symbol) and Arial's metrics (`fonts-liberation`). Response writes the Greek lett
 not that map, so they showed as boxes. The prefix gets a copy of Wine's Symbol font with the map
 added (`src/r2x/worker/prefix.py`). Pictures are checked by eye against Windows; they are not
 byte-comparable.
+
+## All detail views (0.2.0)
+
+Found under Wine on 2026-10-26, with Newbeam at its peak; how r2x 0.2.0 follows from it.
+
+- **The view list.** Response chooses the nine-chart view with a drop-down under "Nine Graphs",
+  above the control charts, not from the toolbar or the View menu. It lists Cracking, General,
+  Mohr's Circles, No Shear and Reinforcement, and opens on No Shear for an analysis without
+  shear. r2x reads the list's items and selects one as a user would: it sets the selection and
+  sends the change notification to the list's parent, as the drop-down itself does, so the reply
+  comes once the new view's charts are in place. 135 exports copied straight after a switch
+  matched those copied a second later.
+- **The stage stays.** Changing the view keeps the load stage (checked at the peak and 20 stages
+  below it), and paging works in any view. So r2x makes one pass through the stages and goes
+  through the views at each one: the view on screen first, then the others in the catalogue's
+  order, which is three switches per stage for four views. A switch takes about 50 ms.
+- **Charts.** Every view has nine cells; those with a data export are in `src/r2x/views.json`
+  with their titles and record keys, and the rest are pictures only. Charts recur: Longitudinal
+  Strain is in all four views at the same place, Transverse Strain in General and Reinforcement,
+  and the two longitudinal reinforcement stresses in Reinforcement and No Shear (at different
+  places). A recurring chart exports the same bytes in every view; r2x checks that at every stage
+  and keeps one section. The Longitudinal Strain check also shows that a switch left the stage
+  alone. Mohr's Circles has five charts with data too (shear–εx, shear–γxy, f2–ε2, shear on
+  crack–ε1, f1–ε1), deferred with the view.
+- **Context menus.** A data chart's menu has Copy Chart Picture, Copy Chart Data, View Data,
+  Properties, Auto/Max Range and Toggle Text (the top control chart's only the first three). A
+  picture's menu is different: Cross Section's has Copy Picture and Toggle Fill, the Crack
+  Diagram's adds Select Font, Toggle Mode and Select Widths. Its second item would toggle the fill
+  instead of copying data, so before choosing Copy Chart Data r2x checks that the open menu is a
+  data chart's. Every data chart's menu is as wide as its Copy Chart Picture item makes it (134
+  pixels under Wine), and picture menus are narrower (102 to 125). The width is taken from a
+  control chart in each run, so the check does not depend on fonts.
+- **Record.** Format version 1 still: a new header key, `views`, and new sections, as
+  `docs/raw-format.md` allows. With `--views no-shear` the sections are byte for byte and in order
+  those r2x 0.1.0 wrote (`tests/test_worker_wine.py`).
+- **Report.** One section per view: Response's window in that view, then each chart not already
+  shown under an earlier view, picture beside data. Each window is taken after the view's chart
+  pictures, and again until two in a row are the same, so a view is never caught half-drawn.
+- **Time.** Newbeam with `--stage all`: 37 s for all four views (1,262 sections), 10 s for No
+  Shear alone (0.1.0: 9.5 s), in the cloud environment.

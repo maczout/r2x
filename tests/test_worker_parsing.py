@@ -6,8 +6,11 @@ import pytest
 
 from r2x.worker.export import control_exports
 from r2x.worker.identify import StageKeys, axis_unit, strain_at_axis, strain_curvature
-from r2x.worker.session import (CONTROL_CHARTS, CONTROL_KEYS, NO_SHEAR_CHARTS, OutOfScope,
-                                R2xError, Session, export_points, export_title)
+from r2x.views import BY_NAME
+from r2x.worker.session import (CONTROL_CHARTS, CONTROL_KEYS, STRAIN, OutOfScope, R2xError,
+                                Session, export_points, export_title, view_charts)
+
+NO_SHEAR_CHARTS = view_charts(BY_NAME["no-shear"])
 
 REFS = Path(__file__).parent / "reference"
 REF = REFS / "newbeam"
@@ -98,10 +101,11 @@ class FakeHelper:
     """Answers the helper's clipboard and menu commands like Response under Wine does.
 
     `lose` lists copy attempts (1-based) whose Return key goes missing, as seen rarely in Wine.
+    `widths` gives a chart's context-menu width (default 134, a data chart's under Wine).
     """
 
-    def __init__(self, exports: dict[str, bytes], lose=()):
-        self.exports, self.lose = exports, set(lose)
+    def __init__(self, exports: dict[str, bytes], lose=(), widths=None):
+        self.exports, self.lose, self.widths = exports, set(lose), widths or {}
         self.seq, self.clip, self.popup, self.downs, self.target = 0, None, False, 0, None
         self.attempt = 0
 
@@ -116,6 +120,10 @@ class FakeHelper:
             self.popup, self.downs, self.target = True, 0, args[0]
         elif cmd == "popup":
             return "1" if self.popup else "0"
+        elif cmd == "popuprect":
+            if not self.popup:
+                raise R2xError("helper: 'popuprect' -> 'err no popup'")
+            return f"100 100 {100 + self.widths.get(self.target, 134)} 226"
         elif cmd == "menukey":
             vk = int(args[0], 16)
             if vk == 0x28:
@@ -139,9 +147,9 @@ class FakeHelper:
             return None
 
 
-def session_with(exports, lose=()):
+def session_with(exports, lose=(), widths=None):
     notes = []
-    s = Session(FakeHelper(exports, lose), note=notes.append)
+    s = Session(FakeHelper(exports, lose, widths), note=notes.append)
     s._charts = {key: key for key in exports}     # window handle = chart key
     return s, notes
 
@@ -206,3 +214,22 @@ def test_worker_wants_input_and_record_or_new_and_record(argv, capsys):
         main(argv + ["--response-dir", "."])
     err = capsys.readouterr().err
     assert e.value.code == 2 and ("give RECORD with --new" in err or "required: PATH" in err)
+
+
+def test_a_picture_only_chart_is_refused_before_any_menu_item_is_chosen():
+    """In a picture-only chart's menu the second item toggles a drawing mode; r2x must not press
+    it. The menu width of a data chart is learnt from the first control chart copied."""
+    ex = read("control/moment_ex.txt")
+    s, _ = session_with({"control_top": ex, "longitudinal_strain": b"x"},
+                        widths={"longitudinal_strain": 110})
+    assert s.copy_chart(CONTROL_CHARTS[0], timeout=0.2) == ex
+    with pytest.raises(R2xError, match=r"row 1, column 2 .* has no Copy Chart Data .* 110 "
+                                       r"pixels wide, a data chart's 134"):
+        s.copy_chart(STRAIN, timeout=0.2)
+    assert s.h.popup is False and s.h.downs == 0          # closed with Escape, nothing chosen
+
+
+def test_a_chart_not_in_the_view_on_screen_is_an_error():
+    s, _ = session_with({"control_top": read("control/moment_ex.txt")})
+    with pytest.raises(R2xError, match="transverse_strain is not in the view on screen"):
+        s.copy_chart(view_charts(BY_NAME["general"])[1], timeout=0.2)

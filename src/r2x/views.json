@@ -1,0 +1,65 @@
+{
+  "about": [
+    "Response-2000's nine-chart detail views that r2x captures, and their charts that have a data",
+    "export (Copy Chart Data). Read by r2x (src/r2x/views.py) and by tests/reference/capture.ps1;",
+    "docs/raw-format.md lists the same charts, and tests/test_views.py keeps them in step.",
+    "name: r2x's name for the view (--views). response: its name in Response's view list.",
+    "grid: [row, column] in the nine-chart grid. key: record section name, from the title.",
+    "title: the export's 'Title :' line. Cells not listed are pictures only (Cross Section,",
+    "Crack Diagram, Internal Forces, N+M). Response's list also has Mohr's Circles: deferred.",
+    "Found under Wine on 2026-10-26 (Newbeam at its peak); see docs/cli.md, All detail views."
+  ],
+  "views": [
+    {
+      "name": "general",
+      "response": "General",
+      "charts": [
+        {"grid": [1, 2], "key": "longitudinal_strain", "title": "Longitudinal Strain"},
+        {"grid": [1, 3], "key": "transverse_strain", "title": "Transverse Strain"},
+        {"grid": [2, 2], "key": "shear_strain", "title": "Shear Strain"},
+        {"grid": [2, 3], "key": "shear_stress", "title": "Shear Stress"},
+        {"grid": [3, 1], "key": "principal_compressive_stress", "title": "Principal Compressive Stress"},
+        {"grid": [3, 2], "key": "shear_on_crack", "title": "Shear on Crack"},
+        {"grid": [3, 3], "key": "principal_tensile_stress", "title": "Principal Tensile Stress"}
+      ]
+    },
+    {
+      "name": "cracking",
+      "response": "Cracking",
+      "charts": [
+        {"grid": [1, 2], "key": "longitudinal_strain", "title": "Longitudinal Strain"},
+        {"grid": [1, 3], "key": "principal_tensile_strain", "title": "Principal Tensile Strain"},
+        {"grid": [2, 2], "key": "crack_widths", "title": "Crack Widths"},
+        {"grid": [2, 3], "key": "average_angle", "title": "Average Angle"},
+        {"grid": [3, 1], "key": "long_crack_spacing", "title": "Long. Crack Spacing"},
+        {"grid": [3, 2], "key": "transverse_crack_spacing", "title": "Transverse Crack Spacing"},
+        {"grid": [3, 3], "key": "diagonal_spacing", "title": "Diagonal Spacing"}
+      ]
+    },
+    {
+      "name": "reinforcement",
+      "response": "Reinforcement",
+      "charts": [
+        {"grid": [1, 2], "key": "longitudinal_strain", "title": "Longitudinal Strain"},
+        {"grid": [1, 3], "key": "transverse_strain", "title": "Transverse Strain"},
+        {"grid": [2, 1], "key": "long_reinforcement_stress", "title": "Long. Reinforcement Stress"},
+        {"grid": [2, 2], "key": "long_reinf_stress_at_crack", "title": "Long. Reinf Stress at Crack"},
+        {"grid": [2, 3], "key": "long_average_bond", "title": "Long. Average Bond"},
+        {"grid": [3, 1], "key": "stirrup_stress", "title": "Stirrup Stress"},
+        {"grid": [3, 2], "key": "stirrup_stress_at_crack", "title": "Stirrup Stress at Crack"},
+        {"grid": [3, 3], "key": "transverse_average_bond", "title": "Transverse Average Bond"}
+      ]
+    },
+    {
+      "name": "no-shear",
+      "response": "No Shear",
+      "charts": [
+        {"grid": [1, 2], "key": "longitudinal_strain", "title": "Longitudinal Strain"},
+        {"grid": [1, 3], "key": "shrinkage_thermal_strain", "title": "Shrinkage & Thermal Strain"},
+        {"grid": [2, 2], "key": "long_reinforcement_stress", "title": "Long. Reinforcement Stress"},
+        {"grid": [2, 3], "key": "long_reinf_stress_at_crack", "title": "Long. Reinf Stress at Crack"},
+        {"grid": [3, 1], "key": "longitudinal_concrete_stress", "title": "Longitudinal Concrete Stress"}
+      ]
+    }
+  ]
+}

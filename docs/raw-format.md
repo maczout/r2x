@@ -18,7 +18,7 @@ from r2x import record
 rec = record.read("Newbeam.r2x.txt")             # or record.decode(sys.stdin.buffer.read())
 rec.header["peak-stage"]                         # '56'
 rec.control("moment_phi")                        # bytes of the Moment-φ export
-rec.stage(56, "longitudinal_strain")             # bytes of one detail-view export
+rec.stage(56, "longitudinal_strain")             # bytes of one detail-view chart's export
 rec.stages()                                     # [56]
 ```
 
@@ -29,10 +29,12 @@ breaks the lengths, and `record.read` then refuses the file.
 
 ```
 r2x-raw 1                                    format name and version
-r2x-version: 0.1.0                           header: one "key: value" per line
+r2x-version: 0.2.0                           header: one "key: value" per line
 response-exe-sha256: bbf4bc59…
 …
 units: si
+…
+views: general,cracking,reinforcement,no-shear
 …
 detail-stages: 56
                                              empty line: end of header
@@ -59,7 +61,7 @@ end                                          end of record
 
 | Key | Example | Meaning |
 |---|---|---|
-| `r2x-version` | `0.1.0` | r2x version that wrote the record |
+| `r2x-version` | `0.2.0` | r2x version that wrote the record |
 | `response-exe-sha256` | `bbf4bc59…` | SHA-256 of `r2k.exe` |
 | `wine-version` | `wine-9.0 (Ubuntu 9.0~repack-4build3)` | output of `wine --version` |
 | `input-name` | `Newbeam.r2t` | input file name, or `File > New` when there is no input |
@@ -69,6 +71,7 @@ end                                          end of record
 | `factors` | `0.65,0.85,0.90` | material factors in effect: concrete, steel, prestress |
 | `initial` | `-2000.00,0.00,0.00` | initial load in effect: N, M, V in the units in effect |
 | `increment` | `0.00,1.00,0.00` | load increment in effect: N, M, V |
+| `views` | `general,cracking,reinforcement,no-shear` | detail views captured (`--views`), in this order; absent in records from r2x 0.1.0, which captured `no-shear` only |
 | `stage-count` | `60` | load stages in the solve, numbered 0 to `stage-count` − 1; 0 is the initial load |
 | `peak-stage` | `56` | the stage Response shows when the solve finishes |
 | `detail-stages` | `0-5,56` | stages with detail-view sections, as numbers and ranges |
@@ -79,23 +82,54 @@ kip-ft reads `0.74`. V is always 0, since an input with shear is out of scope.
 
 ## Sections
 
-| Name | Response chart (`Title :` line of the export) | Stages |
-|---|---|---|
-| `control/moment_ex` | `Control : Moment - \|e_x` | every stage, one point each |
-| `control/moment_phi` | `Control : Moment - \|f` | every stage, one point each |
-| `control/axial_ex` | `Control : Axial Load - \|e_x` | every stage, one point each |
-| `stage/N/longitudinal_strain` | `Longitudinal Strain` | stage N |
-| `stage/N/shrinkage_thermal_strain` | `Shrinkage & Thermal Strain` | stage N |
-| `stage/N/long_reinforcement_stress` | `Long. Reinforcement Stress` | stage N |
-| `stage/N/long_reinf_stress_at_crack` | `Long. Reinf Stress at Crack` | stage N |
-| `stage/N/longitudinal_concrete_stress` | `Longitudinal Concrete Stress` | stage N |
+Control charts, every stage, one point per stage:
+
+| Name | Response chart (`Title :` line of the export) |
+|---|---|
+| `control/moment_ex` | `Control : Moment - \|e_x` |
+| `control/moment_phi` | `Control : Moment - \|f` |
+| `control/axial_ex` | `Control : Axial Load - \|e_x` |
 
 Which control charts there are depends on the loading: `moment_ex` and `moment_phi` when the
 increment includes a moment; `axial_ex` alone for an axial-only increment, where Response shows
-the same chart in both control positions. The detail views are the five No Shear charts that
-have a data export. N is the stage number without leading zeros. Order: the control charts as
-Response places them (top first), then each stage in `detail-stages` ascending, with its charts
-in the order of the table.
+the same chart in both control positions.
+
+Detail views, for each stage N in `detail-stages` (N without leading zeros):
+
+| Name | Response chart (`Title :` line of the export) | Views |
+|---|---|---|
+| `stage/N/longitudinal_strain` | `Longitudinal Strain` | General, Cracking, Reinforcement, No Shear |
+| `stage/N/transverse_strain` | `Transverse Strain` | General, Reinforcement |
+| `stage/N/shear_strain` | `Shear Strain` | General |
+| `stage/N/shear_stress` | `Shear Stress` | General |
+| `stage/N/principal_compressive_stress` | `Principal Compressive Stress` | General |
+| `stage/N/shear_on_crack` | `Shear on Crack` | General |
+| `stage/N/principal_tensile_stress` | `Principal Tensile Stress` | General |
+| `stage/N/principal_tensile_strain` | `Principal Tensile Strain` | Cracking |
+| `stage/N/crack_widths` | `Crack Widths` | Cracking |
+| `stage/N/average_angle` | `Average Angle` | Cracking |
+| `stage/N/long_crack_spacing` | `Long. Crack Spacing` | Cracking |
+| `stage/N/transverse_crack_spacing` | `Transverse Crack Spacing` | Cracking |
+| `stage/N/diagonal_spacing` | `Diagonal Spacing` | Cracking |
+| `stage/N/long_reinforcement_stress` | `Long. Reinforcement Stress` | Reinforcement, No Shear |
+| `stage/N/long_reinf_stress_at_crack` | `Long. Reinf Stress at Crack` | Reinforcement, No Shear |
+| `stage/N/long_average_bond` | `Long. Average Bond` | Reinforcement |
+| `stage/N/stirrup_stress` | `Stirrup Stress` | Reinforcement |
+| `stage/N/stirrup_stress_at_crack` | `Stirrup Stress at Crack` | Reinforcement |
+| `stage/N/transverse_average_bond` | `Transverse Average Bond` | Reinforcement |
+| `stage/N/shrinkage_thermal_strain` | `Shrinkage & Thermal Strain` | No Shear |
+| `stage/N/longitudinal_concrete_stress` | `Longitudinal Concrete Stress` | No Shear |
+
+These are the charts with a data export in the four views r2x captures, as Response names them
+in its view list. A stage has the charts of the views in the `views` key, each chart once: one
+that recurs in several views (Longitudinal Strain is in all four) is the same export in each, and
+r2x checks that. The other cells of each nine-chart view (cross section, crack diagram, internal
+forces, N+M) are pictures only. Where each chart sits in its view is in `src/r2x/views.json`.
+
+Order: the control charts as Response places them (top first), then each stage in
+`detail-stages` ascending, with its charts in the order of the table above, leaving out views not
+captured. With `--views no-shear` a record has the same sections, in the same order, as one from
+r2x 0.1.0.
 
 Each body is exactly what Response put on the clipboard (CF_TEXT) for Copy Chart Data: ASCII
 with CRLF line endings, Greek letters spelled as Response spells them (`|e_x` for εx, `|f` for φ).

@@ -40,7 +40,15 @@ per input as each container has, so `--parallel` works too. `tests/test_cli_wine
 - `session.py` uses it to solve (posted `WM_COMMAND` 5092), find the charts, and run
   **Copy Chart Data** by right-clicking a chart and choosing the second menu item. Every export's
   `Title :` line is checked against the expected chart. A copy that gets no reply (about one in
-  several thousand under Wine) is dismissed and tried again, up to three times.
+  several thousand under Wine) is dismissed and tried again, up to three times. Before choosing
+  the item it checks the open menu is a data chart's (`popuprect`: as wide as the control
+  charts' menus), since a chart that is only a picture has a menu whose second item toggles its
+  drawing.
+- **Detail views** are chosen in Response's view list, the only drop-down on the solution screen
+  (`cbitems`, `cbget`, `cbselect`; the helper sends the change notification, so the new view is
+  in place when it replies). Which grid cells hold which charts in each view is in
+  `src/r2x/views.json`, the catalogue `r2x/views.py` reads; `find_charts` maps the view on
+  screen. Background in `docs/cli.md`, *All detail views*.
 - `dialogs.py` applies `--units`, `--factors`, `--initial` and `--increment` through Response's
   Preferences and Define Loading dialogs (menu commands 321 and 152), reads the settings in
   effect back for the record header, and stops before solving if the loading includes shear.
@@ -52,7 +60,9 @@ per input as each container has, so `--parallel` works too. `tests/test_cli_wine
   stage on screen after the solve, the peak, and stops rather than guess if several stages
   match. `--stage peak` (the default) needs no paging. Stages above the peak are reached by
   paging up from it; for any stage below, it pages down until Response stops at stage 0, then
-  up. Every step is checked the same way.
+  up. Every step is checked the same way. At each selected stage `export.py` goes through the
+  views (the one on screen first), and every view's Longitudinal Strain must be the bytes that
+  identified the stage.
 - `runner.py` writes the result as one raw record (`docs/raw-format.md`; reader and writer in
   `r2x/record.py`), under a temporary name until it is complete.
 - The worker reports progress on stderr in the fixed form of `r2x/progress.py`, which the command
@@ -78,12 +88,13 @@ it once at build time (`python -m r2x.worker.prefix`). It does two things beyond
 ## Pictures for the report
 
 `--report` adds three helper commands: `snap` copies Response's main window from its own window
-DC into a BMP (the screen DC shows only the empty desktop under Wine, since each top-level window
+DC (once per view, repeated until two in a row are the same) into a BMP (the screen DC shows only the empty desktop under Wine, since each top-level window
 draws into its own surface); `clipemf` plays the clipboard's enhanced metafile, which **Copy Chart
 Picture** puts there (as on Windows, with a metafile picture and no bitmap), into a BMP of a given
 width; `clipformats` lists what is on the clipboard. `images.py` turns the BMPs into PNGs and
 `r2x/report.py` builds the page. Both run in the container; the pictures never enter the record.
-They are captured right after the peak is identified, before any paging (`export.py`).
+They are captured right after the peak is identified, before any paging (`export.py`): the
+control charts, then in each view its charts not yet taken and its window.
 
 ## Container image
 

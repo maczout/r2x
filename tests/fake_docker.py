@@ -53,10 +53,11 @@ def host_path(mounts: dict[str, str], p: str) -> Path:
 
 
 def fake_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str],
-                report: Path | None) -> int:
+                report: Path | None, views: str = "all") -> int:
     from r2x import record
     from r2x.progress import Event
     from r2x.stages import StageError, parse_stages
+    from r2x.views import format_views, parse_views
 
     def say(e):
         print(e.line(), file=sys.stderr, flush=True)
@@ -88,14 +89,15 @@ def fake_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str
     if report is not None and "noreport" not in text:
         report.write_text("<!doctype html>\n<title>fake report</title>\n", encoding="utf-8")
     if "noout" not in text:
-        out.write_bytes(record.encode({"input-name": name, **settings, "stage-count": "10",
-                                       "peak-stage": "7"}, sections))
+        out.write_bytes(record.encode({"input-name": name, **settings,
+                                       "views": format_views(parse_views(views)),
+                                       "stage-count": "10", "peak-stage": "7"}, sections))
         say(Event("wrote", str(out), seconds=0.1))
     return 0
 
 
 def wine_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str],
-                report: Path | None) -> int:
+                report: Path | None, views: str = "all") -> int:
     template = Path(os.environ.get("R2X_WINEPREFIX", Path.home() / ".cache/r2x/prefix"))
     with tempfile.TemporaryDirectory(prefix="fake-docker-") as tmp:
         prefix = Path(tmp) / "prefix"
@@ -106,7 +108,8 @@ def wine_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str
         options += ["--report", str(report)] if report is not None else []
         source = [str(inp)] if inp else ["--new"]
         return subprocess.run([sys.executable, "-m", "r2x.worker", *source, str(out),
-                               "--stage", stage, *options], env=env).returncode
+                               "--stage", stage, "--views", views, *options],
+                              env=env).returncode
 
 
 def main(argv: list[str]) -> int:
@@ -121,6 +124,7 @@ def main(argv: list[str]) -> int:
     inp = None if command[3] == "--new" else host_path(mounts, command[3])
     out = host_path(mounts, command[4])
     stage = command[command.index("--stage") + 1] if "--stage" in command else "peak"
+    views = command[command.index("--views") + 1] if "--views" in command else "all"
     settings = {}                       # --units us, --initial=-2000,0 ... as the worker gets them
     rest = command[5:]
     for i, arg in enumerate(rest):
@@ -131,7 +135,7 @@ def main(argv: list[str]) -> int:
                 settings[key] = arg.split("=", 1)[1]
     report = host_path(mounts, rest[rest.index("--report") + 1]) if "--report" in rest else None
     worker = wine_worker if os.environ.get("FAKE_DOCKER_MODE") == "wine" else fake_worker
-    return worker(inp, out, stage, settings, report)
+    return worker(inp, out, stage, settings, report, views)
 
 
 if __name__ == "__main__":

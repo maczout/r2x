@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
+from r2x.views import STRAIN_KEY, VIEWS, View
 from r2x.worker.images import bmp_to_png
 
 # Response-2000 main-menu command IDs (RT_MENU resource of r2k.exe 1.9.7).
@@ -31,8 +32,18 @@ class Chart:
     """A chart with a data export: where it sits in Response and the title its export carries."""
     key: str            # record section name (detail views) or position (control charts)
     title: str | None   # "Title :" line of the export; None: any title in CONTROL_KEYS
-    grid: tuple | None  # (row, col) in the nine-graph view, or None for a control chart
+    grid: tuple | None  # (row, col) in the nine-chart grid, or None for a control chart
     control: int | None = None  # 0 = top control chart, 1 = bottom
+
+
+def view_charts(view: View) -> tuple[Chart, ...]:
+    """A detail view's charts with a data export (views.json), in grid order."""
+    return tuple(Chart(c.key, c.title, c.grid) for c in view.charts)
+
+
+# Longitudinal Strain is at the same place in every view r2x captures (tests/test_views.py); its
+# export identifies the load stage on screen.
+STRAIN = next(c for c in view_charts(VIEWS[0]) if c.key == STRAIN_KEY)
 
 
 # Which control charts Response shows depends on the loading, so the two positions are copied
@@ -47,13 +58,6 @@ CONTROL_KEYS = {
     "Control : Moment - |f": "moment_phi",       # moment increment, bottom
     "Control : Axial Load - |e_x": "axial_ex",   # axial-only increment, top and bottom
 }
-NO_SHEAR_CHARTS = (
-    Chart("longitudinal_strain", "Longitudinal Strain", (1, 2)),
-    Chart("shrinkage_thermal_strain", "Shrinkage & Thermal Strain", (1, 3)),
-    Chart("long_reinforcement_stress", "Long. Reinforcement Stress", (2, 2)),
-    Chart("long_reinf_stress_at_crack", "Long. Reinf Stress at Crack", (2, 3)),
-    Chart("longitudinal_concrete_stress", "Longitudinal Concrete Stress", (3, 1)),
-)
 
 
 class R2xError(RuntimeError):
@@ -109,6 +113,11 @@ class Helper:
             return self.ask(command)
         except R2xError:
             return None
+
+    def lines(self, command: str) -> list[str]:
+        """A command that replies "ok N" and then N lines; the lines."""
+        n = int(self.ask(command))
+        return [self.proc.stdout.readline().decode("latin-1").rstrip("\r\n") for _ in range(n)]
 
     def windows(self, which: str = "tree") -> list[Window]:
         n = int(self.ask(which))
@@ -173,7 +182,10 @@ class Session:
     def __init__(self, helper: Helper, note: Callable[[str], None] = lambda s: None):
         self.h = helper
         self.note = note
-        self._charts: dict[str, str] | None = None
+        self._charts: dict[str, str] | None = None   # chart key -> window, in the view on screen
+        self._charts_view: View | None = None         # the view _charts was found in
+        self._view_list: tuple[str, list[str]] | None = None  # drop-down window, its items
+        self._data_menu_width: int | None = None
 
     # -- windows ------------------------------------------------------------------------------
     def main_window(self) -> tuple[str, str]:
@@ -196,7 +208,8 @@ class Session:
             raise R2xError(self.describe_dialog(boxes[0].hwnd, boxes[0].text))
 
     def find_charts(self) -> dict[str, str]:
-        """Map chart key -> window handle for the solved No Shear view."""
+        """Map chart key -> window handle: the control charts, and the charts of the detail view
+        on screen that have a data export (none if r2x does not capture that view)."""
         ws = [w for w in self.h.windows() if w.visible]
         grid = [w for w in ws if w.cls == "OWL_Window" and w.text == ""
                 and w.rect[2] - w.rect[0] > 200 and w.rect[3] - w.rect[1] > 150]
@@ -210,9 +223,46 @@ class Session:
         if len(ctrl) != 2:
             raise R2xError(f"expected 2 control charts, found {len(ctrl)}")
         charts = {c.key: ctrl[c.control].hwnd for c in CONTROL_CHARTS}
-        charts.update({c.key: at[c.grid] for c in NO_SHEAR_CHARTS})
-        self._charts = charts
+        view = self.view()
+        if view is not None:
+            charts.update({c.key: at[c.grid] for c in view_charts(view)})
+        self._charts, self._charts_view = charts, view
         return charts
+
+    # -- detail views -------------------------------------------------------------------------
+    def _views(self) -> tuple[str, list[str]]:
+        """Response's view list (the drop-down above the control charts) and its items."""
+        if self._view_list is None:
+            boxes = [w for w in self.h.windows() if w.visible and w.cls == "ComboBox"]
+            if len(boxes) != 1:
+                raise R2xError(f"expected Response's view list, found {len(boxes)} drop-downs")
+            items = [bytes.fromhex(x).decode("latin-1")
+                     for x in self.h.lines(f"cbitems {boxes[0].hwnd}")]
+            self._view_list = boxes[0].hwnd, items
+        return self._view_list
+
+    def view(self) -> View | None:
+        """The detail view on screen, or None if it is not one r2x captures."""
+        hwnd, items = self._views()
+        i = int(self.h.ask(f"cbget {hwnd}"))
+        label = items[i] if 0 <= i < len(items) else None
+        return next((v for v in VIEWS if v.response == label), None)
+
+    def select_view(self, view: View):
+        """Show this detail view. The stage on screen stays as it is (export.py checks that)."""
+        hwnd, items = self._views()
+        if view.response not in items:
+            raise R2xError(f"Response's view list has no {view.response!r} "
+                           f"(it has {', '.join(items)})")
+        i = items.index(view.response)
+        if int(self.h.ask(f"cbget {hwnd}")) == i:
+            return
+        # The helper sends the change notification as the drop-down would, and the reply comes
+        # once Response has put the view's charts in place.
+        self.h.ask(f"cbselect {hwnd} {i}")
+        if int(self.h.ask(f"cbget {hwnd}")) != i:
+            raise R2xError(f"Response did not switch to the {view.response} view")
+        self._charts = None
 
     # -- clipboard ----------------------------------------------------------------------------
     def copy_chart(self, chart: Chart, timeout: float = 5, attempts: int = 3) -> bytes:
@@ -260,14 +310,31 @@ class Session:
         finally:
             bmp.unlink(missing_ok=True)
 
-    def snapshot(self, scratch: Path) -> bytes:
-        """Response's main window as it is on screen, as a PNG."""
+    def snapshot(self, scratch: Path, settled: bool = False, interval: float = 0.15,
+                 timeout: float = 5) -> bytes:
+        """Response's main window as it is on screen, as a PNG.
+
+        settled: take it until two in a row are the same, so that a view Response is still
+        drawing is not caught half-drawn.
+        """
         bmp = Path(scratch) / "main-window.bmp"
-        self.h.ask(f"snap {self.main_window()[0]} {wine_path(bmp).encode().hex()}")
-        try:
-            return bmp_to_png(bmp.read_bytes())
-        finally:
-            bmp.unlink(missing_ok=True)
+        def snap() -> bytes:
+            self.h.ask(f"snap {self.main_window()[0]} {wine_path(bmp).encode().hex()}")
+            try:
+                return bmp.read_bytes()
+            finally:
+                bmp.unlink(missing_ok=True)
+        shot = snap()
+        t0 = time.monotonic()
+        while settled:
+            time.sleep(interval)
+            again = snap()
+            if again == shot:
+                break
+            if time.monotonic() - t0 > timeout:
+                raise R2xError(f"Response's window did not settle within {timeout:.0f} s")
+            shot = again
+        return bmp_to_png(shot)
 
     def _retrying(self, chart: Chart, what: str, copy: Callable, attempts: int):
         for attempt in range(1, attempts + 1):
@@ -281,15 +348,47 @@ class Session:
 
     def _choose(self, chart: Chart, downs: int, what: str, timeout: float):
         """Choose an item of the chart's context menu and wait until the clipboard changes."""
-        hwnd = (self._charts or self.find_charts())[chart.key]
+        charts = self._charts or self.find_charts()
+        if chart.key not in charts:
+            raise R2xError(f"{chart.key} is not in the {self._view_name()}")
+        hwnd = charts[chart.key]
         self.h.ask("clipclear")
         seq = self.h.ask("clipseq")
         self.h.ask(f"rclick {hwnd}")
         wait_until(lambda: self.h.ask("popup") == "1", timeout, f"context menu of {chart.key}", 0.005)
+        if downs == COPY_CHART_DATA_DOWNS:
+            self._check_data_menu(chart)
         for _ in range(downs):
             self.h.ask(f"menukey {VK_DOWN:#x}")
         self.h.ask(f"menukey {VK_RETURN:#x}")
         wait_until(lambda: self.h.ask("clipseq") != seq, timeout, f"{what} of {chart.key}", 0.005)
+
+    def _check_data_menu(self, chart: Chart):
+        """Refuse to go on unless the open context menu is a data chart's.
+
+        A chart that is only a picture (cross section, crack diagram, ...) has another menu, in
+        which the second item toggles a drawing mode instead of copying data. Every data chart's
+        menu is as wide as its Copy Chart Picture item makes it, whatever its length (the top
+        control chart's has three items, the others six); picture menus are narrower. The width
+        is taken from the first control chart copied (solve() copies them first): control
+        charts are found by their window class and title, so they always have data.
+        """
+        left, _, right, _ = map(int, self.h.ask("popuprect").split())
+        width = right - left
+        if chart.control is not None:
+            if self._data_menu_width is None:
+                self._data_menu_width = width
+            return
+        if self._data_menu_width is not None and width != self._data_menu_width:
+            self._dismiss_popup()
+            where = f"row {chart.grid[0]}, column {chart.grid[1]}" if chart.grid else "its place"
+            raise R2xError(f"{chart.key}: the chart at {where} of the {self._view_name()} has no "
+                           f"Copy Chart Data (its menu is {width} pixels wide, a data chart's "
+                           f"{self._data_menu_width})")
+
+    def _view_name(self) -> str:
+        view = self._charts_view
+        return f"{view.response} view" if view else "view on screen"
 
     def _dismiss_popup(self, timeout: float = 2):
         """Close a context menu left open by a copy that got no reply."""

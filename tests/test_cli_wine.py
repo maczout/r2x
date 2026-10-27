@@ -9,7 +9,8 @@ import pytest
 
 from r2x import record
 
-from test_worker_wine import REF, pytestmark, reference_sections  # noqa: F401 (pytestmark)
+from test_worker_wine import (CHARTS, REF, assert_matches, pytestmark,  # noqa: F401
+                              reference_sections)
 
 HERE = Path(__file__).parent
 
@@ -23,7 +24,9 @@ def r2x(*argv, cwd=None):
 
 
 def test_stdout_matches_references():
-    code, out, err = r2x("solve", str(REF / "newbeam" / "input.r2t"), "--stdout")
+    """--views reaches the worker: No Shear alone is exactly the hand-captured case."""
+    code, out, err = r2x("solve", str(REF / "newbeam" / "input.r2t"), "--stdout", "--views",
+                         "no-shear")
     assert code == 0, err
     assert record.decode(out).sections == reference_sections("newbeam")
 
@@ -32,9 +35,9 @@ def test_report_through_the_command_line(tmp_path):
     code, _, err = r2x("solve", str(REF / "newbeam" / "input.r2t"), "--report", "--out",
                        str(tmp_path))
     assert code == 0, err
-    assert record.read(tmp_path / "input.r2x.txt").sections == reference_sections("newbeam")
+    assert_matches(record.read(tmp_path / "input.r2x.txt"), "newbeam")
     page = (tmp_path / "input.r2x.html").read_text(encoding="utf-8")
-    assert page.count("data:image/png;base64,") == 8
+    assert page.count("data:image/png;base64,") == 2 + 4 + CHARTS
 
 
 def test_parallel_with_an_out_of_scope_input(tmp_path):
@@ -45,7 +48,7 @@ def test_parallel_with_an_out_of_scope_input(tmp_path):
                        "--out", str(tmp_path))
     assert code == 3, err
     assert "[dm-n1n] out of scope: the loading includes shear" in err
-    assert record.read(tmp_path / "input.r2x.txt").sections == reference_sections("newbeam")
+    assert_matches(record.read(tmp_path / "input.r2x.txt"), "newbeam")
     assert not (tmp_path / "dm-n1n.r2x.txt").exists()
 
 

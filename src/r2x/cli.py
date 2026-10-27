@@ -27,6 +27,7 @@ from r2x.display import Display, Job
 from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE
 from r2x.settings import FACTORS, UNITS, Settings, parse_pair
 from r2x.stages import StageError, StageSpec, parse_stages
+from r2x.views import ViewError, format_views, parse_views
 
 DEFAULT_IMAGE = "r2x"
 RECORD_SUFFIX = ".r2x.txt"
@@ -109,7 +110,7 @@ def overall_status(statuses: list[int]) -> int:
 
 # -- one input ----------------------------------------------------------------------------------
 def container_command(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
-                      image: str, report: Path | None = None) -> list[str]:
+                      image: str, report: Path | None = None, views=None) -> list[str]:
     """docker run for one input; without an input the worker defines a new section (--new).
     The report, if any, goes in the record's folder."""
     mounts = ["-v", f"{docker_path(inp)}:/in/{inp.name}:ro"] if inp is not None else []
@@ -118,16 +119,17 @@ def container_command(inp: Path | None, record: Path, stages: StageSpec, setting
         "run", "--rm", "--pull", "never", "--network", "none", *mounts,
         "-v", f"{docker_path(record.parent)}:/out",
         image, "python", "-m", "r2x.worker", *worker_input, f"/out/{record.name}",
-        "--stage", str(stages), *settings.args(),
+        "--stage", str(stages), *(["--views", format_views(views)] if views else []),
+        *settings.args(),
         *(["--report", f"/out/{report.name}"] if report is not None else []),
     ]
 
 
 def run_container(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
                   image: str, display: Display, job: Job,
-                  report: Path | None = None) -> tuple[int, str]:
+                  report: Path | None = None, views=None) -> tuple[int, str]:
     """Solve one input in its own container; return its exit status and, if it failed, why."""
-    cmd = container_command(inp, record, stages, settings, image, report)
+    cmd = container_command(inp, record, stages, settings, image, report, views)
     display.start(job)
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -197,7 +199,7 @@ def cmd_solve(a) -> int:
 
         def solve(k: int) -> int:
             status, reason = run_container(inputs[k], records[k], a.stage, settings_from(a),
-                                           a.image, display, jobs[k], reports[k])
+                                           a.image, display, jobs[k], reports[k], a.views)
             where = str(records[k]) + (f", {reports[k].name}" if reports[k] else "")
             display.finish(jobs[k], status, reason, where)
             return status
@@ -215,7 +217,7 @@ def solve_to_stdout(inp: Path | None, a, live: bool) -> int:
         with Display(sys.stderr, live, a.quiet) as display:
             job = display.add(job_name(inp))
             status, reason = run_container(inp, record, a.stage, settings_from(a), a.image,
-                                           display, job)
+                                           display, job, views=a.views)
             display.finish(job, status, reason, "stdout")
         if status == SOLVED:
             # The binary buffer, so that Windows cannot rewrite the record's line endings.
@@ -263,6 +265,7 @@ Examples:
   r2x solve
   r2x solve beam.r2t --report
   r2x solve beam.r2t --stage all
+  r2x solve beam.r2t --views cracking,no-shear
   r2x solve col.rsp --units si --initial -2000,0 --increment 0,1
   r2x solve cases\\*.r2t --out results --parallel 4
   r2x solve beam.r2t --stdout | py parse.py"""
@@ -287,6 +290,13 @@ def stage_spec(text: str) -> StageSpec:
     try:
         return parse_stages(text)
     except StageError as e:
+        raise argparse.ArgumentTypeError(str(e))
+
+
+def views_spec(text: str):
+    try:
+        return parse_views(text)
+    except ViewError as e:
         raise argparse.ArgumentTypeError(str(e))
 
 
@@ -368,6 +378,9 @@ def build_parser() -> argparse.ArgumentParser:
                         "and ranges (0,10,20-30 or peak,0-5). 0 is the\n"
                         "initial load. Control charts always cover every\n"
                         "stage. Default: peak.")
+    g.add_argument("--views", type=views_spec, default=views_spec("all"), metavar="VIEWS",
+                   help="Detail views: all, or any of general, cracking,\n"
+                        "reinforcement, no-shear. Default: all.")
     g.add_argument("--report", action="store_true",
                    help="Also write an HTML report of the peak stage.\n"
                         "Default: off.")
