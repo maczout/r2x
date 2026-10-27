@@ -29,7 +29,7 @@ breaks the lengths, and `record.read` then refuses the file.
 
 ```
 r2x-raw 1                                    format name and version
-r2x-version: 0.2.0                           header: one "key: value" per line
+r2x-version: 0.3.0                           header: one "key: value" per line
 response-exe-sha256: bbf4bc59…
 …
 units: si
@@ -61,7 +61,7 @@ end                                          end of record
 
 | Key | Example | Meaning |
 |---|---|---|
-| `r2x-version` | `0.2.0` | r2x version that wrote the record |
+| `r2x-version` | `0.3.0` | r2x version that wrote the record |
 | `response-exe-sha256` | `bbf4bc59…` | SHA-256 of `r2k.exe` |
 | `wine-version` | `wine-9.0 (Ubuntu 9.0~repack-4build3)` | output of `wine --version` |
 | `input-name` | `Newbeam.r2t` | input file name, or `File > New` when there is no input |
@@ -70,7 +70,8 @@ end                                          end of record
 | `units` | `si` | units in effect: `si`, `us` or `kgcm` |
 | `factors` | `0.65,0.85,0.90` | material factors in effect: concrete, steel, prestress |
 | `initial` | `-2000.00,0.00,0.00` | initial load in effect: N, M, V in the units in effect |
-| `increment` | `0.00,1.00,0.00` | load increment in effect: N, M, V |
+| `increment` | `0.00,1.00,1.00` | load increment in effect: N, M, V |
+| `more-detail` | `2` | Solve > More Detail presses that refined the solve (`--more-detail`), `0` without; absent in records from r2x 0.1.0 and 0.2.0 |
 | `views` | `general,cracking,reinforcement,no-shear` | detail views captured (`--views`), in this order; absent in records from r2x 0.1.0, which captured `no-shear` only |
 | `stage-count` | `60` | load stages in the solve, numbered 0 to `stage-count` − 1; 0 is the initial load |
 | `peak-stage` | `56` | the stage Response shows when the solve finishes |
@@ -78,7 +79,12 @@ end                                          end of record
 
 The four settings keys are read back from Response's Preferences and Define Loading dialogs
 after r2x has applied its options, as the dialogs show them: two decimals, so a load of 0.738
-kip-ft reads `0.74`. V is always 0, since an input with shear is out of scope.
+kip-ft reads `0.74`. Records from r2x 0.1.0 and 0.2.0 always have V = 0 (shear was out of scope
+until 0.3.0).
+
+With More Detail, stage numbers, `stage-count`, `peak-stage` and `detail-stages` are those of
+the refined solve: each press puts new stages between the old ones up to the peak, so the same
+load stage has a higher number after it.
 
 ## Sections
 
@@ -89,10 +95,23 @@ Control charts, every stage, one point per stage:
 | `control/moment_ex` | `Control : Moment - \|e_x` |
 | `control/moment_phi` | `Control : Moment - \|f` |
 | `control/axial_ex` | `Control : Axial Load - \|e_x` |
+| `control/shear_gxy` | `Control : Shear - \|g_x_y` |
+| `control/shear_ex` | `Control : Shear - \|e_x` |
 
-Which control charts there are depends on the loading: `moment_ex` and `moment_phi` when the
-increment includes a moment; `axial_ex` alone for an axial-only increment, where Response shows
-the same chart in both control positions.
+Which two there are depends on the increment, and they are in the record in screen order (top
+first):
+
+| Increment | Sections |
+|---|---|
+| no shear, with a moment (or 0,0,0) | `moment_ex`, `moment_phi` |
+| axial load alone | `axial_ex` alone: Response shows the same chart in both places |
+| shear and a moment | `shear_gxy`, `moment_phi` |
+| shear and an axial load | `shear_gxy`, `axial_ex` |
+| shear alone | `shear_gxy`, `shear_ex` |
+
+Shear–γxy's γxy is the average shear strain weighted by shear force over the section
+(∫ τ γxy b dy / V), not the strain at any one depth (docs/cli.md, *Shear and More Detail*).
+An increment of 0,0,0 gives two stages, 0 and 1, both at the initial load.
 
 Detail views, for each stage N in `detail-stages` (N without leading zeros):
 
@@ -134,7 +153,8 @@ r2x 0.1.0.
 Each body is exactly what Response put on the clipboard (CF_TEXT) for Copy Chart Data: ASCII
 with CRLF line endings, Greek letters spelled as Response spells them (`|e_x` for εx, `|f` for φ).
 r2x checks each export's `Title :` line, and matches each stage's strain profile to the control
-curves (εx, and curvature where there is a Moment–φ curve), before it writes anything.
+curves (εx where there is an εx curve, curvature where there is a Moment–φ curve), before it
+writes anything.
 
 ## Guarantees
 

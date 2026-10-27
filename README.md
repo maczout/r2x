@@ -6,11 +6,11 @@ r2x drives an unmodified copy of Response-2000, Bentz and Collins' sectional ana
 reinforced and prestressed concrete, under Wine in a Linux container. It returns Response's own
 exported data, byte for byte, and does not re-compute, filter or interpret anything.
 
-**Scope:** the sectional response to axial load and moment, without shear: both control charts,
-and every chart with a data export in four detail views, **General**, **Cracking**,
-**Reinforcement** and **No Shear** (21 charts in all). Input is any file
-Response-2000 opens (`.r2t`, `.rsp`), or none, which gives the section File > New gives. Inputs
-whose loading includes shear stop with a reason. Not M–N interaction or full-member analysis.
+**Scope:** the sectional response (Solve → Sectional Response) to axial load, moment and shear,
+optionally refined with Solve → More Detail: both control charts, and every chart with a data
+export in four detail views, **General**, **Cracking**, **Reinforcement** and **No Shear** (21
+charts in all). Input is any file Response-2000 opens (`.r2t`, `.rsp`), or none, which gives
+the section File > New gives. Not M–N, M–V or N–V interaction, and not full-member analysis.
 
 ```
 PS> r2x solve .\Newbeam.r2t --report
@@ -25,14 +25,15 @@ PS> r2x solve .\Newbeam.r2t --report
   a header with the r2x, Wine and Response versions, the input's SHA-256 and the settings in
   effect. It is the result, and r2x's contract with whatever reads it: layout and a Python reader
   in `docs/raw-format.md`.
-- **`NAME.r2x.html`, the report** (`--report`). The peak stage as Response shows it: the control
-  charts, then each detail view: Response's window in that view, and each of its charts as
-  **Copy Chart Picture** draws it, beside its data. For reading; the pictures are drawn under
-  Wine.
+- **`NAME.r2x.html`, the report** (`--report`). Screenshots for checking by eye that r2x drove
+  Response as intended, with an index down the left: under **Inputs**, Response's window before
+  solving and the Preferences and Define Loading dialogs as r2x leaves them; under **Outputs**,
+  Response's window in each captured view at the peak stage. No data; the screenshots are taken
+  under Wine.
 
 Charts that Response shows only as pictures (cross section, crack diagram, internal forces, N+M)
-have no data export, so they appear in the report's window pictures and nowhere else. Not
-captured: the Load Deformation Plot (a whole-member result) and Mohr's Circles (deferred).
+have no data export, so they appear in the report's screenshots and nowhere else. Not captured:
+the Load Deformation Plot (a whole-member result) and Mohr's Circles.
 
 ## Setup (Windows)
 
@@ -60,20 +61,26 @@ r2x solve .\Newbeam.r2t --stage all          # detail views at every stage (defa
 r2x solve .\Newbeam.r2t --stage peak,0-5     # or at these stages; 0 is the initial load
 r2x solve .\Newbeam.r2t --views no-shear     # only these detail views (default: all four)
 r2x solve .\Newbeam.r2t --report             # also the HTML report
-r2x solve .\col.rsp --units si --initial -2000,0 --increment 0,1
+r2x solve .\Newbeam.r2t --increment 0,1,1     # moment and shear, M/V = 1 m
+r2x solve .\Newbeam.r2t --more-detail 2       # refined twice with Solve > More Detail
+r2x solve .\col.rsp --units si --initial -2000,0,0 --increment 0,1,0
 r2x solve .\cases\*.r2t --out .\results --parallel 4
 r2x solve .\Newbeam.r2t --stdout | py parse.py   # the record on stdout, no files
 ```
 
 - **Settings are overrides.** `--units`, `--factors`, `--initial` and `--increment` are applied
-  through Response's own dialogs; r2x never edits the input. An option left out keeps the input's
-  value, or Response's start-up default. The settings in effect are in the record header.
+  through Response's own dialogs; r2x never edits the input. Loads are N,M,V, as Define Loading
+  has them. An option left out keeps the input's value, or Response's start-up default. The
+  settings in effect are in the record header.
+- **More Detail.** `--more-detail N` presses Solve → More Detail N times after the solve (`max`:
+  until Response refines no further, which it stops doing at 327 stages). Stage numbers are the
+  refined solve's.
 - **Results** go next to each input, or to `--out`. An existing result is replaced only with
   `--overwrite`.
 - **Progress** goes to stderr, with a status line when stderr is a terminal; `-q` shows errors
   only.
-- **Exit status:** 0 solved, 1 failed, 2 usage error, 3 out of scope; with several inputs, the
-  most serious of these (1, then 2, then 3).
+- **Exit status:** 0 solved, 1 failed, 2 usage error, 3 out of scope (reserved: since 0.3.0
+  nothing is); with several inputs, the most serious of these (1, then 2, then 3).
 - **Environment:** `R2X_IMAGE` (image name, default `r2x`), `R2X_DOCKER` (the command that runs
   docker), `R2X_WSL_DISTRO` (the WSL distribution with Docker).
 
@@ -89,9 +96,9 @@ r2x (Windows)  ──docker run──▶  container in WSL: Xvfb + Wine + Respon
 `r2x solve` runs the container once per input, with the input mounted read-only and the results
 written straight to the output folder. Inside, a small Win32 helper drives Response on a virtual
 display: it applies the settings through Response's dialogs, runs **Solve → Sectional
-Response**, then reads every chart with **Copy Chart Data** from the clipboard, paging through
-the load stages and checking each one against the control curves. At each stage it goes through
-the detail views with Response's view list. Every container has its own
+Response** (and **More Detail**, if asked), then reads every chart with **Copy Chart Data** from
+the clipboard, paging through the load stages and checking each one against the control curves.
+At each stage it goes through the detail views with Response's view list. Every container has its own
 display and Wine prefix, so several run at once (`--parallel`). `docs/development.md` has the
 details and how to run it without Docker.
 
@@ -117,11 +124,17 @@ view shows, must export the same bytes in each view, as must any other chart two
 eye against Windows. Rerun the tests (`docs/development.md`) on any change to Wine, the image or
 r2x.
 
+**Shear and More Detail (0.3.0)** rely on those checks alone so far, under Wine, for Newbeam
+under several loadings and Response's own shear examples; hand captures on Windows
+(`newbeam-shear`, `newbeam-shear-only`, `newbeam-moredetail`) are next. With shear, the strain
+profile can match several stages near the peak, and then r2x tells them apart by their exports
+(`docs/cli.md`, *Shear and More Detail*).
+
 Two heuristics are worth knowing. Wine gives no "solve finished" signal, so the solve counts as
-finished once the bottom control curve has not changed for 1 s. Copy Chart Data and Copy Chart
-Picture are chosen by their position in each chart's right-click menu; every export's title is
-checked, every picture must be a metafile, and r2x opens a menu item only if the menu is a data
-chart's (charts that are only pictures have a different menu), so a change there fails loudly.
+finished once the bottom control curve has not changed for 1 s and Response's process is idle.
+Copy Chart Data is chosen by its position in each chart's right-click menu; every export's title
+is checked, and r2x opens a menu item only if the menu is a data chart's (charts that are only
+pictures have a different menu), so a change there fails loudly.
 
 ## Server (optional, not used by the CLI)
 

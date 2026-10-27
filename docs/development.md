@@ -21,6 +21,8 @@ python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/all.r2x.txt --stage 
 python -m r2x.worker --new /tmp/new.r2x.txt --response-dir Response       # no input: File > New
 python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/Newbeam.r2x.txt --report /tmp/Newbeam.html \
     --response-dir Response
+python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/shear.r2x.txt --increment=0,1,1 \
+    --more-detail 2 --response-dir Response
 R2X_RESPONSE_DIR=Response pytest        # includes the end-to-end Newbeam tests
 ```
 
@@ -49,20 +51,29 @@ per input as each container has, so `--parallel` works too. `tests/test_cli_wine
   in place when it replies). Which grid cells hold which charts in each view is in
   `src/r2x/views.json`, the catalogue `r2x/views.py` reads; `find_charts` maps the view on
   screen. Background in `docs/cli.md`, *All detail views*.
-- `dialogs.py` applies `--units`, `--factors`, `--initial` and `--increment` through Response's
-  Preferences and Define Loading dialogs (menu commands 321 and 152), reads the settings in
-  effect back for the record header, and stops before solving if the loading includes shear.
+- `dialogs.py` applies `--units`, `--factors`, `--initial` and `--increment` (N, M and V)
+  through Response's Preferences and Define Loading dialogs (menu commands 321 and 152), and
+  reads the settings in effect back for the record header, with a screenshot of each dialog for
+  the report when there is one.
   Control IDs come from `r2k.exe`'s RT_DIALOG resources: `python tools/dialogs.py
   Response/r2k.exe` (needs `pefile`) lists them; the output is in `docs/r2k-dialogs.txt`.
-- `identify.py` tells which stage a Longitudinal Strain export belongs to: εx (the profile's
-  strain at y = 0) against the control chart's εx curve, and curvature against the Moment–φ
-  curve when there is one, with units from the axis titles. `export.py` uses it to identify the
-  stage on screen after the solve, the peak, and stops rather than guess if several stages
-  match. `--stage peak` (the default) needs no paging. Stages above the peak are reached by
-  paging up from it; for any stage below, it pages down until Response stops at stage 0, then
-  up. Every step is checked the same way. At each selected stage `export.py` goes through the
-  views (the one on screen first), and every view's Longitudinal Strain must be the bytes that
-  identified the stage.
+- `identify.py` tells which stages a Longitudinal Strain export can belong to: εx (the
+  profile's strain at y = 0) against a control chart's εx curve (Moment–, Axial Load– or
+  Shear–εx), and curvature against the Moment–φ curve, whichever there are, with units from the
+  axis titles. Shear–γxy is no key (its γxy needs the section's widths). `export.py` identifies
+  the stage on screen after the solve, the peak. If several stages match (common with shear),
+  `Pager.find` pages from stage 0 to the highest of them and takes the one whose exports are the
+  same bytes, and stops rather than guess if none or several are. `--stage peak` (the default)
+  otherwise needs no paging. Stages above the peak are reached by paging up from it; for any
+  stage below, it pages down until Response stops at stage 0, then up. Every step is checked the
+  same way. With Shear–γxy on top, or repeated control points (an increment of 0,0,0), the
+  strain profile can stay the same from one stage to the next, so each look also copies the
+  General view's Shear Strain (recorded only if General is among the views). At each selected
+  stage `export.py` goes through the views (the one on screen first), and every view's
+  Longitudinal Strain must be the bytes that identified the stage.
+- **More Detail** (`--more-detail`) is menu command 11845, posted after the solve has finished;
+  each press is waited for like the solve. A press that changes nothing (Response stops at 327
+  stages) ends it, with a note if fewer presses took effect than were asked.
 - `runner.py` writes the result as one raw record (`docs/raw-format.md`; reader and writer in
   `r2x/record.py`), under a temporary name until it is complete.
 - The worker reports progress on stderr in the fixed form of `r2x/progress.py`, which the command
@@ -70,8 +81,11 @@ per input as each container has, so `--parallel` works too. `tests/test_cli_wine
   stage), 3 out of scope.
 
 Known heuristic: Wine gives no readable "solve finished" signal, so the solve counts as finished
-once the bottom control curve has not changed for 1 s (Response extends it about every 0.2 s
-while solving). Background in `docs/wine-spike.md`.
+once the bottom control curve has not changed for 1 s and Response's process has used under
+10 % of a processor over 0.2 s (`session.Cpu`, from `/proc/PID/stat` on the Linux side; without
+it, the curve alone decides). Response adds a point every 0.05 to 0.5 s while solving and uses
+60 to 80 % of a processor. A solve fails after 300 s without a new stage. Background in
+`docs/wine-spike.md` and `docs/cli.md` (*Shear and More Detail*).
 
 `prefix.py` prepares the Wine prefix: the runner checks it before every job, and the image runs
 it once at build time (`python -m r2x.worker.prefix`). It does two things beyond `wineboot`:
@@ -87,14 +101,15 @@ it once at build time (`python -m r2x.worker.prefix`). It does two things beyond
 
 ## Pictures for the report
 
-`--report` adds three helper commands: `snap` copies Response's main window from its own window
-DC (once per view, repeated until two in a row are the same) into a BMP (the screen DC shows only the empty desktop under Wine, since each top-level window
-draws into its own surface); `clipemf` plays the clipboard's enhanced metafile, which **Copy Chart
-Picture** puts there (as on Windows, with a metafile picture and no bitmap), into a BMP of a given
-width; `clipformats` lists what is on the clipboard. `images.py` turns the BMPs into PNGs and
-`r2x/report.py` builds the page. Both run in the container; the pictures never enter the record.
-They are captured right after the peak is identified, before any paging (`export.py`): the
-control charts, then in each view its charts not yet taken and its window.
+`--report` uses the helper's `snap` command: it copies a window of Response's from its own window
+DC into a BMP, repeated until two in a row are the same (the screen DC shows only the empty
+desktop under Wine, since each top-level window draws into its own surface). `images.py` turns
+the BMPs into PNGs and `r2x/report.py` builds the page. Both run in the container; the pictures
+never enter the record. The inputs are taken before solving (`runner.py`, `dialogs.read`):
+Response's main window with the settings applied, then the Preferences and Define Loading
+dialogs. The outputs are taken right after the solve, before any paging (`export.py`): the main
+window in each view. Since 0.3.0 the report has no Copy Chart Picture; the helper's `clipemf`
+and `clipformats` commands, which played its metafiles, are unused.
 
 ## Container image
 
@@ -115,9 +130,7 @@ server instead: `docker run -d -p 8000:8000 -e R2X_TOKEN=<token> -e R2X_WORKERS=
 
 Image size is about 1.3 GB compressed (Wine with its 32-bit libraries is most of it).
 
-Inputs outside the scope stop with a reason and exit status 3 rather than writing a record: an
-analysis with shear (Response's shear examples) is recognised as soon as the solve starts, from
-the top control chart's title, Shear–γxy.
+Exit status 3 (out of scope) is reserved: until 0.3.0, an analysis with shear stopped with it.
 
 ## Server (optional)
 
