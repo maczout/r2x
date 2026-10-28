@@ -96,7 +96,34 @@ def test_report_is_screenshots_under_inputs_and_outputs():
     # no data: no tables, no export text, no record header, no chart pictures
     assert "<table" not in page and "Data from Graph" not in page and "<pre" not in page
     assert "input-sha256" not in page
-    assert "<script" not in page and "http" not in page.replace("http-equiv", "")  # self-contained
+    # self-contained: its only scripts are its own (reloading itself), nothing is fetched
+    assert "<script src" not in page and "http" not in page.replace("http-equiv", "")
+
+
+def test_report_reloads_itself_when_rewritten():
+    page = build()
+    stamp = page.split('R2X_STAMP = "')[1].split('"')[0]
+    assert len(stamp) == 16 and page.count(stamp) == 1
+    assert build() == page                                  # the same report, the same stamp
+    assert build({"more-detail": "1"}).split('R2X_STAMP = "')[1][:16] != stamp
+    # the copy loaded in a frame posts its stamp before anything else and stops there
+    head = page[:page.index("<title>")]
+    assert "postMessage({r2xStamp: R2X_STAMP}" in head and "window.stop()" in head
+    assert "location.reload()" in page and "setInterval" in page
+
+
+def test_define_report_has_the_inputs_only():
+    page = report.build_define("pier-cap.r2t", "define quick",
+                               {"input/screen": PNG, "dialog/1": PNG, "dialog/2": PNG,
+                                "dialog/10": PNG}, b"<xml/>")
+    assert "<h2>Inputs</h2>" in page and "Outputs" not in page
+    heads = [page.index(h) for h in ("<h3>Input screen</h3>", "<h3>Dialog, page 1</h3>",
+                                     "<h3>Dialog, page 2</h3>", "<h3>Dialog, page 10</h3>")]
+    assert heads == sorted(heads)
+    assert page.count('<img src="data:image/png;base64,') == 4
+    assert "<code>define quick</code>" in page and "R2X_STAMP" in page
+    one = report.build_define("x.r2t", "define loads", {"input/screen": PNG, "dialog/1": PNG})
+    assert "<h3>Dialog</h3>" in one and "pressing OK" in one
 
 
 def test_report_has_a_left_column_index():

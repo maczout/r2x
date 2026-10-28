@@ -12,6 +12,11 @@ FAKE_DOCKER_MODE=fake (default) imitates the worker without Wine. The input's te
     otherwise: 10 stages, peak 7, and a stub report if one is asked for
 FAKE_DOCKER_MODE=wine runs the real worker on this machine instead, with its own copy of the Wine
 prefix as each container has, so that inputs can run in parallel (needs $R2X_RESPONSE_DIR).
+
+`python -m r2x.worker define ...` (a define step) runs the real worker in wine mode, with this
+process's stdin and stdout, so the questions reach the command line. In fake mode it asks one
+question, "Title", and saves the input (or a stub section) with the answer appended; with
+--screen it asks nothing and copies the input to --out, if given.
 """
 
 from __future__ import annotations
@@ -113,6 +118,59 @@ def wine_worker(inp: Path | None, out: Path, stage: str, settings: dict[str, str
                               env=env).returncode
 
 
+def define_worker(mounts: dict[str, str], args: list[str]) -> int:
+    """A define step: the real worker (wine mode) or an imitation of its questions."""
+    mapped, i = [], 0
+    while i < len(args):
+        a = args[i]
+        if a in ("--input", "--out", "--report") and i + 1 < len(args):
+            mapped += [a, str(host_path(mounts, args[i + 1]))]
+            i += 2
+        else:
+            mapped.append(a)
+            i += 1
+    if os.environ.get("FAKE_DOCKER_MODE") == "wine":
+        template = Path(os.environ.get("R2X_WINEPREFIX", Path.home() / ".cache/r2x/prefix"))
+        with tempfile.TemporaryDirectory(prefix="fake-docker-") as tmp:
+            prefix = Path(tmp) / "prefix"
+            if (template / "system.reg").exists():
+                shutil.copytree(template, prefix, symlinks=True)
+            env = dict(os.environ, R2X_WINEPREFIX=str(prefix))
+            return subprocess.run([sys.executable, "-m", "r2x.worker", "define", *mapped],
+                                  env=env).returncode
+    opt = lambda k: mapped[mapped.index(k) + 1] if k in mapped else None
+    inp, out, report = opt("--input"), opt("--out"), opt("--report")
+    if "--screen" in mapped:                 # no dialog: Save As to --out, and the report
+        if out:
+            Path(out).write_bytes(Path(inp).read_bytes())
+        if report:
+            Path(report).write_text("<!doctype html>\n<title>fake report</title>\n")
+        print(json.dumps({"done": {"saved": bool(out), "seconds": 0.1}}), flush=True)
+        return 0
+    if "--show" in mapped:
+        print(json.dumps({"show": [["Title", "fake"]]}), flush=True)
+        print(json.dumps({"done": {"saved": False}}), flush=True)
+        return 0
+    print(json.dumps({"ask": {"key": "title", "text": "Title", "kind": "text",
+                              "value": "fake", "unit": "", "choices": [], "keep": True,
+                              "hint": ""}}), flush=True)
+    line = sys.stdin.readline()
+    if not line:
+        print("r2x: failed: stopped without an answer; nothing saved", file=sys.stderr)
+        return 1
+    answer = json.loads(line)["answer"]
+    body = Path(inp).read_bytes() if inp else b"<section/>\r\n"
+    if out:
+        if answer is not None:
+            body += f"title {answer}\r\n".encode()
+        Path(out).write_bytes(body)
+    if report:
+        Path(report).write_text("<!doctype html>\n<title>fake report</title>\n")
+    print(json.dumps({"set": [["Title", answer]] if answer else []}), flush=True)
+    print(json.dumps({"done": {"saved": bool(out), "seconds": 0.1}}), flush=True)
+    return 0
+
+
 def main(argv: list[str]) -> int:
     if not argv or argv[0] != "run":
         raise SystemExit(f"fake docker: only 'run' is supported, not {argv[:1]}")
@@ -120,6 +178,8 @@ def main(argv: list[str]) -> int:
     if command[:3] == ["python", "-m", "r2x.worker.info"]:
         print(json.dumps({"r2x_version": "fake", "wine_version": None}))
         return 0
+    if command[:4] == ["python", "-m", "r2x.worker", "define"]:
+        return define_worker(mounts, command[4:])
     if command[:3] != ["python", "-m", "r2x.worker"]:
         raise SystemExit(f"fake docker: unexpected command {command}")
     inp = None if command[3] == "--new" else host_path(mounts, command[3])

@@ -8,9 +8,11 @@ import shutil
 import subprocess
 import tempfile
 import time
-from contextlib import ExitStack
+import uuid
+from contextlib import ExitStack, contextmanager
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Callable
+from typing import Callable, Iterator
 
 from r2x import __version__, record, report as html_report
 from r2x.progress import Event, note
@@ -36,7 +38,8 @@ def ensure_helper(cache: Path) -> Path:
     exe = cache / f"helper-{sha256(HELPER_SOURCE)[:12]}.exe"
     if not exe.exists():
         cache.mkdir(parents=True, exist_ok=True)
-        tmp = exe.with_suffix(".tmp")
+        # A name of its own per process: parallel jobs may build it at the same time.
+        tmp = exe.with_name(f".{exe.stem}.{uuid.uuid4().hex}.tmp")
         subprocess.run(["i686-w64-mingw32-gcc", "-O2", "-o", str(tmp), str(HELPER_SOURCE),
                         "-luser32", "-lgdi32"], check=True)
         tmp.replace(exe)
@@ -73,6 +76,68 @@ TEMPLATE = "r2k.r2k"
 NEW_INPUT = "File > New"      # input-name in the record header when there is no input file
 
 
+@dataclass
+class Running:
+    """A fresh Response-2000 under Wine, reached through its helper."""
+    session: Session
+    job: Path                 # the job's own folder: Response's program folder copy, scratch
+    input: Path | None        # the input as Response opened it (a copy in job), if any
+
+
+@contextmanager
+def start_response(input_file: Path | None, response_dir: Path, prefix: Path,
+                   display: str | None = None, cache: Path | None = None,
+                   on_event: Callable[[Event], None] = lambda e: None) -> Iterator[Running]:
+    """Start Response-2000 from a fresh copy of its program folder, on its own virtual display
+    (or on display), with input_file opened if given; stop it and clean up on exit.
+
+    With no input, Response starts with its start-up section and nothing else is done.
+    """
+    response_dir = Path(response_dir)
+    if not (response_dir / "r2k.exe").is_file():
+        raise R2xError(f"no r2k.exe in {response_dir}")
+    cache = cache or Path.home() / ".cache" / "r2x"
+    helper_exe = ensure_helper(cache)
+
+    with ExitStack() as stack:
+        env = dict(os.environ, WINEPREFIX=str(prefix), WINEARCH="win32", WINEDEBUG="-all")
+        if display:
+            env["DISPLAY"] = display
+        else:
+            xvfb, env["DISPLAY"] = start_xvfb()
+            stack.callback(lambda: (xvfb.terminate(), xvfb.wait(10)))
+        prepare_prefix(prefix, env, on_event)
+        stack.callback(lambda: subprocess.run(["wineserver", "-k"], env=env,
+                                              stderr=subprocess.DEVNULL))
+
+        # Each job gets its own copy of the program folder (Response writes Response.ini there).
+        job = Path(tempfile.mkdtemp(prefix="r2x-job-"))
+        stack.callback(shutil.rmtree, job, ignore_errors=True)
+        shutil.copytree(response_dir, job / "Response")
+        args, job_input = [], None
+        if input_file is not None:
+            job_input = job / Path(input_file).name
+            shutil.copyfile(input_file, job_input)
+            args = [wine_path(job_input)]
+
+        r2k = subprocess.Popen(["wine", "r2k.exe", *args], cwd=job / "Response",
+                               env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        def stop_response():  # runs before the helper closes and the prefix is shut down
+            subprocess.run(["wineserver", "-k"], env=env, stderr=subprocess.DEVNULL)
+            r2k.wait(10)
+        stack.callback(stop_response)
+        helper = Helper(str(helper_exe), env)
+        stack.callback(helper.close)
+        session = Session(helper, note=lambda text: on_event(note(text)), cpu=Cpu(r2k.pid))
+        if input_file is not None:
+            session.wait_for_file(Path(input_file).stem)
+        else:
+            wait_until(lambda: helper.try_ask("main"), 60, "Response to start", 0.1)
+        time.sleep(0.2)
+        session.check_no_dialog()
+        yield Running(session, job, job_input)
+
+
 def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path,
             display: str | None = None, stages: StageSpec = PEAK,
             settings: Settings = Settings(), cache: Path | None = None,
@@ -94,53 +159,14 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
     out = Path(out)
     response_dir = Path(response_dir)
     exe = response_dir / "r2k.exe"
-    if not exe.is_file():
-        raise R2xError(f"no r2k.exe in {response_dir}")
     report = Path(report) if report is not None else None
     for path, what in ((out, "the record"), (report, "the report")):
         if path is not None and not path.parent.is_dir():
             raise R2xError(f"no folder {path.parent} to write {what} in")
-    cache = cache or Path.home() / ".cache" / "r2x"
-    helper_exe = ensure_helper(cache)
 
-    with ExitStack() as stack:
-        env = dict(os.environ, WINEPREFIX=str(prefix), WINEARCH="win32", WINEDEBUG="-all")
-        if display:
-            env["DISPLAY"] = display
-        else:
-            xvfb, env["DISPLAY"] = start_xvfb()
-            stack.callback(lambda: (xvfb.terminate(), xvfb.wait(10)))
-        prepare_prefix(prefix, env, on_event)
-        stack.callback(lambda: subprocess.run(["wineserver", "-k"], env=env,
-                                              stderr=subprocess.DEVNULL))
-
-        # Each job gets its own copy of the program folder (Response writes Response.ini there).
-        job = Path(tempfile.mkdtemp(prefix="r2x-job-"))
-        stack.callback(shutil.rmtree, job, ignore_errors=True)
-        shutil.copytree(response_dir, job / "Response")
-        args = []
-        if input_file is not None:
-            job_input = job / input_file.name
-            shutil.copyfile(input_file, job_input)
-            args = [wine_path(job_input)]
-
-        r2k = subprocess.Popen(["wine", "r2k.exe", *args], cwd=job / "Response",
-                               env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        def stop_response():  # runs before the helper closes and the prefix is shut down
-            subprocess.run(["wineserver", "-k"], env=env, stderr=subprocess.DEVNULL)
-            r2k.wait(10)
-        stack.callback(stop_response)
-        helper = Helper(str(helper_exe), env)
-        stack.callback(helper.close)
-        session = Session(helper, note=lambda text: on_event(note(text)), cpu=Cpu(r2k.pid))
-        if input_file is not None:
-            session.wait_for_file(input_file.stem)
-            time.sleep(0.2)
-            session.check_no_dialog()
-        else:
-            wait_until(lambda: helper.try_ask("main"), 60, "Response to start", 0.1)
-            time.sleep(0.2)
-            session.check_no_dialog()
+    with start_response(input_file, response_dir, prefix, display, cache, on_event) as running:
+        session, job = running.session, running.job
+        if input_file is None:
             dialogs.quick_define(session)
         dialogs.apply(session, settings)
         pictures, inputs = None, {}

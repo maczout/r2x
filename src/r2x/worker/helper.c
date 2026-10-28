@@ -18,8 +18,11 @@
  *   clip                     CF_TEXT contents, hex-encoded
  *   find <hwnd> <id>         first descendant of a window with this control ID (dialogs)
  *   gettext <hwnd>           a control's text (WM_GETTEXT), hex-encoded
- *   settext <hwnd> <hex>     set a control's text (WM_SETTEXT); text hex-encoded, "-" if empty
+ *   settext <hwnd> <hex>     set a control's text (WM_SETTEXT); text hex-encoded, "-" if empty;
+ *                            "ok busy" if Response opened a dialog of its own meanwhile
  *   click <hwnd>             post BM_CLICK to a button
+ *   sclick <hwnd>            send BM_CLICK: "ok" once Response has handled it, "ok busy" if it
+ *                            is still at it (showing a dialog of its own)
  *   getcheck <hwnd>          a check box or radio button's state (0 or 1)
  *   alive <hwnd>             "ok 1" if the window exists and is visible, else "ok 0"
  *   cbitems <hwnd>           a combo box's items: "ok N", then N lines, each hex-encoded
@@ -29,9 +32,22 @@
  *   clipemf <width> <hexpath>  render the clipboard's enhanced metafile (Copy Chart Picture) to a
  *                            24-bit BMP file this wide, height from its aspect; "ok W H"
  *   snap <hwnd> <hexpath>    the window as it is on screen, to a 24-bit BMP file; "ok W H"
+ *   ctls <hwnd>              all descendants of a window with their control IDs: "ok N", then
+ *                            N lines: hwnd, parent, control ID, visible, enabled, class, text
+ *   enabled <hwnd>           "ok 1" if the window is enabled, else "ok 0"
+ *   lbitems <hwnd>           a list box's items: "ok N", then N lines, each hex-encoded
+ *   lbget <hwnd>             a list box's selected index (-1: none)
+ *   lbselect <hwnd> <index>  select a list box item and notify its parent (LBN_SELCHANGE, sent)
+ *   psget <sheet>            a property sheet's current page: "ok INDEX HWND"
+ *   psselect <sheet> <index> show a property sheet's page (PSM_SETCURSEL, sent)
+ *   lvitems <hwnd>           a list view's item labels: "ok N", then N lines, each hex-encoded
+ *   lvget <hwnd>             a list view's selected item (-1: none)
+ *   lvselect <hwnd> <index>  select and focus a list view item (LVM_SETITEMSTATE, sent); the
+ *                            list view notifies its parent (LVN_ITEMCHANGED) as for a click
  *   quit
  */
 #include <windows.h>
+#include <commctrl.h>
 #include <fcntl.h>
 #include <io.h>
 #include <stdio.h>
@@ -105,6 +121,18 @@ static BOOL CALLBACK find_cb(HWND h, LPARAM lp) {
  * Response cannot block the helper. */
 #define SEND_TIMEOUT_MS 5000
 
+/* Messages that can make Response open a dialog of its own (a field's change notification, a
+ * button) are sent with a short timeout: "ok" once Response has handled one, "ok busy" if it is
+ * still handling it, which in practice means it is showing a message box or another dialog;
+ * the message completes when that dialog closes. */
+#define ACT_TIMEOUT_MS 800
+
+static const char *act(HWND h, UINT msg, WPARAM wp, LPARAM lp, DWORD_PTR *r) {
+    if (!IsWindow(h)) return "err no window\n";
+    if (SendMessageTimeoutA(h, msg, wp, lp, SMTO_NORMAL, ACT_TIMEOUT_MS, r)) return "ok\n";
+    return IsWindow(h) ? "ok busy\n" : "err gone\n";
+}
+
 static int hexval(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
@@ -171,10 +199,8 @@ static void do_cbselect(HWND h, int index) {
         printf("err cbselect\n");
         return;
     }
-    printf(SendMessageTimeoutA(GetParent(h), WM_COMMAND,
-                               MAKEWPARAM(GetDlgCtrlID(h), CBN_SELCHANGE), (LPARAM)h,
-                               SMTO_ABORTIFHUNG, SEND_TIMEOUT_MS, &r)
-           ? "ok\n" : "err notify\n");
+    printf("%s", act(GetParent(h), WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(h), CBN_SELCHANGE),
+                     (LPARAM)h, &r));
 }
 
 /* Write a bitmap selected out of any DC as a bottom-up 24-bit BMP file. */
@@ -263,6 +289,134 @@ static void do_snap(HWND h, const char *hexpath) {
     }
 }
 
+static void print_hex(const char *s) {
+    for (const unsigned char *p = (const unsigned char *)s; *p; p++) printf("%02x", *p);
+    printf("\n");
+}
+
+/* Every descendant of a window with its control ID, enabled state and text (dialogs). */
+static void do_ctls(HWND parent) {
+    if (!IsWindow(parent)) { printf("err no window\n"); return; }
+    g_n = 0;
+    EnumChildWindows(parent, collect_cb, 0);
+    printf("ok %d\n", g_n);
+    for (int i = 0; i < g_n; i++) {
+        HWND h = g_list[i];
+        char cls[64], txt[256];
+        GetClassNameA(h, cls, sizeof cls);
+        GetWindowTextA(h, txt, sizeof txt);
+        for (char *p = txt; *p; p++) if (*p == '\n' || *p == '\r' || *p == '\t') *p = ' ';
+        printf("%lx\t%lx\t%d\t%d\t%d\t%s\t%s\n", (unsigned long)(ULONG_PTR)h,
+               (unsigned long)(ULONG_PTR)GetParent(h), GetDlgCtrlID(h),
+               IsWindowVisible(h) ? 1 : 0, IsWindowEnabled(h) ? 1 : 0, cls, txt);
+    }
+}
+
+/* A list box's items, as for a combo box. */
+static void do_lbitems(HWND h) {
+    DWORD_PTR n = 0;
+    if (!IsWindow(h) || !SendMessageTimeoutA(h, LB_GETCOUNT, 0, 0, SMTO_ABORTIFHUNG,
+                                             SEND_TIMEOUT_MS, &n) || (LRESULT)n < 0) {
+        printf("err lbitems\n");
+        return;
+    }
+    printf("ok %d\n", (int)n);
+    for (int i = 0; i < (int)n; i++) {
+        WCHAR wbuf[512] = L"";
+        char buf[1024] = "";
+        DWORD_PTR len = 0;
+        if (SendMessageTimeoutW(h, LB_GETTEXTLEN, i, 0, SMTO_ABORTIFHUNG, SEND_TIMEOUT_MS, &len)
+            && (LRESULT)len >= 0 && len < sizeof wbuf / sizeof wbuf[0])
+            SendMessageTimeoutW(h, LB_GETTEXT, i, (LPARAM)wbuf, SMTO_ABORTIFHUNG,
+                                SEND_TIMEOUT_MS, &len);
+        WideCharToMultiByte(1252, 0, wbuf, -1, buf, sizeof buf, NULL, NULL);
+        print_hex(buf);
+    }
+}
+
+static void do_lbselect(HWND h, int index) {
+    DWORD_PTR r = 0;
+    if (!IsWindow(h) || !SendMessageTimeoutA(h, LB_SETCURSEL, index, 0, SMTO_ABORTIFHUNG,
+                                             SEND_TIMEOUT_MS, &r) || (LRESULT)r != index) {
+        printf("err lbselect\n");
+        return;
+    }
+    printf("%s", act(GetParent(h), WM_COMMAND, MAKEWPARAM(GetDlgCtrlID(h), LBN_SELCHANGE),
+                     (LPARAM)h, &r));
+}
+
+/* A list view's messages carry pointers, which must point into the list view's own process:
+ * the structure and the text buffer are put there with VirtualAllocEx and copied back. */
+typedef struct { HANDLE proc; char *base; } Remote;
+
+static int remote_open(HWND h, Remote *r, SIZE_T size) {
+    DWORD pid = 0;
+    GetWindowThreadProcessId(h, &pid);
+    r->proc = OpenProcess(PROCESS_VM_OPERATION | PROCESS_VM_READ | PROCESS_VM_WRITE |
+                          PROCESS_QUERY_INFORMATION, FALSE, pid);
+    if (!r->proc) return 0;
+    r->base = VirtualAllocEx(r->proc, NULL, size, MEM_COMMIT | MEM_RESERVE, PAGE_READWRITE);
+    if (!r->base) { CloseHandle(r->proc); return 0; }
+    return 1;
+}
+
+static void remote_close(Remote *r) {
+    VirtualFreeEx(r->proc, r->base, 0, MEM_RELEASE);
+    CloseHandle(r->proc);
+}
+
+#define LV_TEXT_MAX 256
+
+static void do_lvitems(HWND h) {
+    DWORD_PTR n = 0;
+    Remote r;
+    if (!IsWindow(h) || !SendMessageTimeoutA(h, LVM_GETITEMCOUNT, 0, 0, SMTO_ABORTIFHUNG,
+                                             SEND_TIMEOUT_MS, &n) || (LRESULT)n < 0) {
+        printf("err lvitems\n");
+        return;
+    }
+    if (!remote_open(h, &r, sizeof(LVITEMA) + LV_TEXT_MAX)) { printf("err remote memory\n"); return; }
+    printf("ok %d\n", (int)n);
+    for (int i = 0; i < (int)n; i++) {
+        LVITEMA item;
+        char buf[LV_TEXT_MAX] = "";
+        DWORD_PTR len = 0;
+        memset(&item, 0, sizeof item);
+        item.mask = LVIF_TEXT;
+        item.iItem = i;
+        item.pszText = r.base + sizeof item;
+        item.cchTextMax = LV_TEXT_MAX;
+        if (WriteProcessMemory(r.proc, r.base, &item, sizeof item, NULL) &&
+            SendMessageTimeoutA(h, LVM_GETITEMTEXTA, i, (LPARAM)r.base, SMTO_ABORTIFHUNG,
+                                SEND_TIMEOUT_MS, &len))
+            ReadProcessMemory(r.proc, r.base + sizeof item, buf, sizeof buf - 1, NULL);
+        buf[sizeof buf - 1] = 0;
+        print_hex(buf);
+    }
+    remote_close(&r);
+}
+
+static void do_lvselect(HWND h, int index) {
+    DWORD_PTR ok = 0;
+    Remote r;
+    LVITEMA item;
+    if (!IsWindow(h)) { printf("err no window\n"); return; }
+    if (!remote_open(h, &r, sizeof item)) { printf("err remote memory\n"); return; }
+    memset(&item, 0, sizeof item);
+    item.stateMask = LVIS_SELECTED | LVIS_FOCUSED;
+    item.state = LVIS_SELECTED | LVIS_FOCUSED;
+    if (!WriteProcessMemory(r.proc, r.base, &item, sizeof item, NULL)) printf("err lvselect\n");
+    else {
+        /* The list view tells its parent (LVN_ITEMCHANGED) while handling this. */
+        const char *reply = act(h, LVM_SETITEMSTATE, index, (LPARAM)r.base, &ok);
+        if (!strcmp(reply, "ok\n"))
+            SendMessageTimeoutA(h, LVM_ENSUREVISIBLE, index, FALSE, SMTO_ABORTIFHUNG,
+                                SEND_TIMEOUT_MS, &ok);
+        printf("%s", reply);
+    }
+    remote_close(&r);
+}
+
 static void do_settext(HWND h, const char *hex) {
     char buf[512];
     size_t n = 0;
@@ -276,9 +430,8 @@ static void do_settext(HWND h, const char *hex) {
         }
     }
     buf[n] = 0;
-    if (!SendMessageTimeoutA(h, WM_SETTEXT, 0, (LPARAM)buf, SMTO_ABORTIFHUNG, SEND_TIMEOUT_MS, &r))
-        printf("err settext\n");
-    else printf("ok\n");
+    /* The control tells its parent (EN_CHANGE) while handling this, and Response may ask. */
+    printf("%s", act(h, WM_SETTEXT, 0, (LPARAM)buf, &r));
 }
 
 /* Response opens the clipboard, empties it (which already bumps the sequence number), sets the
@@ -385,6 +538,9 @@ int main(void) {
         } else if (!strcmp(cmd, "click") && a1) {
             HWND t = parse_hwnd(a1);
             printf(IsWindow(t) && PostMessageA(t, BM_CLICK, 0, 0) ? "ok\n" : "err click\n");
+        } else if (!strcmp(cmd, "sclick") && a1) {
+            DWORD_PTR r = 0;
+            printf("%s", act(parse_hwnd(a1), BM_CLICK, 0, 0, &r));
         } else if (!strcmp(cmd, "getcheck") && a1) {
             DWORD_PTR r = 0;
             HWND t = parse_hwnd(a1);
@@ -409,6 +565,50 @@ int main(void) {
             else printf("err cbget\n");
         } else if (!strcmp(cmd, "cbselect") && a1 && a2) {
             do_cbselect(parse_hwnd(a1), atoi(a2));
+        } else if (!strcmp(cmd, "ctls") && a1) {
+            do_ctls(parse_hwnd(a1));
+        } else if (!strcmp(cmd, "enabled") && a1) {
+            HWND t = parse_hwnd(a1);
+            printf("ok %d\n", IsWindow(t) && IsWindowEnabled(t) ? 1 : 0);
+        } else if (!strcmp(cmd, "lbitems") && a1) {
+            do_lbitems(parse_hwnd(a1));
+        } else if (!strcmp(cmd, "lbget") && a1) {
+            DWORD_PTR r = 0;
+            HWND t = parse_hwnd(a1);
+            if (IsWindow(t) && SendMessageTimeoutA(t, LB_GETCURSEL, 0, 0, SMTO_ABORTIFHUNG,
+                                                   SEND_TIMEOUT_MS, &r))
+                printf("ok %d\n", (int)(LRESULT)r);
+            else printf("err lbget\n");
+        } else if (!strcmp(cmd, "lbselect") && a1 && a2) {
+            do_lbselect(parse_hwnd(a1), atoi(a2));
+        } else if (!strcmp(cmd, "psget") && a1) {
+            DWORD_PTR page = 0, tab = 0, index = 0;
+            HWND t = parse_hwnd(a1);
+            if (IsWindow(t) && SendMessageTimeoutA(t, PSM_GETCURRENTPAGEHWND, 0, 0,
+                                                   SMTO_ABORTIFHUNG, SEND_TIMEOUT_MS, &page)
+                && SendMessageTimeoutA(t, PSM_GETTABCONTROL, 0, 0, SMTO_ABORTIFHUNG,
+                                       SEND_TIMEOUT_MS, &tab)
+                && SendMessageTimeoutA((HWND)tab, TCM_GETCURSEL, 0, 0, SMTO_ABORTIFHUNG,
+                                       SEND_TIMEOUT_MS, &index))
+                printf("ok %d %lx\n", (int)(LRESULT)index, (unsigned long)page);
+            else printf("err psget\n");
+        } else if (!strcmp(cmd, "psselect") && a1 && a2) {
+            DWORD_PTR r = 0;
+            HWND t = parse_hwnd(a1);
+            printf(IsWindow(t) && SendMessageTimeoutA(t, PSM_SETCURSEL, atoi(a2), 0,
+                                                      SMTO_ABORTIFHUNG, SEND_TIMEOUT_MS, &r) && r
+                   ? "ok\n" : "err psselect\n");
+        } else if (!strcmp(cmd, "lvitems") && a1) {
+            do_lvitems(parse_hwnd(a1));
+        } else if (!strcmp(cmd, "lvget") && a1) {
+            DWORD_PTR r = 0;
+            HWND t = parse_hwnd(a1);
+            if (IsWindow(t) && SendMessageTimeoutA(t, LVM_GETNEXTITEM, (WPARAM)-1, LVNI_SELECTED,
+                                                   SMTO_ABORTIFHUNG, SEND_TIMEOUT_MS, &r))
+                printf("ok %d\n", (int)(LRESULT)r);
+            else printf("err lvget\n");
+        } else if (!strcmp(cmd, "lvselect") && a1 && a2) {
+            do_lvselect(parse_hwnd(a1), atoi(a2));
         } else if (!strcmp(cmd, "alive") && a1) {
             HWND t = parse_hwnd(a1);
             printf("ok %d\n", IsWindow(t) && IsWindowVisible(t) ? 1 : 0);

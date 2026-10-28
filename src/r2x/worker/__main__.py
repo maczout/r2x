@@ -1,4 +1,5 @@
 """python -m r2x.worker (INPUT | --new) RECORD [options]  — solve one input and write its record.
+python -m r2x.worker define NOUN [ACTION [NAME]] [options]  — one define step (r2x.worker.define).
 
 With --new instead of an input, the section is a new one with Quick Define's defaults, as
 File > New gives.
@@ -28,6 +29,10 @@ def report(event: Event):
 
 
 def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+    if argv[:1] == ["define"]:
+        from r2x.worker.define import main as define_main
+        return define_main(argv[1:])
     p = argparse.ArgumentParser(prog="python -m r2x.worker", description=__doc__,
                                 usage="%(prog)s (INPUT | --new) RECORD [options]",
                                 formatter_class=argparse.RawDescriptionHelpFormatter)

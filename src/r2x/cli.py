@@ -12,6 +12,7 @@ Environment:
 from __future__ import annotations
 
 import argparse
+import functools
 import glob
 import os
 import shlex
@@ -23,6 +24,10 @@ from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PureWindowsPath
 
 from r2x import __version__, progress
+from r2x.ask import Question
+from r2x.catalogue import CatalogueError, parse_step
+from r2x.define import (SECTION_SUFFIXES, Prompter, record_for, report_for, run_step, set_line,
+                        show_lines, today, worker_command)
 from r2x.display import Display, Job
 from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE
 from r2x.settings import FACTORS, UNITS, Settings, parse_loads, parse_more_detail
@@ -247,6 +252,121 @@ def cmd_health(a) -> int:
         return FAILED
 
 
+# -- define, show and the session -----------------------------------------------------------------
+def step_command(image: str):
+    """The docker command for one define step (r2x.define.worker_command)."""
+    return functools.partial(worker_command, docker_command(), image, docker_path)
+
+
+def section_args(words: list[str], what: str):
+    """[NOUN ...] FILE -> (step words, the section's file)."""
+    if not words:
+        raise UsageError(f"r2x {what} needs the section's file, last")
+    file = Path(words[-1])
+    if file.suffix.lower() not in SECTION_SUFFIXES:
+        raise UsageError(f"{words[-1]}: the section's file comes last (.r2t or .rsp)")
+    return words[:-1], file
+
+
+def cmd_define(a) -> int:
+    words, file = section_args(a.words, "define NOUN [ACTION [NAME]]")
+    try:
+        step = parse_step(words)
+    except CatalogueError as e:
+        raise UsageError(str(e))
+    prompter = Prompter()
+    command = step_command(a.image)
+    report = report_for(file)
+    if step.noun == "quick":
+        if file.exists():
+            ok, answer = prompter.answer(Question("replace", f"{file.name} exists: replace its "
+                                                  "section", "yesno", "n"))
+            if not ok or answer != "y":
+                print("r2x: nothing done", file=sys.stderr)
+                return SOLVED
+        cmd = command(["quick"], input_file=file if file.exists() else None, out=file,
+                      report=report, date=today())
+    else:
+        if not file.is_file():
+            raise UsageError(f"no file {file} (define quick makes one)")
+        cmd = command(step.words(), input_file=file, out=file, report=report)
+    result = run_step(cmd, prompter)
+    if result.status != SOLVED:
+        print(f"r2x: define {' '.join(step.words())} failed: {result.reason}", file=sys.stderr)
+        return result.status
+    if result.saved:
+        prompter.print(set_line(result.readback))
+        prompter.print(f"r2x: saved {file}, report {report.name} ({result.seconds:.1f} s)")
+    else:
+        prompter.print(f"r2x: nothing changed; {file} is as it was")
+    return SOLVED
+
+
+def cmd_show(a) -> int:
+    from r2x.shell import record_status, sha
+    words, file = section_args(a.words, "show [NOUN]")
+    if not file.is_file():
+        raise UsageError(f"no file {file}")
+    prompter = Prompter()
+    if not words:
+        prompter.print(f"  file: {file} (SHA-256 {sha(file)[:12]})")
+        report = report_for(file)
+        prompter.print(f"  report: {report.name}" if report.exists() else "  report: none")
+        prompter.print(f"  record: {record_status(file)}")
+        return SOLVED
+    try:
+        step = parse_step(words[:1])
+    except CatalogueError as e:
+        raise UsageError(str(e))
+    if step.noun == "quick":
+        raise UsageError("Quick Define always starts a new section: show general, section, ...")
+    result = run_step(step_command(a.image)([step.noun], input_file=file, mode="show"),
+                      prompter)
+    if result.status != SOLVED:
+        print(f"r2x: show {step.noun} failed: {result.reason}", file=sys.stderr)
+        return result.status
+    for line in show_lines(result.shown):
+        prompter.print(line)
+    return SOLVED
+
+
+SESSION_SOLVE_ONLY = ("stdout", "out", "overwrite", "report")
+
+
+def session_solve(options: list[str], file: Path, image: str) -> int:
+    """solve at a session's prompt: r2x solve's options for the session's file. The record and
+    the report go beside it and are replaced."""
+    p = argparse.ArgumentParser(prog="solve", usage="solve [options]", add_help=False,
+                                formatter_class=HelpFormatter, allow_abbrev=False,
+                                description="Solve the session's file; the record and the "
+                                            "report go beside it.")
+    p.add_argument("-h", "--help", action="help", help=argparse.SUPPRESS)
+    add_solve_options(p)
+    try:
+        o = p.parse_args(join_pair_values(options))
+    except SystemExit as e:        # argparse has said why (or printed the help)
+        return USAGE if e.code else SOLVED
+    given = [f"--{k}" for k in SESSION_SOLVE_ONLY if getattr(o, k)]
+    if given or o.parallel != 1:
+        print(f"  {', '.join(given or ['--parallel'])}: not in a session (the record and the "
+              f"report always go beside the file)")
+        return USAGE
+    record, report = record_for(file), report_for(file)
+    with Display(sys.stderr, sys.stderr.isatty(), o.quiet) as display:
+        job = display.add(file.stem)
+        status, reason = run_container(file, record, o.stage, settings_from(o), image, display,
+                                       job, report, o.views, o.more_detail)
+        display.finish(job, status, reason, f"{record.name}, {report.name}")
+    return status
+
+
+def cmd_session(a) -> int:
+    from r2x.shell import Shell
+    shell = Shell(step_command(a.image), lambda options, file: session_solve(options, file,
+                                                                            a.image))
+    return shell.run()
+
+
 # -- arguments ----------------------------------------------------------------------------------
 SOLVE_DESCRIPTION = """\
 Run a full sectional response in Response-2000 1.9.7 and capture the data
@@ -344,24 +464,8 @@ def join_pair_values(argv: list[str]) -> list[str]:
     return out
 
 
-def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="r2x", description="Run Response-2000 from the command line.")
-    p.add_argument("--version", action="version", version=f"r2x {__version__}")
-    p.add_argument("--image", default=os.environ.get("R2X_IMAGE", DEFAULT_IMAGE),
-                   help="container image (default: $R2X_IMAGE or r2x)")
-    sub = p.add_subparsers(dest="command", required=True, metavar="{solve,health}")
-
-    s = sub.add_parser("solve", help="solve inputs and capture their exported data",
-                       usage="r2x solve [INPUT ...] [options]", description=SOLVE_DESCRIPTION,
-                       epilog=SOLVE_EPILOG, formatter_class=HelpFormatter, add_help=False,
-                       allow_abbrev=False)
-    s.add_argument("-h", "--help", action="help", help=argparse.SUPPRESS)
-
-    g = s.add_argument_group("Input")
-    g.add_argument("inputs", nargs="*", metavar="INPUT",
-                   help=".rsp or .r2t files; globs allowed (cases\\*.r2t).\n"
-                        "Default: a new Quick Define section (Newbeam).")
-
+def add_solve_options(s: argparse.ArgumentParser):
+    """r2x solve's options, for the solve command and for solve in a session."""
     g = s.add_argument_group("Analysis")
     g.add_argument("--units", choices=UNITS, type=str.lower,
                    help="Units for loads and results.\n"
@@ -409,16 +513,65 @@ def build_parser() -> argparse.ArgumentParser:
     g.add_argument("-p", "--parallel", type=positive_int, default=1, metavar="N",
                    help="Solve up to N inputs at once. Default: 1.")
     g.add_argument("-q", "--quiet", action="store_true", help="Errors only. Default: off.")
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="r2x", description="Run Response-2000 from the command line.")
+    p.add_argument("--version", action="version", version=f"r2x {__version__}")
+    p.add_argument("--image", default=os.environ.get("R2X_IMAGE", DEFAULT_IMAGE),
+                   help="container image (default: $R2X_IMAGE or r2x)")
+    sub = p.add_subparsers(dest="command", metavar="{solve,define,show,health}",
+                           description="With no command: a session at the r2x> prompt "
+                                       "(define, solve, ...; help there).")
+
+    s = sub.add_parser("solve", help="solve inputs and capture their exported data",
+                       usage="r2x solve [INPUT ...] [options]", description=SOLVE_DESCRIPTION,
+                       epilog=SOLVE_EPILOG, formatter_class=HelpFormatter, add_help=False,
+                       allow_abbrev=False)
+    s.add_argument("-h", "--help", action="help", help=argparse.SUPPRESS)
+
+    g = s.add_argument_group("Input")
+    g.add_argument("inputs", nargs="*", metavar="INPUT",
+                   help=".rsp or .r2t files; globs allowed (cases\\*.r2t).\n"
+                        "Default: a new Quick Define section (Newbeam).")
+
+    add_solve_options(s)
     s.set_defaults(func=cmd_solve)
+
+    d = sub.add_parser("define", help="set one of Response's dialogs for a section, by questions",
+                       usage="r2x define NOUN [ACTION [NAME]] FILE",
+                       description=define_description(), formatter_class=HelpFormatter,
+                       epilog="r2x with no command starts a session, where the file is kept "
+                              "between steps and undo goes back one step.")
+    d.add_argument("words", nargs="+", metavar="WORD", help=argparse.SUPPRESS)
+    d.set_defaults(func=cmd_define)
+
+    sh = sub.add_parser("show", help="a section's file, report and record, or a dialog's values",
+                        usage="r2x show [NOUN] FILE", formatter_class=HelpFormatter,
+                        description="Without NOUN: the file, its report and whether its record "
+                                    "is a solve of it as it is.\nWith NOUN: the values one of "
+                                    "Response's dialogs shows for it (nothing is changed).")
+    sh.add_argument("words", nargs="+", metavar="WORD", help=argparse.SUPPRESS)
+    sh.set_defaults(func=cmd_show)
 
     health = sub.add_parser("health", help="show the image's r2x, Wine and Response-2000 versions")
     health.set_defaults(func=cmd_health)
     return p
 
 
+def define_description() -> str:
+    from r2x.shell import define_help
+    return ("Set one of Response-2000's dialogs for the section in FILE, question by question,\n"
+            "and let Response save the file (Save As). The section's report beside it\n"
+            "(FILE.r2x.html) is rewritten and reloads itself in the browser.\n\n"
+            + define_help())
+
+
 def main(argv: list[str] | None = None) -> int:
     argv = sys.argv[1:] if argv is None else argv
     a = build_parser().parse_args(join_pair_values(argv))
+    if a.command is None:
+        a.func = cmd_session
     try:
         return a.func(a)
     except UsageError as e:

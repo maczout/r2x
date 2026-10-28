@@ -1,0 +1,190 @@
+{
+  "about": [
+    "Response-2000's dialogs that r2x define drives, field by field, in each dialog's own order.",
+    "Read by r2x (src/r2x/catalogue.py) for the questions, the help, the worker and the tests;",
+    "docs/define.md has the findings behind it. Found under Wine on 2026-10-27 (Response 1.9.7).",
+    "noun: the word after define. menu: Response's main-menu command (RT_MENU of r2k.exe).",
+    "title: the dialog's window title; a wizard's pages have their own titles.",
+    "kind: wizard (Next, Finish), sheet (a property sheet; r2x uses the page named), dialog, or",
+    "list (a sheet page with named items: Add, Modify, Delete).",
+    "Fields: id is the control ID (RT_DIALOG of r2k.exe); label, the control holding the label",
+    "Response shows beside it (labels can change: Select bar by area turns Bar Designation into",
+    "Bar Area); unit, the control holding its unit; question, the words r2x asks with when",
+    "there is no label control. kind: text, number, integer, check (a check box, yes or no),",
+    "choice (a drop-down), shape (the list view of shapes), radio (one of several buttons), bar",
+    "(a bar or strand designation, checked by Response against rebar.dat), first-line and",
+    "other-lines (the title and the comments, which share one box). unless: skip the field when",
+    "this check box is ticked. A field Response shows disabled is skipped. xml: where Response",
+    "saves the value (element and attribute), for reference."
+  ],
+  "dialogs": [
+    {
+      "noun": "quick", "menu": 150, "kind": "wizard", "title": "Quick Define",
+      "summary": "Define > Quick Define: a new section",
+      "pages": [
+        {"title": "Quick Define - Step 1 of 4", "fields": [
+          {"key": "title", "id": 5060, "kind": "text", "question": "Title", "xml": "r3g_beam name"},
+          {"key": "analysis-by", "id": 5061, "kind": "text", "question": "Analysis By", "xml": "r3g_beam doneby"},
+          {"key": "fc", "id": 5064, "kind": "number", "question": "Concrete Cylinder Strength", "unit": 5059, "xml": "concrete fcp"},
+          {"key": "fy", "id": 5031, "kind": "number", "question": "Long. Steel Yield Strength", "unit": 5058, "xml": "rebar fy"},
+          {"key": "fyt", "id": 5065, "kind": "number", "question": "Transverse Steel Yield", "unit": 5057, "xml": "rebar name=Trans fy"},
+          {"key": "prestress", "id": 5070, "kind": "choice", "question": "Prestressed Steel Type", "xml": "prestress"}
+        ]},
+        {"title": "Quick Define - Step 2 of 4", "fields": [
+          {"key": "shape", "id": 5025, "kind": "shape", "question": "Shape", "xml": "shapesection name"},
+          {"key": "dim1", "id": 5060, "kind": "number", "label": 230, "unit": 130, "question": "Dimension 1", "xml": "shapesection par1"},
+          {"key": "dim2", "id": 5061, "kind": "number", "label": 239, "unit": 131, "question": "Dimension 2", "xml": "shapesection par2"},
+          {"key": "dim3", "id": 5062, "kind": "number", "label": 238, "unit": 132, "question": "Dimension 3", "xml": "shapesection par3"},
+          {"key": "dim4", "id": 5123, "kind": "number", "label": 237, "unit": 133, "question": "Dimension 4", "xml": "shapesection par4"},
+          {"key": "dim5", "id": 5064, "kind": "number", "label": 236, "unit": 134, "question": "Dimension 5", "xml": "shapesection par5"},
+          {"key": "dim6", "id": 101, "kind": "number", "label": 231, "unit": 235, "question": "Dimension 6", "xml": "shapesection par6"}
+        ]},
+        {"title": "Quick Define - Step 3 of 4", "fields": [
+          {"key": "top-number", "id": 5060, "kind": "integer", "question": "Top, Number of Bars", "xml": "longreinfx name=top num"},
+          {"key": "top-by-area", "id": 107, "kind": "check", "question": "Top, Select bar by area"},
+          {"key": "top-bar", "id": 5061, "kind": "bar", "label": 130, "prefix": "Top, ", "question": "Top, Bar Designation", "unit": 132, "xml": "longreinfx name=top bartitle"},
+          {"key": "bottom-number", "id": 5062, "kind": "integer", "question": "Bottom, Number of Bars", "xml": "longreinfx num"},
+          {"key": "bottom-by-area", "id": 5014, "kind": "check", "question": "Bottom, Select bar by area"},
+          {"key": "bottom-bar", "id": 5123, "kind": "bar", "label": 230, "prefix": "Bottom, ", "question": "Bottom, Bar Designation", "unit": 238, "xml": "longreinfx bartitle"}
+        ]},
+        {"title": "Quick Define - Step 4 of 4", "fields": [
+          {"key": "stirrup-type", "id": 5004, "kind": "choice", "question": "Stirrup Type", "xml": "transreinfz pattern"},
+          {"key": "stirrup-by-area", "id": 5067, "kind": "check", "question": "Stirrups, Select bar by area"},
+          {"key": "stirrup-bar", "id": 5061, "kind": "bar", "label": 130, "prefix": "Stirrups, ", "question": "Stirrups, Bar Designation", "unit": 132, "xml": "transreinfz bartitle"},
+          {"key": "spacing", "id": 5062, "kind": "number", "question": "Spacing", "unit": 230, "xml": "transreinfz space"},
+          {"key": "cover", "id": 5065, "kind": "number", "question": "Clear Cover", "unit": 238, "xml": "transreinfz disttop, distbot"},
+          {"key": "strands", "id": 5041, "kind": "integer", "label": 237, "question": "Number of strands", "xml": "longreinfx num (a tendon layer)"},
+          {"key": "prestrain", "id": 5044, "kind": "number", "question": "Delta-Epsilon P", "unit": 239, "xml": "longreinfx dep"}
+        ]}
+      ]
+    },
+    {
+      "noun": "general", "menu": 103, "kind": "dialog", "title": "General  Definitions",
+      "summary": "Define > Edit General: title, date, ...",
+      "pages": [
+        {"fields": [
+          {"key": "title", "id": 5032, "kind": "first-line", "question": "Title", "xml": "r3g_beam name"},
+          {"key": "comments", "id": 5032, "kind": "other-lines", "question": "Comments", "xml": "r3g_beam name (after the first line)"},
+          {"key": "analysis-by", "id": 5870, "kind": "text", "question": "Analysis By", "xml": "r3g_beam doneby"},
+          {"key": "date", "id": 5050, "kind": "text", "question": "Date", "xml": "r3g_beam date"},
+          {"key": "auto-long-spacing", "id": 101, "kind": "check", "question": "Automatic Longitudinal Spacing"},
+          {"key": "long-spacing", "id": 5042, "kind": "number", "question": "Longitudinal Spacing", "unit": 5450, "unless": 101, "xml": "r3g_beam smx"},
+          {"key": "auto-trans-spacing", "id": 103, "kind": "check", "question": "Automatic Transverse Spacing"},
+          {"key": "trans-spacing", "id": 5043, "kind": "number", "question": "Transverse Spacing", "unit": 5451, "unless": 103, "xml": "r3g_beam smt"},
+          {"key": "centroidal-axis", "id": 5871, "kind": "check", "question": "Centroidal Moment axis"},
+          {"key": "moment-axis", "id": 5044, "kind": "number", "question": "Moment axis", "unit": 5452, "unless": 5871, "xml": "r3g_beam axialloc"}
+        ]}
+      ]
+    },
+    {
+      "noun": "materials", "menu": 117, "kind": "sheet", "title": "Materials Page",
+      "summary": "Define > Material Properties: f'c, fy, fpu",
+      "pages": [
+        {"title": "Basic Properties", "fields": [
+          {"key": "fc", "id": 104, "kind": "number", "question": "Concrete Cylinder Strength", "unit": 5019, "xml": "concrete fcp"},
+          {"key": "fy", "id": 105, "kind": "number", "question": "Reinforcement Yield Strength", "unit": 5020, "xml": "rebar fy (every type)"},
+          {"key": "fpu", "id": 322, "kind": "number", "question": "Prestressed Reinforcement Strength", "unit": 5030, "xml": "prestress fu"}
+        ]}
+      ]
+    },
+    {
+      "noun": "section", "menu": 153, "kind": "sheet", "title": "Define Concrete Cross Section",
+      "summary": "Define > Concrete Section: basic shapes",
+      "pages": [
+        {"title": "Basic Shapes", "fields": [
+          {"key": "shape", "id": 5025, "kind": "shape", "question": "Shape", "xml": "shapesection name, sectionSOLID"},
+          {"key": "dim1", "id": 5060, "kind": "number", "label": 230, "unit": 130, "question": "Dimension 1", "xml": "shapesection par1"},
+          {"key": "dim2", "id": 5061, "kind": "number", "label": 239, "unit": 131, "question": "Dimension 2", "xml": "shapesection par2"},
+          {"key": "dim3", "id": 5062, "kind": "number", "label": 238, "unit": 132, "question": "Dimension 3", "xml": "shapesection par3"},
+          {"key": "dim4", "id": 5123, "kind": "number", "label": 237, "unit": 133, "question": "Dimension 4", "xml": "shapesection par4"},
+          {"key": "dim5", "id": 5064, "kind": "number", "label": 236, "unit": 134, "question": "Dimension 5", "xml": "shapesection par5"},
+          {"key": "dim6", "id": 101, "kind": "number", "label": 231, "unit": 235, "question": "Dimension 6", "xml": "shapesection par6"}
+        ]}
+      ]
+    },
+    {
+      "noun": "long", "menu": 156, "kind": "list", "title": "Define Longitudinal Reinforcement",
+      "summary": "Define > Longitudinal Reinforcement",
+      "item": "layer",
+      "list": {"box": 5072, "name": 5081, "add": 5075, "modify": 5076, "delete": 5077},
+      "pages": [
+        {"title": "Individual Layers", "fields": [
+          {"key": "number", "id": 5060, "kind": "integer", "label": 218, "question": "Number of Bars", "xml": "longreinfx num"},
+          {"key": "by-area", "id": 5084, "kind": "check", "question": "Select bar by area"},
+          {"key": "bar", "id": 5062, "kind": "bar", "label": 213, "unit": 212, "question": "Bar Designation", "xml": "longreinfx bartitle, A"},
+          {"key": "depth", "id": 5063, "kind": "number", "label": 210, "unit": 209, "question": "Dist. from Bottom", "xml": "longreinfx z"},
+          {"key": "type", "id": 5070, "kind": "choice", "label": 203, "question": "Rebar Type", "xml": "longreinfx type"}
+        ]}
+      ]
+    },
+    {
+      "noun": "trans", "menu": 154, "kind": "list", "title": "Define Transverse Reinforcement",
+      "summary": "Define > Transverse Reinforcement",
+      "item": "stirrup type",
+      "list": {"box": 5072, "name": 5081, "add": 5075, "modify": 5076, "delete": 5077},
+      "pages": [
+        {"title": "Define Stirrups", "fields": [
+          {"key": "spacing", "id": 5060, "kind": "number", "label": 218, "unit": 219, "question": "Stirrup Spacing", "xml": "transreinfz space"},
+          {"key": "by-area", "id": 5084, "kind": "check", "question": "Select bar by area"},
+          {"key": "bar", "id": 5062, "kind": "bar", "label": 213, "unit": 212, "question": "Bar Designation", "xml": "transreinfz bartitle, A"},
+          {"key": "top", "id": 5063, "kind": "number", "label": 210, "unit": 209, "question": "Dist. to Top", "xml": "transreinfz disttop"},
+          {"key": "bottom", "id": 5064, "kind": "number", "label": 207, "unit": 206, "question": "Dist. to Bottom", "xml": "transreinfz distbot"},
+          {"key": "bar-type", "id": 322, "kind": "choice", "label": 204, "question": "Bar Type", "xml": "transreinfz pattern"},
+          {"key": "type", "id": 5070, "kind": "choice", "label": 203, "question": "Rebar Type", "xml": "transreinfz type"}
+        ]}
+      ]
+    },
+    {
+      "noun": "tendons", "menu": 5098, "kind": "list", "title": "Define Tendons",
+      "summary": "Define > Tendons",
+      "item": "tendon layer",
+      "list": {"box": 5072, "name": 5081, "add": 5075, "modify": 5076, "delete": 5077},
+      "pages": [
+        {"title": "Define Tendon Layers", "fields": [
+          {"key": "number", "id": 5060, "kind": "integer", "label": 218, "question": "Number of Strands", "xml": "longreinfx num"},
+          {"key": "by-area", "id": 5084, "kind": "check", "question": "Select bar by area"},
+          {"key": "strand", "id": 5062, "kind": "bar", "label": 213, "unit": 212, "question": "Strand Designation", "xml": "longreinfx bartitle, A"},
+          {"key": "prestrain", "id": 5063, "kind": "number", "label": 210, "unit": 209, "question": "Prestrain", "xml": "longreinfx dep"},
+          {"key": "depth", "id": 5064, "kind": "number", "label": 207, "unit": 206, "question": "Dist. from Bottom", "xml": "longreinfx z"},
+          {"key": "slope", "id": 5065, "kind": "number", "label": 204, "unit": 200, "question": "Slope of Tendon", "xml": "longreinfx slope"},
+          {"key": "type", "id": 5070, "kind": "choice", "label": 203, "question": "Tendon Type", "xml": "longreinfx type"}
+        ]}
+      ]
+    },
+    {
+      "noun": "loads", "menu": 152, "kind": "dialog", "title": "Define Loading",
+      "summary": "Loads > Sectional Loads: N, M, V",
+      "pages": [
+        {"fields": [
+          {"key": "axial", "id": 101, "kind": "number", "question": "Axial Load, Constant", "unit": 5059, "xml": "sectloading BN"},
+          {"key": "moment", "id": 5052, "kind": "number", "question": "Moment, Constant", "unit": 5058, "xml": "sectloading BM"},
+          {"key": "shear", "id": 5053, "kind": "number", "question": "Shear, Constant", "unit": 5057, "xml": "sectloading BV"},
+          {"key": "axial-increment", "id": 5054, "kind": "number", "question": "Axial Load, Increment", "unit": 5059, "xml": "sectloading MN"},
+          {"key": "moment-increment", "id": 5055, "kind": "number", "question": "Moment, Increment", "unit": 5058, "xml": "sectloading MM"},
+          {"key": "shear-increment", "id": 5056, "kind": "number", "question": "Shear, Increment", "unit": 5057, "xml": "sectloading MV"}
+        ]}
+      ]
+    },
+    {
+      "noun": "units", "menu": 321, "kind": "sheet", "title": "Response-2000 Preferences",
+      "summary": "Options > Preferences: units",
+      "pages": [
+        {"title": "General", "fields": [
+          {"key": "units", "kind": "radio", "question": "Units", "xml": "r3g_beam units",
+           "options": [{"id": 5028, "text": "SI Metric"}, {"id": 5029, "text": "US Customary"}, {"id": 5030, "text": "kg/cm Metric"}]}
+        ]}
+      ]
+    },
+    {
+      "noun": "factors", "menu": 321, "kind": "sheet", "title": "Response-2000 Preferences",
+      "summary": "Options > Preferences: material factors",
+      "pages": [
+        {"title": "General", "fields": [
+          {"key": "concrete", "id": 5041, "kind": "number", "question": "Material Factors, Concrete", "xml": "analysisoptions phic"},
+          {"key": "steel", "id": 5044, "kind": "number", "question": "Material Factors, Steel", "xml": "analysisoptions phis"},
+          {"key": "prestress", "id": 5045, "kind": "number", "question": "Material Factors, Prestress", "xml": "analysisoptions phip"}
+        ]}
+      ]
+    }
+  ]
+}
