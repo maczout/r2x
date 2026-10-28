@@ -223,7 +223,7 @@ class Driver:
             self.interruptions(wait=2.0)
 
     # fields -------------------------------------------------------------------------------
-    def ask_fields(self, container: str, fields: tuple[Field, ...], keep_bars=True) -> int:
+    def ask_fields(self, container: str, fields: tuple[Field, ...]) -> int:
         """Ask each field in order and set the answers; return how many changed."""
         n = 0
         for f in fields:
@@ -447,7 +447,7 @@ def quick(d: Driver, dialog: Dialog, date: str | None) -> Outcome:
             d.press(wizard, WIZARD_NEXT,
                     lambda: any(w.hwnd == wizard and w.text == nxt
                                 for w in d.h.windows("dialogs")), f"show {nxt!r}", own)
-    d.s.check_no_dialog()
+    d.interruptions(0.5, set())       # View Data, if Response found errors in the section
     if date:
         set_date(d, date)
     return Outcome(True, d.changes(read))
@@ -478,7 +478,7 @@ def form(d: Driver, dialog: Dialog) -> Outcome:
         d.gone(dlg)
         return Outcome(False)
     d.press(dlg, IDOK, lambda: d.h.ask(f"alive {dlg}") == "0", f"close {dialog.title!r}", {dlg})
-    d.s.check_no_dialog()
+    d.interruptions(0.5, set())
     # Read back what Response kept.
     dlg = d.open(dialog.menu, dialog.title)
     container = d.page(dlg, page.title) if dialog.kind == "sheet" else dlg
@@ -557,7 +557,7 @@ def listed(d: Driver, dialog: Dialog, action: str | None, name: str | None) -> O
         if renamed and renamed in after:
             name = renamed
     d.press(dlg, IDOK, lambda: d.h.ask(f"alive {dlg}") == "0", f"close {dialog.title!r}", {dlg})
-    d.s.check_no_dialog()
+    d.interruptions(0.5, set())
     if action != "delete":
         dlg = d.open(dialog.menu, dialog.title)
         container = d.page(dlg, page.title)

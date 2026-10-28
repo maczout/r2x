@@ -1,0 +1,24 @@
+define quick
+r2x.r2t
+Column
+
+50
+
+
+None
+Circular
+600
+12
+
+30M
+
+
+
+Hoop
+
+
+300
+
+
+
+quit

@@ -1,0 +1,8 @@
+open r2x.r2t
+define long add web
+2
+
+15M
+300
+
+quit

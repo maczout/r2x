@@ -23,7 +23,10 @@ python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/Newbeam.r2x.txt --re
     --response-dir Response
 python -m r2x.worker tests/reference/newbeam/input.r2t /tmp/shear.r2x.txt --increment=0,1,1 \
     --more-detail 2 --response-dir Response
-R2X_RESPONSE_DIR=Response pytest        # includes the end-to-end Newbeam tests
+python -m r2x.worker define quick --out /tmp/new.r2t --report /tmp/new.r2x.html \
+    --response-dir Response               # one define step: questions on stdout (JSON lines)
+python tests/define_driver.py long add web -- @in=$PWD/x.r2t @out=$PWD/x.r2t number=2 bar=15M
+R2X_RESPONSE_DIR=$PWD/Response pytest   # includes the end-to-end Newbeam tests
 ```
 
 The first run creates a Wine prefix in `~/.cache/r2x/prefix` and builds the helper there.
@@ -98,6 +101,38 @@ it once at build time (`python -m r2x.worker.prefix`). It does two things beyond
   (εx, φ) as Symbol-font characters at those codes; without the map they are boxes. Only the
   report's pictures change. It needs fontTools and Wine's fonts; without them the runner notes
   that the Greek letters will be boxes and carries on.
+
+## r2x define (0.4.0)
+
+`python -m r2x.worker define NOUN [ACTION [NAME]] [--input FILE] --out FILE [--report HTML]
+[--date YYYY/MM/DD] [--units U]` is one define step (`src/r2x/worker/define.py`); `--show` only
+reads the dialog's values, and `--screen CAPTION` opens the file and rewrites the report with
+its input screen (and with `--out`, saves it there first: `save`, `undo`, `open` in a
+session). It writes questions to stdout and reads answers on stdin, one JSON object per line
+(`src/r2x/ask.py`); end of input stops it without saving. `docs/define.md` has the details.
+
+- **The catalogue**, `src/r2x/dialogs.json` (read by `r2x/catalogue.py`): each dialog's menu
+  command, title, kind (wizard, sheet, dialog, list) and fields in order, with their control
+  IDs, label and unit controls. The worker reads labels and units from the dialog as it asks.
+  `tests/test_define.py` checks every control ID against `docs/r2k-dialogs.txt`.
+- **The worker's `Driver`** reads a field, asks, sets it only if the answer differs, and after
+  every action passes on any dialog Response has opened (`interruptions`, `handle`): Yes/No
+  questions, messages, the Reinforcement Types list (its rows are `rebar.dat`'s lines, so a bar
+  is picked by its row), View Data. A dialog that is not recognised at once is read again for a
+  moment (Response may still be building it) before it is an error.
+- **The command line side** (`r2x/define.py`: the prompter and `run_step`; `r2x/shell.py`: the
+  session) is standard library only, like the rest of the client.
+- **Tests:** `tests/test_define.py` without Wine (the catalogue, answers, the docker command,
+  the command line and the session against the fake docker); under Wine
+  `tests/test_define_wine.py` (every dialog, through `tests/define_driver.py`, which answers by
+  field key), `tests/test_session_wine.py` (define, solve, undo through the command line) and
+  `tests/test_define_cases_wine.py` (the reference cases, `tests/reference/define`, against the
+  files made by hand on Windows once they are there). `python tools/define_survey.py` prints the
+  dialogs' table in `docs/define.md`; `python tools/define_cases.py` writes the reference cases'
+  `session.txt` and `README.md` from `cases.json`.
+
+The fake docker passes a define step's stdin and stdout through to the real worker in wine
+mode; in fake mode it asks one question (Title).
 
 ## Pictures for the report
 

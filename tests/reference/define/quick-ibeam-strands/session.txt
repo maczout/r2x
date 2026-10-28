@@ -1,0 +1,29 @@
+define quick
+r2x.r2t
+I-girder
+
+60
+
+
+
+I-Beam
+600
+1000
+150
+150
+200
+450
+2
+
+15M
+2
+
+15M
+Open Stirrup
+
+
+400
+
+12
+
+quit

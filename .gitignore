@@ -4,6 +4,11 @@
 # r2x output
 *_r2x/
 
+# r2x define's reference checks: r2x's side, made on each run (tests/reference/define)
+/tests/reference/define/*/r2x.*
+/tests/reference/define/*/r2x-session.log
+/tests/reference/define/check-results.txt
+
 # Python
 __pycache__/
 *.py[cod]

@@ -4,7 +4,9 @@
 in r2x 0.2.0 (2026-10-26). Shear, loads as N,M,V, `--more-detail` and the slimmer report in r2x
 0.3.0 (2026-10-27), implemented ahead of the Windows reference captures. Phases 3 to 5, *All
 detail views* and *Shear and More Detail* below record how. `r2x solve --help` matches the text
-below plus one note, and `tests/test_cli.py` keeps them in step.
+below plus one note, and `tests/test_cli.py` keeps them in step. `r2x define`, `r2x show` and
+the session (`r2x` alone) in r2x 0.4.0 (2026-10-28, under Wine): *Defining a section*, at the
+end, and `docs/define.md`.
 
 A stage number past the last stage is a usage error (exit status 2), found once the solve has
 given the stage count. With several inputs, the exit status is the most serious outcome: 1, then
@@ -364,3 +366,45 @@ how r2x 0.3.0 follows from it. Checked on Windows on 2026-10-27 with three hand-
   signed zero in those two exports only. Response's Save As stores the load increments in
   `<sectloading>` as `MN` (axial), `MM` (moment) and `MV` (shear), each only when it differs
   from the default (0, 1 and 0); solving the saved files reproduces the captures.
+
+## Defining a section (0.4.0)
+
+Planned in the Claude Doc "r2x define and the r2x session — plan" (2026-10-27); built under
+Wine on 2026-10-28. How a step works, every dialog's fields and what was found in Response are
+in `docs/define.md`. The decisions:
+
+- **`define` is always the verb, a dialog the noun**, at the session's prompt and on the command
+  line alike: `define quick`, `define long add web`. The nouns: `quick`, `general`, `materials`,
+  `section`, `long`, `trans`, `tendons` (`add`, `modify` or `delete`, then the item's name, asked
+  if left out), `loads`, `units`, `factors`.
+- **Questions only.** A define asks its dialog's fields, in the dialog's order and words, each
+  with the value the dialog shows now; Enter keeps it, and a field is set only when the answer
+  differs. No options give a define's values: automation writes the input file elsewhere and
+  hands it to `solve`. (Answers can be piped, one per line, which the tests use.)
+- **Response checks the values**, and its own questions and messages are passed on in its
+  words; r2x checks only that a number is a number and a choice one of the choices.
+- **The file chain.** Each step is one container run: Response opens the file, one dialog is
+  set, and Response saves the file back (Save As). r2x never reads or writes the XML.
+- **The file is the section; arguments are the analysis.** `solve` takes `r2x solve`'s options
+  for the session's file and never changes it. Loads, units and factors can go either way.
+- **The report is the preview**: every step rewrites `NAME.r2x.html` (the input screen after
+  Save As, the dialog as set) and the page reloads itself. In a session `solve` always writes
+  the report (with the outputs); `r2x solve` alone keeps it opt-in. A define after a solve takes
+  the outputs out.
+- **Beside a section** there are only `NAME.r2t`, its report and, once solved, its record. Each
+  solve replaces the record, whose header has the input's SHA-256 and the settings, so `show`
+  can say whether it is a solve of the file as it is.
+- **Undo** is one step back, inside a session only; the copy is held by the session.
+- **The date:** a new section gets today's date on the Windows side (Edit General's date);
+  a way to set another comes later.
+- **The file name** is asked by `define quick` in a session, defaulting to the session's file or
+  to Response's title for a new section (`new-cross-section.r2t`).
+
+```
+usage: r2x define NOUN [ACTION [NAME]] FILE
+usage: r2x show [NOUN] FILE
+r2x                     (a session: define, open, save, show, solve, undo, report, help, quit)
+```
+
+Exit status of `define` and `show`: 0 done (saved, or nothing changed), 1 failed (Response's
+message, or the person stopped answering: nothing is saved), 2 usage error.

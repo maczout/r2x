@@ -472,6 +472,8 @@ int main(void) {
             if (m) {
                 char txt[256];
                 GetWindowTextA(m, txt, sizeof txt);
+                /* a section's title can have several lines (Edit General's comments) */
+                for (char *p = txt; *p; p++) if (*p == '\n' || *p == '\r') *p = ' ';
                 printf("ok %lx\t%s\n", (unsigned long)(ULONG_PTR)m, txt);
             } else printf("err no main window\n");
         } else if (!m && strcmp(cmd, "dialogs") && strcmp(cmd, "kids")) {

@@ -97,6 +97,18 @@ def test_quick_t_beam_with_a_bar_response_does_not_know(tmp_path):
     assert r.done["title"] == "Pier cap"
 
 
+def test_quick_passes_on_responses_own_corrections(tmp_path):
+    """Response takes a negative width and makes it positive, saying so in its View Data
+    window after Finish: r2x shows that, and the section is as Response made it."""
+    out = tmp_path / "neg.r2t"
+    r = define(["quick"], {"dim1": "-100"}, out=out, date=NEWBEAM_DATE)
+    assert r.status == 0, r.stderr
+    (said,) = r.said
+    assert said.startswith("Response reports: Errors in defining Section")
+    assert "Negative width found" in said and "Made positive" in said
+    assert attrs(out.read_text(), "shapesection")[0]["par1"] == "100.0"
+
+
 def test_quick_in_us_units_before_it(tmp_path):
     """A session's units come first: Quick Define's defaults are then US ones."""
     out = tmp_path / "us.r2t"

@@ -1,0 +1,12 @@
+open r2x.r2t
+define general
+Newbeam edited
+by r2x define
+JM
+
+n
+300
+
+n
+250
+quit

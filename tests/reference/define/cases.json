@@ -1,0 +1,57 @@
+{
+  "about": [
+    "r2x define's reference cases: each is made by hand in Response-2000 on Windows (hand.r2t)",
+    "and by r2x from the same answers (session.txt, a script for the r2x session). The two",
+    "files must be the same bytes; for a Quick Define case, made on the same day, or the same",
+    "but for the date. from: newbeam starts from tests/reference/newbeam/input.r2t, opened in",
+    "Response (so its layers are sorted by depth, as in r2x's file chain); null starts from a",
+    "fresh Response. steps: each define with its answers by field key (dialogs.json); fields",
+    "not listed are left as Response shows them (Enter). tools/define_cases.py writes each",
+    "case's session.txt and README.md from this file."
+  ],
+  "cases": [
+    {"name": "quick-tbeam", "from": null, "about": "Quick Define: a T-beam with two layers of bottom bars",
+     "steps": [{"define": "quick", "answers": {
+       "title": "T-beam", "analysis-by": "JM", "fc": "40", "fy": "450", "fyt": "420",
+       "prestress": "None", "shape": "T-Beam", "dim1": "900", "dim2": "1200", "dim3": "300",
+       "dim4": "200", "top-number": "4", "bottom-number": "6", "bottom-bar": "30M",
+       "stirrup-type": "Closed Stirrup", "stirrup-bar": "15M", "spacing": "300", "cover": "50"}}]},
+    {"name": "quick-column", "from": null, "about": "Quick Define: a circular column with hoops",
+     "steps": [{"define": "quick", "answers": {
+       "title": "Column", "fc": "50", "prestress": "None", "shape": "Circular", "dim1": "600",
+       "top-number": "12", "top-bar": "30M", "stirrup-type": "Hoop", "spacing": "300"}}]},
+    {"name": "quick-ibeam-strands", "from": null, "about": "Quick Define: an I-beam with 12 strands",
+     "steps": [{"define": "quick", "answers": {
+       "title": "I-girder", "fc": "60", "shape": "I-Beam", "dim1": "600", "dim2": "1000",
+       "dim3": "150", "dim4": "150", "dim5": "200", "dim6": "450", "top-number": "2",
+       "top-bar": "15M", "bottom-number": "2", "bottom-bar": "15M",
+       "stirrup-type": "Open Stirrup", "spacing": "400", "strands": "12"}}]},
+    {"name": "add-delete", "from": "newbeam", "about": "Add a layer, then delete it: Newbeam as opened and saved",
+     "steps": [{"define": "long add web", "answers": {"number": "2", "bar": "15M", "depth": "300"}},
+               {"define": "long delete web", "answers": {}}]},
+    {"name": "general", "from": "newbeam", "about": "Edit General: title, comments, crack spacing, moment axis",
+     "steps": [{"define": "general", "answers": {
+       "title": "Newbeam edited", "comments": "by r2x define", "analysis-by": "JM",
+       "auto-long-spacing": "n", "long-spacing": "300", "centroidal-axis": "n",
+       "moment-axis": "250"}}]},
+    {"name": "materials", "from": "newbeam", "about": "Material Properties: f'c and fpu (fy left as Detailed)",
+     "steps": [{"define": "materials", "answers": {"fc": "45", "fpu": "1700"}}]},
+    {"name": "section", "from": "newbeam", "about": "Concrete Section: Newbeam as a T-beam",
+     "steps": [{"define": "section", "answers": {"shape": "T-Beam", "dim1": "600", "dim3": "250",
+                                                  "dim4": "150"}}]},
+    {"name": "long-add", "from": "newbeam", "about": "Longitudinal Reinforcement: add a layer web",
+     "steps": [{"define": "long add web", "answers": {"number": "2", "bar": "15M", "depth": "300"}}]},
+    {"name": "long-modify", "from": "newbeam", "about": "Longitudinal Reinforcement: 4 bars in bot (its depth, shown as 64, becomes 64.00)",
+     "steps": [{"define": "long modify bot", "answers": {"number": "4"}}]},
+    {"name": "trans-modify", "from": "newbeam", "about": "Transverse Reinforcement: closed stirrups at 200",
+     "steps": [{"define": "trans modify stirrup", "answers": {"spacing": "200", "bar-type": "Closed Stirrup"}}]},
+    {"name": "tendons-add", "from": "newbeam", "about": "Tendons: add 4 strands at 100 mm",
+     "steps": [{"define": "tendons add t1", "answers": {"number": "4", "strand": "S13",
+                                                        "prestrain": "6.5", "depth": "100",
+                                                        "slope": "0", "type": "Low Relax"}}]},
+    {"name": "loads", "from": "newbeam", "about": "Sectional Loads: N = -2000 kN, increment 0,1,1",
+     "steps": [{"define": "loads", "answers": {"axial": "-2000", "shear-increment": "1"}}]},
+    {"name": "units", "from": "newbeam", "about": "Preferences: US Customary",
+     "steps": [{"define": "units", "answers": {"units": "US Customary"}}]}
+  ]
+}

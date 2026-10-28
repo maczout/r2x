@@ -214,6 +214,7 @@ def test_define_usage_errors(tmp_path):
     for argv, msg in ((["define", "quick"], "comes last"),
                       (["define", "beam", "x.r2t"], "no dialog 'beam'"),
                       (["define", "general", "missing.r2t"], "no file missing.r2t"),
+                      (["define", "quick", "nope/x.r2t"], "no folder nope"),
                       (["show", "quick", "x.r2t"], "no file")):
         code, _, err = r2x(*argv, cwd=tmp_path)
         assert code == 2 and msg in err, err

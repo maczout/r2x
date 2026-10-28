@@ -1,0 +1,10 @@
+open r2x.r2t
+define tendons add t1
+4
+
+S13
+6.5
+100
+0
+Low Relax
+quit

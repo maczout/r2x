@@ -155,6 +155,9 @@ class Shell:
         name = (name or "").strip() or default
         target = self.path(name if Path(name).suffix.lower() in SECTION_SUFFIXES
                            else name + ".r2t")
+        if not target.parent.is_dir():
+            self.p.print(f"  no folder {target.parent}")
+            return
         if target.exists() and target != self.file:
             ok, a = self.p.answer(Question("replace", f"{target.name} exists: replace its "
                                            "section", "yesno", "n"))
@@ -232,6 +235,9 @@ class Shell:
             return
         target = self.path(words[0] if Path(words[0]).suffix.lower() in SECTION_SUFFIXES
                            else words[0] + ".r2t")
+        if not target.parent.is_dir():
+            self.p.print(f"  no folder {target.parent}")
+            return
         if target.exists():
             ok, a = self.p.answer(Question("replace", f"{target.name} exists: replace it",
                                            "yesno", "n"))

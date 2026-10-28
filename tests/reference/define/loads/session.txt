@@ -1,0 +1,9 @@
+open r2x.r2t
+define loads
+-2000
+
+
+
+
+1
+quit

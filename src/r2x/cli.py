@@ -274,6 +274,8 @@ def cmd_define(a) -> int:
         step = parse_step(words)
     except CatalogueError as e:
         raise UsageError(str(e))
+    if not file.parent.is_dir():
+        raise UsageError(f"no folder {file.parent} for {file.name}")
     prompter = Prompter()
     command = step_command(a.image)
     report = report_for(file)

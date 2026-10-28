@@ -1,0 +1,27 @@
+define quick
+r2x.r2t
+T-beam
+JM
+40
+450
+420
+None
+T-Beam
+900
+1200
+300
+200
+4
+
+
+6
+
+30M
+Closed Stirrup
+
+15M
+300
+50
+
+
+quit

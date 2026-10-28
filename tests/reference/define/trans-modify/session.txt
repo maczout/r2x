@@ -1,0 +1,11 @@
+open r2x.r2t
+define trans modify stirrup
+
+200
+
+
+
+
+Closed Stirrup
+
+quit

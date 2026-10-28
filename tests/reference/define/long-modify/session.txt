@@ -1,0 +1,9 @@
+open r2x.r2t
+define long modify bot
+
+4
+
+
+
+
+quit

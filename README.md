@@ -12,6 +12,10 @@ export in four detail views, **General**, **Cracking**, **Reinforcement** and **
 charts in all). Input is any file Response-2000 opens (`.r2t`, `.rsp`), or none, which gives
 the section File > New gives. Not M–N, M–V or N–V interaction, and not full-member analysis.
 
+**Defining a section** (0.4.0): `r2x define` goes through one of Response's own Define dialogs
+question by question and lets Response save the file; `r2x` alone is a session in which a
+section is defined in steps and then solved, without opening Response.
+
 ```
 PS> r2x solve .\Newbeam.r2t --report
 [Newbeam] solved: 60 stages, peak 56 -> Newbeam.r2x.txt, Newbeam.r2x.html (6.2 s)
@@ -87,6 +91,57 @@ r2x solve .\Newbeam.r2t --stdout | py parse.py   # the record on stdout, no file
 `r2x solve --help` has the details. `docs/cli.md` is the full specification, with the decisions
 behind it and what was confirmed in Response on Windows.
 
+## Defining a section
+
+```
+PS> r2x
+r2x> define quick
+  File name [new-cross-section.r2t]: pier-cap.r2t
+  Title [New Cross Section]: Pier cap
+  Analysis By []: JM
+  Concrete Cylinder Strength (MPa) [35.0]: 40
+  ...
+    1) Rectangle  2) Circular  3) T-Beam  4) I-Beam
+  Shape [Rectangle]: t
+  btop (mm) [250]: 900
+  h (mm) [600]: 1200
+  ...
+  set: Title Pier cap; Analysis By JM; Concrete Cylinder Strength 40.0 MPa; Shape T-Beam; ...
+  saved pier-cap.r2t, report pier-cap.r2x.html updated (6.1 s)
+r2x> define long add web
+r2x> define loads
+r2x> solve --increment 0,1,1
+r2x> undo
+r2x> quit
+```
+
+- **`define NOUN`** is one of Response's dialogs: `quick` (Quick Define: a new section),
+  `general`, `materials`, `section`, `long`, `trans` and `tendons` (each `add`, `modify` or
+  `delete NAME`), `loads`, `units`, `factors`. The questions are the dialog's fields, in its
+  order and in its words, each showing the value the dialog holds now: **Enter keeps it**, and
+  a field is touched only when the answer differs. `?` explains a question; `help define NOUN`
+  lists them.
+- **Response checks the values.** Its own questions and messages come through word for word
+  (an fy that would overwrite detailed material properties, a layer name that exists), and a
+  bar designation it does not know brings up its list of bars as a question.
+- **The file is the section; arguments are the analysis.** Each step opens the file in
+  Response, sets one dialog and saves it back with Response's Save As; `solve` takes r2x
+  solve's options and never changes the file. Loads, units and factors can go either way.
+- **The report is the preview.** Every step rewrites `NAME.r2x.html` beside the file with
+  Response's input screen and the dialog as set, and the page reloads itself, so one browser
+  tab follows the session (the session opens it the first time). After a `solve` it has the
+  outputs too, until the next define takes them out.
+- **Session commands:** `define`, `open FILE`, `save [FILE]`, `show [NOUN]` (the file, its
+  report and whether its record is a solve of it; or a dialog's values), `solve [options]`,
+  `undo` (one step back), `report`, `help`, `quit`. Nothing besides the file, its report and its
+  record is written.
+- **On the command line**, each define names its file: `r2x define quick pier-cap.r2t` makes
+  it, `r2x define long add web pier-cap.r2t` opens it, asks and saves it back, and
+  `r2x show long pier-cap.r2t` shows a dialog's values.
+
+Each step is one container run, about 3 to 7 s. `docs/define.md` has how it works, every
+dialog's fields and what was found in Response.
+
 ## How it works
 
 ```
@@ -101,6 +156,10 @@ the clipboard, paging through the load stages and checking each one against the 
 At each stage it goes through the detail views with Response's view list. Every container has its own
 display and Wine prefix, so several run at once (`--parallel`). `docs/development.md` has the
 details and how to run it without Docker.
+
+`r2x define` runs the container once per step with its stdin open (`docker run -i`): the worker
+opens the section's dialog and sends each question to the command line, which prompts and sends
+the answer back.
 
 ## Verification
 
@@ -133,6 +192,13 @@ r2x.
 loadings (Newbeam under N and V, Response's own shear examples) rely on r2x's own checks under
 Wine. With shear, the strain profile can match several stages near the peak, and then r2x tells
 them apart by their exports (`docs/cli.md`, *Shear and More Detail*).
+
+**Defining a section (0.4.0)** is checked under Wine so far: Enter through every question of
+`define quick` gives Newbeam's `input.r2t` byte for byte (dated as Newbeam is), adding a layer
+and deleting it again leaves a file as it was, and each dialog's answers land where Response
+saves them (`tests/test_define_wine.py`). The Windows references, the same thirteen sections
+made by hand in Response and by an r2x session (`tests/reference/define`), are still to be
+made; `check.ps1` there compares them.
 
 Two heuristics are worth knowing. Wine gives no "solve finished" signal, so the solve counts as
 finished once the bottom control curve has not changed for 1 s and Response's process is idle.

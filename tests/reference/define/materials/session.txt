@@ -1,0 +1,6 @@
+open r2x.r2t
+define materials
+45
+
+1700
+quit
