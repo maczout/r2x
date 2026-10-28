@@ -58,14 +58,30 @@ def solve(tmp_path, stages, name="Newbeam", report=None, views=ALL_VIEWS, settin
     return rec
 
 
-def assert_matches(rec, case):
+# A number that rounds to zero can print with a minus sign under Wine and without one on Windows,
+# or the other way round: floating-point noise in the last bit. Found in two exports of
+# newbeam-shear at stage 20 (docs/cli.md, *Shear and More Detail*); allowed only where listed.
+SIGNED_ZERO = re.compile(rb"-(?=0\.0+\s)")
+
+
+def unsigned_zeros(data: bytes) -> bytes:
+    return SIGNED_ZERO.sub(b"", data)
+
+
+def assert_matches(rec, case, signed_zeros=()):
     """Every hand-captured export of the case at the record's stages and in its views is in the
-    record, byte for byte, and each detail stage has the charts of the record's views."""
+    record, byte for byte, and each detail stage has the charts of the record's views.
+    Sections in signed_zeros may differ from the reference by the sign of zeros alone."""
     keys = [c.key for c in record_order(parse_views(rec.header["views"]))]
     ref = reference_sections(case, rec.stages(), keys)
     for name, body in ref.items():
-        assert rec.sections.get(name) == body, name
-    controls = [n for n in ref if n.startswith("control/")]
+        if name in signed_zeros:
+            assert unsigned_zeros(rec.sections.get(name, b"")) == unsigned_zeros(body), name
+        else:
+            assert rec.sections.get(name) == body, name
+    # the record's control charts are in screen order (top first), the reference's by file name
+    controls = [n for n in rec.sections if n.startswith("control/")]
+    assert sorted(controls) == [n for n in ref if n.startswith("control/")]
     assert list(rec.sections) == controls + [f"stage/{i}/{k}" for i in rec.stages() for k in keys]
 
 
@@ -154,10 +170,12 @@ def test_a_shear_example_solves(tmp_path):
     assert len(rec.sections) == 2 + CHARTS
 
 
-@pytest.mark.parametrize("case", ["newbeam-axial", "newbeam-axial-only", "newbeam-csa"])
+@pytest.mark.parametrize("case", ["newbeam-axial", "newbeam-axial-only", "newbeam-csa",
+                                  "newbeam-shear", "newbeam-shear-only"])
 def test_saved_settings_match_references(tmp_path, case):
     """Response's own Save As stores the case's settings (loads, factors) in saved.r2t, and
-    solving that file gives the hand-captured exports. See tests/reference/<case>/README.md."""
+    solving that file gives the hand-captured exports at the peak. See
+    tests/reference/<case>/README.md."""
     out = tmp_path / f"{case}.r2x.txt"
     run_job(REF / case / "saved.r2t", out, Path(RESPONSE), PREFIX, stages=PEAK)
     assert_matches(record.read(out), case)
@@ -236,10 +254,12 @@ def test_new_section_records_the_template(tmp_path):
 
 
 # -- shear and More Detail (r2x 0.3.0) -----------------------------------------------------------
-# No hand captures yet (tests/reference gains them in Step 3 of the 0.3.0 plan); these rely on
-# r2x's own checks: every stage identified from its strain profile, recurring charts the same
-# bytes in every view, and each solve's numbers as found under Wine on 2026-10-27.
+# Hand captures on Windows (2026-10-27): newbeam-shear (every view at stages 20 and 30),
+# newbeam-shear-only (every view at 16) and newbeam-moredetail (every view at 224). The other
+# solves rely on r2x's own checks: every stage identified from its strain profile, recurring
+# charts the same bytes in every view, and each solve's numbers as found under Wine.
 SHEAR = Settings(increment=(0, 1, 1))
+SHEAR_AT_20 = {"stage/20/shear_strain", "stage/20/shear_stress"}     # signed zeros (above)
 
 
 def test_shear_with_moment(tmp_path):
@@ -250,10 +270,12 @@ def test_shear_with_moment(tmp_path):
     assert (h["increment"], h["stage-count"], h["peak-stage"]) == ("0.00,1.00,1.00", "43", "30")
     assert list(peak.sections)[:2] == ["control/shear_gxy", "control/moment_phi"]
     assert len(peak.sections) == 2 + CHARTS and not [e for e in events if e.kind == "note"]
+    assert_matches(peak, "newbeam-shear")
     every = solve(tmp_path, ALL, "all", settings=SHEAR)
     assert every.stages() == list(range(43)) and len(every.sections) == 2 + 43 * CHARTS
     for name, body in peak.sections.items():
         assert every.sections[name] == body, name
+    assert_matches(every, "newbeam-shear", signed_zeros=SHEAR_AT_20)     # stages 20 and 30
     gxy = export_points(every.control("shear_gxy"))
     assert max(range(43), key=lambda i: gxy[i][1]) == 30          # the peak shear
 
@@ -268,6 +290,9 @@ def test_shear_alone(tmp_path):
     assert list(rec.sections)[:2] == ["control/shear_gxy", "control/shear_ex"]
     assert not [n for n in rec.sections if n.endswith("/shear_strain")]
     assert rec.stage(1, "longitudinal_strain") == rec.stage(9, "longitudinal_strain")
+    assert_matches(rec, "newbeam-shear-only")
+    assert_matches(solve(tmp_path, PEAK, "peak", settings=Settings(increment=(0, 0, 1))),
+                   "newbeam-shear-only")                                # every view
 
 
 def test_a_peak_its_strain_profile_cannot_tell(tmp_path):
@@ -298,9 +323,10 @@ def test_more_detail(tmp_path):
     """Each press puts a stage between every two up to the peak, keeping the others byte for
     byte; Response stops at 327 stages."""
     plain = solve(tmp_path, PEAK, "plain", views=NO_SHEAR)
-    twice = solve(tmp_path, PEAK, "twice", views=NO_SHEAR, more_detail=2)
+    twice = solve(tmp_path, PEAK, "twice", more_detail=2)
     h = twice.header
     assert (h["more-detail"], h["stage-count"], h["peak-stage"]) == ("2", "228", "224")
+    assert_matches(twice, "newbeam-moredetail")
     old = plain.control("moment_phi").split(b"\r\n")
     new = iter(twice.control("moment_phi").split(b"\r\n"))
     assert all(any(line == other for other in new) for line in old)    # in order, unchanged

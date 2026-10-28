@@ -1,0 +1,20 @@
+  Data from Graph
+  ==============
+
+  Title		: Long. Average Bond
+
+  X Axis Title	: Bond Stress (MPa)
+  Y Axis Title	: Beam Depth (mm)
+
+   Bond Stress (MPa)		Beam Depth (mm)
+Line type : 0
+   0.000   	   300.000
+   0.000   	   -248.700
+   1.617   	   -248.700
+   1.617   	   -223.500
+   0.000   	   -223.500
+   0.000   	   229.200
+   0.392   	   229.200
+   0.392   	   248.700
+   0.000   	   248.700
+   0.000   	   -300.000

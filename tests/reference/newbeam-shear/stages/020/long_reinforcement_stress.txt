@@ -1,0 +1,20 @@
+  Data from Graph
+  ==============
+
+  Title		: Long. Reinforcement Stress
+
+  X Axis Title	: Stress (MPa)
+  Y Axis Title	: Beam Depth (mm)
+
+   Stress (MPa)		Beam Depth (mm)
+Line type : 0
+   0.000   	   300.000
+   0.000   	   -248.700
+   109.760   	   -248.700
+   109.760   	   -223.500
+   0.000   	   -223.500
+   0.000   	   229.200
+   -46.077   	   229.200
+   -46.077   	   248.700
+   0.000   	   248.700
+   0.000   	   -300.000

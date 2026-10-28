@@ -106,17 +106,22 @@ details and how to run it without Docker.
 
 Each reference case was solved in Response-2000 on Windows and its charts copied by hand
 (`tests/reference/`). r2x's record matches every one byte for byte: the control charts at every
-stage and the five No Shear charts at the peak in every case, and for Newbeam all 21 charts of
-the four views at the peak and 20 stages below it.
+stage and the five No Shear charts at the peak in every case, and all 21 charts of the four
+views for Newbeam at the peak and 20 stages below it and for the shear and More Detail cases.
+One known exception: two exports of the moment-and-shear case at stage 20 each have one zero
+printed with the opposite sign (`-0.0000` against `0.0000`), floating-point noise under Wine.
 
 | Case | Settings | Stages, peak |
 |---|---|---|
 | Newbeam (250 × 600 rectangle, 3–25M / 1–20M) | none: moment increment; every view at stages 56 and 36 | 60, peak 56 |
 | Newbeam, US units | `--units us` | 60, peak 56 |
 | Newbeam, CSA factors | `--factors csa` | 57, peak 46 |
-| Newbeam, axial load | `--initial -2000,0` | 46, peak 37 |
-| Newbeam, axial increment only | `--increment -1,0` | 35, peak 22 |
+| Newbeam, axial load | `--initial=-2000,0,0` | 46, peak 37 |
+| Newbeam, axial increment only | `--increment=-1,0,0` | 35, peak 22 |
 | No input (File > New) | none | 60, peak 56 |
+| Newbeam, moment and shear (M/V = 1 m) | `--increment 0,1,1`; every view at stages 30 and 20 | 43, peak 30 |
+| Newbeam, shear alone | `--increment 0,0,1`; every view | 52, peak 16 |
+| Newbeam, More Detail twice | `--more-detail 2`; every view | 228, peak 224 |
 
 Other stages, and other cases' views, rely on r2x's own checks: each stage is identified from its strain
 profile against the control curves before it is copied, and Longitudinal Strain, which every
@@ -124,11 +129,10 @@ view shows, must export the same bytes in each view, as must any other chart two
 eye against Windows. Rerun the tests (`docs/development.md`) on any change to Wine, the image or
 r2x.
 
-**Shear and More Detail (0.3.0)** rely on those checks alone so far, under Wine, for Newbeam
-under several loadings and Response's own shear examples; hand captures on Windows
-(`newbeam-shear`, `newbeam-shear-only`, `newbeam-moredetail`) are next. With shear, the strain
-profile can match several stages near the peak, and then r2x tells them apart by their exports
-(`docs/cli.md`, *Shear and More Detail*).
+**Shear and More Detail (0.3.0)** are checked on Windows by the last three cases; other
+loadings (Newbeam under N and V, Response's own shear examples) rely on r2x's own checks under
+Wine. With shear, the strain profile can match several stages near the peak, and then r2x tells
+them apart by their exports (`docs/cli.md`, *Shear and More Detail*).
 
 Two heuristics are worth knowing. Wine gives no "solve finished" signal, so the solve counts as
 finished once the bottom control curve has not changed for 1 s and Response's process is idle.

@@ -273,8 +273,8 @@ Found under Wine on 2026-10-26, with Newbeam at its peak; how r2x 0.2.0 follows 
 
 Found under Wine on 2026-10-27 (Step 1 of the 0.3.0 plan), with Newbeam under several loadings,
 a T-section variant of it, and Response's own examples (Marshall, se100am69, dm-n1n, Liping LB1);
-how r2x 0.3.0 follows from it. Not yet checked on Windows: the hand-captured references
-(`newbeam-shear`, `newbeam-shear-only`, `newbeam-moredetail`) come next.
+how r2x 0.3.0 follows from it. Checked on Windows on 2026-10-27 with three hand-captured cases
+(last bullet).
 
 - **Control charts** depend on the increment, not on the constant loads:
 
@@ -337,7 +337,9 @@ how r2x 0.3.0 follows from it. Not yet checked on Windows: the hand-captured ref
 - **Its limit is a number of stages, not of presses**: every case stopped at 327 stages (Newbeam
   after 3 presses, Newbeam at M/V = 1 m and Liping after 4, V alone after 5), the last press
   adding fewer. A press past it does nothing visible: no message, and the curves stay the same,
-  which is how r2x tells.
+  which is how r2x tells. On Windows the menu item is greyed out once the limit is reached
+  (Newbeam, after the third press); r2x posts the command without opening the menu, and a
+  disabled command does nothing, so the outcome is the same.
 - **The stage on screen stays the peak**, which can move to a new stage: Liping's fourth press
   moved it from stage 256 (246.48 kN·m) to 322 (246.65 kN·m), a new stage beside it.
 - **Time.** A press takes 0.3 to 1.2 s; the finish signal covers it. Newbeam with an increment of
@@ -349,3 +351,16 @@ how r2x 0.3.0 follows from it. Not yet checked on Windows: the hand-captured ref
   fy and fpu, and its Materials Page needs a second tab for the bars. Outputs: Response's window
   in each captured view at the peak; the control charts are in every one. Without the per-chart
   Copy Chart Picture, Newbeam with `--report` at the peak takes 9.7 s in the cloud.
+- **On Windows** (2026-10-27, Response 1.9.7 on Windows 11): `tests/reference/newbeam-shear`
+  (0,1,1; every view at the peak, stage 30, and at stage 20), `newbeam-shear-only` (0,0,1; every
+  view at the peak, 16) and `newbeam-moredetail` (More Detail twice; every view at the peak,
+  224). The control charts, stage counts, peaks, opening view and status bars are as found under
+  Wine, and so is every export byte for byte, with one exception: at `newbeam-shear`'s stage 20,
+  one value that prints as zero has the opposite sign in each of Shear Strain (`-0.0000` under
+  Wine at −274.35 mm) and Shear Stress (`-0.0000` on Windows at −300 mm), floating-point noise
+  near the bottom of the section where shear is nil. The peak itself matches exactly, and
+  solving the same input twice under Wine gives the same bytes, so the noise is Wine's against
+  Windows', not run to run. r2x returns Response's bytes as they are; the Wine tests allow a
+  signed zero in those two exports only. Response's Save As stores the load increments in
+  `<sectloading>` as `MN` (axial), `MM` (moment) and `MV` (shear), each only when it differs
+  from the default (0, 1 and 0); solving the saved files reproduces the captures.

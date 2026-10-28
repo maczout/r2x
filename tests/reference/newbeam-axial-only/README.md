@@ -31,7 +31,7 @@ the −2.5 kNm is a numerical artifact of Response's solution. The curvature is 
 
 Response's own **Save As** after applying the loads: `<sectloading MN="-1.000" MM="0.000"/>`.
 Solving `saved.r2t` reproduces these exports byte for byte, as does `--increment -1,0` on
-`input.r2t` (r2x under Wine 9.0, 2026-10-25).
+`input.r2t` (`--increment=-1,0,0` since r2x 0.3.0) (r2x under Wine 9.0, 2026-10-25).
 
 ## Capture
 

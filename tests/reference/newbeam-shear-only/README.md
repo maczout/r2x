@@ -1,4 +1,4 @@
-# Newbeam, shear alone (to be captured)
+# Newbeam, shear alone
 
 Newbeam (`input.r2t`, the same file as `../newbeam/input.r2t`) under shear increasing from zero,
 with no moment and no axial load.
@@ -13,34 +13,33 @@ with no moment and no axial load.
 | Moment (kNm) | 0 | 0 |
 | Shear (kN) | 0 | 1 |
 
-## What r2x 0.3.0 finds under Wine (2026-10-27)
+## Exports
 
-`r2x solve input.r2t --increment 0,0,1`: 52 stages (0–51), peak **16**.
+Both control curves, 52 stages (0–51): `Control : Shear - |g_x_y` on top (`control/shear_gxy`)
+and `Control : Shear - |e_x` below (`control/shear_ex`), shear against εx, the strain at
+mid-depth. Every view's charts (21) at **stage 16**, the stage Response opens on after solving,
+in the **General** view: status bar V 217.7 kN (εx 0.038 mm/m on the control curve), identified
+by εx against Shear–εx.
 
-- Control charts: `Control : Shear - |g_x_y` on top (`control/shear_gxy`), `Control : Shear - |e_x`
-  below (`control/shear_ex`): shear against εx, the strain at mid-depth.
-- Response opens on the **General** view, at stage 16: V = 217.71 kN (εx 0.038 mm/m on the
-  control curve).
-- εx is 0 until the section cracks, so the Longitudinal Strain export is the same at stages 1
-  to 9; r2x tells them apart by Shear Strain.
+εx is 0 until the section cracks, so the Longitudinal Strain export is the same at stages 1 to
+9; r2x tells such stages apart by the General view's Shear Strain.
+
+r2x 0.3.0 under Wine 9.0 (2026-10-27) gives every file byte for byte.
+
+## `saved.r2t`
+
+Response's own **Save As** after setting the loads:
+`<sectloading MM="0.000" MV="1.000"/>`, the moment and shear increments. Response leaves out
+an increment that is at its default: axial 0, moment 1, shear 0. Solving `saved.r2t` reproduces
+these exports byte for byte (r2x 0.3.0 under Wine 9.0, 2026-10-27).
 
 ## Capture
 
-1. Open `input.r2t` in Response on Windows, set the loads above in **Loads → Sectional Loads**,
-   **Save As** `saved.r2t` (outside this folder, then copy it in), and **Solve → Sectional
-   Response**. Don't use More Detail and don't page.
-2. Screenshot the window with its status bar. Note the view it opens on and the status bar's V.
-3. In PowerShell, from this folder:
-   `powershell -ExecutionPolicy Bypass -File ..\capture.ps1`
-   It asks for both control charts, then every view's charts into `stages\peak`.
-4. Commit the files, or say where they are, and fill in the table below. Claude renames
-   `stages\peak` once its strain profile is matched to the control curves (εx against Shear–εx).
+The routine in `../README.md`, *Adding a case*, with every view.
 
 | Captured | Notes |
 |---|---|
-| Date | |
-| Windows version | |
-| Response version (Help → About) | |
-| View Response opened on | |
-| Status bar at the peak (V) | |
-| By | |
+| Date | October 27, 2026 |
+| Windows version | Windows 11 Pro |
+| Response | 1.9.7, `r2k.exe` SHA-256 `bbf4bc59…4e74` |
+| By | Jamie McIntyre |

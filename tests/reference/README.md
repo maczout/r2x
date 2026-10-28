@@ -3,8 +3,9 @@
 Each case is a folder holding the input `.r2t` and exports produced by Response-2000 running
 natively on Windows: `control/` for the control charts, `stages/NNN/` for the detail views'
 charts at stage NNN, one file per record key (`docs/raw-format.md`). Every case has the five No
-Shear charts at its peak; `newbeam` has every view's charts, at its peak (56) and at stage 36. These files are stored byte-for-byte (see `.gitattributes`); never edit or re-save
-them.
+Shear charts at its peak; `newbeam` has every view's charts at its peak (56) and at stage 36,
+and the shear and More Detail cases have every view's charts too. These files are stored
+byte-for-byte (see `.gitattributes`); never edit or re-save them.
 
 | Case | Settings applied by hand | Peak stage | `saved.r2t` reproduces it |
 |---|---|---|---|
@@ -14,9 +15,14 @@ them.
 | `newbeam-csa` | CSA material factors | 46 of 0–56 | yes |
 | `newbeam-us` | US Customary units | 56 of 0–59 | no: values rounded on save |
 | `newbeam-filenew` | no input: File > New, Quick Define's defaults | 56 of 0–59 | (no input file) |
-| `newbeam-shear` | increment 0,1,1 (M/V = 1 m); every view, peak and peak-10 | to be captured (Wine: 30 of 0–42) | |
-| `newbeam-shear-only` | increment 0,0,1; every view at the peak | to be captured (Wine: 16 of 0–51) | |
-| `newbeam-moredetail` | none, then More Detail twice; No Shear at the peak | to be captured (Wine: 224 of 0–227) | (More Detail is not saved) |
+| `newbeam-shear` | increment 0,1,1 (M/V = 1 m); every view, stages 20 and 30 | 30 of 0–42 | yes |
+| `newbeam-shear-only` | increment 0,0,1; every view | 16 of 0–51 | yes |
+| `newbeam-moredetail` | none, then More Detail twice; every view | 224 of 0–227 | (More Detail is not saved) |
+
+Under Wine r2x matches every file byte for byte, with one known exception: in `newbeam-shear` at
+stage 20, Shear Strain and Shear Stress each have one zero whose sign differs (`-0.0000`
+against `0.0000`), floating-point noise around zero. The Wine tests allow that for those two
+exports only.
 
 Cases with settings keep `input.r2t` as given and say in their README how the settings were
 applied. `saved.r2t`, where present, is Response's own Save As after applying them.
