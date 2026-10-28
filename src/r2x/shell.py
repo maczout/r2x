@@ -194,7 +194,8 @@ class Shell:
 
     def outcome(self, result: StepResult, what: str) -> bool:
         if result.status != SOLVED:
-            self.p.print(f"  {what} failed: {result.reason}")
+            stopped = result.reason.startswith("stopped")
+            self.p.print(f"  {result.reason}" if stopped else f"  {what} failed: {result.reason}")
             return False
         return True
 
