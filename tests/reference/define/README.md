@@ -1,10 +1,17 @@
 # r2x define: reference cases
 
 Thirteen sections, each made twice: by hand in Response-2000 on Windows (`hand.r2t`) and by an
-r2x session from the same answers (`session.txt`). They must be the same bytes; the three
-Quick Define cases are compared but for the date, since Response dates a new section with the
-day it is made (made on the same day, they match outright). Cases starting from Newbeam open
-`..\newbeam\input.r2t`, so its layers are sorted by depth as in r2x's file chain.
+r2x session from the same answers (`session.txt`). They match when they are the same bytes (the
+three Quick Define cases but for the date, since Response dates a new section with the day it
+is made), or else when they are the same section with the longitudinal layers in another order
+and solve to the same record: Response keeps a new section's layers in the order it made them,
+which differed between the hand-made Quick Define sections and r2x's, and sorts them by depth
+whenever it opens the file (`compare.py`; `docs/define.md`, *Findings*). Cases starting from
+Newbeam open `..\newbeam\input.r2t`, so its layers are sorted by depth as in r2x's file chain.
+
+Made by hand so far (2026-10-28): `quick-tbeam`, `quick-column`, `quick-ibeam-strands`. The
+column is the same bytes; the T-beam and the I-girder differ only in where one layer sits, and
+solve to the same record.
 
 | Case | What it checks |
 |---|---|
@@ -30,8 +37,10 @@ day it is made (made on the same day, they match outright). Cases starting from 
 2. From this folder: `powershell -ExecutionPolicy Bypass -File check.ps1`. For each case with a
    `hand.r2t` it runs `session.txt` in an r2x session (piped into `r2x`), which writes `r2x.r2t`
    and its report `r2x.r2x.html` in the case folder, and prints `MATCH` or `DIFFERS`;
-   `fc.exe /n hand.r2t r2x.r2t` shows where. The results are also in `check-results.txt`, and
-   each session's output in the case's `r2x-session.log`. r2x's files are not committed.
+   `fc.exe /n hand.r2t r2x.r2t` shows where. Where the files differ only in their layers'
+   order, it solves both (into `solved\`) and compares the records. The results are also in
+   `check-results.txt`, and each session's output in the case's `r2x-session.log`. r2x's files
+   are not committed.
 3. Commit the `hand.r2t` files: `tests/test_define_cases_wine.py` then compares them under
    Wine on every test run.
 

@@ -8,7 +8,10 @@
 # session.txt in an r2x session in the case folder, which makes r2x.r2t (from a copy of Newbeam
 # where the case starts from it) and its report r2x.r2x.html, then compares r2x.r2t with hand.r2t
 # byte for byte. For a Quick Define case the date is left out of the comparison: Response dates
-# a new section with the day it is made. The session's output is kept in r2x-session.log.
+# a new section with the day it is made. Files that differ only in the order of their
+# longitudinal layers (Response sorts them by depth when it opens a file) are the same section
+# if solving both gives the same record (compare.py; the records go in solved\). The session's
+# output is kept in r2x-session.log. Needs py with r2x installed (as for the client).
 # Needs r2x installed and its image built (r2x health).
 param(
     [string[]]$Cases = @(),
@@ -17,6 +20,7 @@ param(
 
 $names = @($Cases | ForEach-Object { $_ -split "," } | ForEach-Object { $_.Trim() } | Where-Object { $_ })
 $newbeam = Join-Path $PSScriptRoot "..\newbeam\input.r2t"
+$compare = Join-Path $PSScriptRoot "compare.py"
 $data = Get-Content -Raw -Encoding UTF8 (Join-Path $PSScriptRoot "cases.json") | ConvertFrom-Json
 $datePattern = 'date(\s*)="\d{4}/\d{2}/\d{2}"'
 $results = @()
@@ -33,6 +37,7 @@ foreach ($case in $data.cases) {
     $verdict = $null
     try {
         Remove-Item r2x.r2t, r2x.r2x.html, r2x.r2x.txt, r2x-session.log -ErrorAction SilentlyContinue
+        Remove-Item solved -Recurse -ErrorAction SilentlyContinue
         if ($case.from -eq "newbeam") { Copy-Item $newbeam r2x.r2t }
         $started = Get-Date
         # stderr (progress) goes to the log too; in Windows PowerShell keep its lines as text
@@ -54,7 +59,20 @@ foreach ($case in $data.cases) {
             }
             if ($same) { $verdict = "MATCH byte for byte" }
             elseif (-not $verdict) {
-                $verdict = "DIFFERS (fc.exe /n hand.r2t r2x.r2t shows where)"
+                # The same section with its layers in another order? Then solve both: the
+                # records must be the same.
+                py $compare sections hand.r2t r2x.r2t | Out-Null
+                if ($LASTEXITCODE -eq 0) {
+                    r2x solve hand.r2t r2x.r2t --out solved --overwrite -q 2>&1 | ForEach-Object { "$_" } | Out-File -Append -Encoding utf8 r2x-session.log
+                    py $compare records solved\hand.r2x.txt solved\r2x.r2x.txt | Out-Null
+                    if ($LASTEXITCODE -eq 0) {
+                        $verdict = "MATCH: the same section, layers in another order; the same record solved"
+                    } else {
+                        $verdict = "DIFFERS: the same section, layers in another order, but not the same record"
+                    }
+                } else {
+                    $verdict = "DIFFERS (fc.exe /n hand.r2t r2x.r2t shows where)"
+                }
             }
         }
         $line = "{0}: {1} ({2:N0} s)" -f $case.name, $verdict, $seconds

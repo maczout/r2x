@@ -182,6 +182,15 @@ Found under Wine on 2026-10-27 and 28, on Newbeam and on sections made with Quic
   and the moment diagram. Those are Response's; r2x only answers its questions.
 - **A file opened and saved sorts its layers**; opened and saved again it keeps its bytes.
   Adding a layer and deleting it again leaves the file byte for byte as it was before.
+- **The order of a new section's layers is not reliable** (found with the Windows references,
+  2026-10-28). Quick Define's T-beam and I-girder made by hand on Windows and by r2x hold the
+  same layers with the same values, but the layer Quick Define splits off (`bot3`, the fourth
+  strand layer) comes last in the hand-made file and first in r2x's. Opened and saved again by
+  Response, the two are the same bytes, and they solve to the same record. Whether typing
+  through the wizard or Windows against Wine makes the difference is not known; nothing after
+  Response's first opening of the file sees it. So a reference case matches when its files are
+  the same bytes, or else the same section with the layers in another order that solves to the
+  same record (`tests/reference/define/compare.py`).
 - **Modify takes every field as the dialog shows it**, as in the GUI: Newbeam's bottom layer
   at 63.90 shows as 64 (Dist. from Bottom has no decimals), so a modify that changes only its
   bar count stores z = 64.00. Quick Define's derived depths survive only until a layer is
