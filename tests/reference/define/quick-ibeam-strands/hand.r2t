@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<!DOCTYPE suite_3g SYSTEM "r3g.dtd">
+<!-- The Response Suite of programs is Copyright Evan C. Bentz 2011 -->
+
+<document>
+	<r3g_beam	name		="I-girder"
+			date		="2026/10/28"	>
+		<concrete	fcp		="60.0"
+				maxagg	="19.0"	/>
+		<rebar		fy		="400.0"
+				esh		="7.0"
+				eu		="100.0"	/>
+		<rebar		fy		="400.0"
+				esh		="7.0"
+				eu		="100.0"
+				name		="Trans"	/>
+		<prestress	fu		="1860.0"	/>
+		<sectionSOLID		>
+					1000.0	600.0
+					850.0	600.0	"Concrete 1"
+					850.0	150.0
+					200.0	150.0	"Concrete 1"
+					200.0	450.0
+					0.0	450.0	"Concrete 1"
+			</sectionSOLID>
+		<shapesection	name		="IBEAM"
+				par1		="600.0"
+				par2		="1000.0"
+				par3		="150.0"
+				par4		="150.0"
+				par5		="200.0"
+				par6		="450.0"	/>
+		<longreinfx	z		="940.70"
+				type		="Steel 1"
+				num		="2"
+				A		="400.0"
+				bartitle	="15M"
+				name		="top"	/>
+		<longreinfx	z		="57.65"
+				type		="Low Relax"
+				num		="8"
+				A		="792.0"
+				bartitle	="S13"
+				dep		="6.50"
+				name		="pbot"	/>
+		<longreinfx	z		="59.30"
+				type		="Steel 1"
+				num		="2"
+				A		="400.0"
+				bartitle	="15M"	/>
+		<longreinfx	z		="108.45"
+				type		="Low Relax"
+				num		="4"
+				A		="396.0"
+				bartitle	="S13"
+				dep		="6.50"
+				name		="pbot4"	/>
+		<transreinfz	A		="200.0"
+				type		="Trans"
+				pattern	="2"
+				space		="400.0"
+				disttop	="954.3"
+				distbot	="45.7"
+				bartitle	="10M"
+				name		="stirrup"	/>
+		<sectloading		/>
+
+	</r3g_beam>
+	<R2010_Analysis	length	="4333"
+			displocate	="3000.00"	>
+		<BMD			>
+				333.3 0.000 0
+				3333.3 3.000 0
+				4333.3 3.000 0
+			</BMD>
+		<mattypes		>
+				0.0 "I-girder"
+			</mattypes>
+		<supports	which		="left"
+				platelocate	="333.3"	/>
+		<supports	which		="right"
+				platelocate	="4333.3"
+				support	="fixedverticalroller"	/>
+
+	</R2010_Analysis>
+</document>

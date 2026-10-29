@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<!DOCTYPE suite_3g SYSTEM "r3g.dtd">
+<!-- The Response Suite of programs is Copyright Evan C. Bentz 2011 -->
+
+<document>
+	<r3g_beam	name		="T-beam"
+			doneby	="JM"
+			date		="2026/10/28"	>
+		<concrete	fcp		="40.0"
+				maxagg	="19.0"	/>
+		<rebar		fy		="450.0"
+				fu		="675.0"
+				esh		="7.0"
+				eu		="100.0"
+				name		="Long"	/>
+		<rebar		fy		="420.0"
+				fu		="630.0"
+				esh		="7.0"
+				eu		="100.0"
+				name		="Trans"	/>
+		<prestress	fu		="1860.0"	/>
+		<sectionSOLID		>
+					1200.0	900.0
+					1000.0	900.0	"Concrete 1"
+					1000.0	300.0
+					0.0	300.0	"Concrete 1"
+			</sectionSOLID>
+		<shapesection	name		="TBEAM"
+				par1		="900.0"
+				par2		="1200.0"
+				par3		="300.0"
+				par4		="200.0"	/>
+		<longreinfx	z		="1124.25"
+				type		="Long"
+				num		="4"
+				A		="1200.0"
+				bartitle	="20M"
+				name		="top"	/>
+		<longreinfx	z		="80.95"
+				type		="Long"
+				num		="3"
+				A		="2100.0"
+				bartitle	="30M"	/>
+		<longreinfx	z		="140.75"
+				type		="Long"
+				num		="3"
+				A		="2100.0"
+				bartitle	="30M"
+				name		="bot3"	/>
+		<transreinfz	A		="400.0"
+				type		="Trans"
+				pattern	="3"
+				space		="300.0"
+				disttop	="1142.0"
+				distbot	="58.0"
+				bartitle	="15M"
+				name		="stirrup"	/>
+		<sectloading		/>
+
+	</r3g_beam>
+	<R2010_Analysis	length	="5200"
+			displocate	="3600.00"	>
+		<BMD			>
+				400.0 0.000 0
+				4000.0 3.600 0
+				5200.0 3.600 0
+			</BMD>
+		<mattypes		>
+				0.0 "T-beam"
+			</mattypes>
+		<supports	which		="left"
+				platelocate	="400.0"	/>
+		<supports	which		="right"
+				platelocate	="5200.0"
+				support	="fixedverticalroller"	/>
+
+	</R2010_Analysis>
+</document>

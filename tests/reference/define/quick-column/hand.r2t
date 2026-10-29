@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<!DOCTYPE suite_3g SYSTEM "r3g.dtd">
+<!-- The Response Suite of programs is Copyright Evan C. Bentz 2011 -->
+
+<document>
+	<r3g_beam	name		="Column"
+			date		="2026/10/28"	>
+		<concrete	fcp		="50.0"
+				maxagg	="19.0"	/>
+		<rebar		fy		="400.0"
+				esh		="7.0"
+				eu		="100.0"	/>
+		<rebar		fy		="400.0"
+				esh		="7.0"
+				eu		="100.0"
+				name		="Trans"	/>
+		<prestress	fu		="1860.0"	/>
+		<sectionSOLID		>
+					600.0	0.1
+					589.8	155.3	"Concrete 1"
+					559.8	300.0	"Concrete 1"
+					512.1	424.3	"Concrete 1"
+					450.0	519.6	"Concrete 1"
+					377.6	579.6	"Concrete 1"
+					300.0	600.0	"Concrete 1"
+					222.4	579.6	"Concrete 1"
+					150.0	519.6	"Concrete 1"
+					87.9	424.3	"Concrete 1"
+					40.2	300.0	"Concrete 1"
+					10.2	155.3	"Concrete 1"
+					0.0	0.1	"Concrete 1"
+			</sectionSOLID>
+		<shapesection	name		="CIRCLE"
+				par1		="600.0"
+				par2		="600.0"	/>
+		<longreinfx	z		="66.25"
+				type		="Steel 1"
+				A		="700.0"
+				bartitle	="30M"
+				pattern	="1"
+				nround	="12"
+				aligned	="1"
+				index		="1"
+				name		="outer6"	/>
+		<longreinfx	z		="97.57"
+				type		="Steel 1"
+				num		="2"
+				A		="1400.0"
+				bartitle	="30M"
+				pattern	="1"
+				nround	="12"
+				aligned	="1"
+				index		="1"
+				name		="outer5"	/>
+		<longreinfx	z		="183.13"
+				type		="Steel 1"
+				num		="2"
+				A		="1400.0"
+				bartitle	="30M"
+				pattern	="1"
+				nround	="12"
+				aligned	="1"
+				index		="1"
+				name		="outer4"	/>
+		<longreinfx	z		="300.00"
+				type		="Steel 1"
+				num		="2"
+				A		="1400.0"
+				bartitle	="30M"
+				pattern	="1"
+				nround	="12"
+				aligned	="1"
+				index		="1"
+				name		="outer3"	/>
+		<longreinfx	z		="416.88"
+				type		="Steel 1"
+				num		="2"
+				A		="1400.0"
+				bartitle	="30M"
+				pattern	="1"
+				nround	="12"
+				aligned	="1"
+				index		="1"
+				name		="outer2"	/>
+		<longreinfx	z		="502.43"
+				type		="Steel 1"
+				num		="2"
+				A		="1400.0"
+				bartitle	="30M"
+				pattern	="1"
+				nround	="12"
+				aligned	="1"
+				index		="1"
+				name		="outer1"	/>
+		<longreinfx	z		="533.75"
+				type		="Steel 1"
+				A		="700.0"
+				bartitle	="30M"
+				pattern	="1"
+				nround	="12"
+				aligned	="1"
+				index		="1"
+				name		="outer"	/>
+		<transreinfz	A		="200.0"
+				type		="Trans"
+				pattern	="4"
+				space		="300.0"
+				disttop	="554.3"
+				distbot	="45.6"
+				bartitle	="10M"
+				name		="hoop"	/>
+		<sectloading		/>
+
+	</r3g_beam>
+	<R2010_Analysis	length	="2600"
+			displocate	="1800.00"	>
+		<BMD			>
+				200.0 0.000 0
+				2000.0 1.800 0
+				2600.0 1.800 0
+			</BMD>
+		<mattypes		>
+				0.0 "Column"
+			</mattypes>
+		<supports	which		="left"
+				platelocate	="200.0"	/>
+		<supports	which		="right"
+				platelocate	="2600.0"
+				support	="fixedverticalroller"	/>
+
+	</R2010_Analysis>
+</document>
