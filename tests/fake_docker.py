@@ -147,13 +147,9 @@ def define_worker(mounts: dict[str, str], args: list[str]) -> int:
             Path(report).write_text("<!doctype html>\n<title>fake report</title>\n")
         print(json.dumps({"done": {"saved": bool(out), "seconds": 0.1}}), flush=True)
         return 0
-    if "--show" in mapped:
-        print(json.dumps({"show": [["Title", "fake"]]}), flush=True)
-        print(json.dumps({"done": {"saved": False}}), flush=True)
-        return 0
     print(json.dumps({"ask": {"key": "title", "text": "Title", "kind": "text",
                               "value": "fake", "unit": "", "choices": [], "keep": True,
-                              "hint": ""}}), flush=True)
+                              "frame": ""}}), flush=True)
     line = sys.stdin.readline()
     if not line:
         print("r2x: failed: stopped without an answer; nothing saved", file=sys.stderr)
@@ -166,7 +162,7 @@ def define_worker(mounts: dict[str, str], args: list[str]) -> int:
         Path(out).write_bytes(body)
     if report:
         Path(report).write_text("<!doctype html>\n<title>fake report</title>\n")
-    print(json.dumps({"set": [["Title", answer]] if answer else []}), flush=True)
+    print(json.dumps({"set": [["Title", answer, ""]] if answer else []}), flush=True)
     print(json.dumps({"done": {"saved": bool(out), "seconds": 0.1}}), flush=True)
     return 0
 

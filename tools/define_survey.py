@@ -1,10 +1,12 @@
 """python tools/define_survey.py [--response-dir DIR]  — survey the define dialogs under Wine.
 
-For every field in r2x's catalogue (src/r2x/dialogs.json): its control ID, the value Response
-shows for Newbeam (Quick Define's defaults for quick; tests/reference/newbeam/input.r2t for the
-others), the precision the dialog shows it with, and where Response saves it. Prints a Markdown
-table (docs/define.md has its output) and the time each step took. Needs what the Wine tests
-need ($R2X_RESPONSE_DIR, wine, Xvfb, mingw-w64).
+For every field in r2x's catalogue (src/r2x/dialogs.json): its control ID, the frame it sits in
+and the label the dialog shows, the value Response shows for Newbeam (Quick Define's defaults
+for quick; tests/reference/newbeam/input.r2t for the others, each item of a list dialog in
+turn), the precision the dialog shows it with, and where Response saves it. Every question is
+answered with Enter, so nothing is saved. Prints a Markdown table (docs/define.md has its
+output) and the time each step took. Needs what the Wine tests need ($R2X_RESPONSE_DIR, wine,
+Xvfb, mingw-w64).
 """
 
 from __future__ import annotations
@@ -19,65 +21,47 @@ from pathlib import Path
 
 from r2x import catalogue
 from r2x.catalogue import Step
-from r2x.worker.define import Asker, run_define, run_show
+from r2x.worker.define import Abort, Asker, run_define
+from r2x.worker.session import R2xError
 
 ROOT = Path(__file__).resolve().parent.parent
 NEWBEAM = ROOT / "tests" / "reference" / "newbeam" / "input.r2t"
 
 
 class Recorder(Asker):
-    """Answers Enter to everything and keeps the questions."""
+    """Answers Enter to everything and keeps the questions; a question that needs an answer
+    ends the step, as the end of the input does at the command line."""
 
     def __init__(self):
-        self.questions, self.shown, self.said = [], [], []
+        self.questions, self.said = [], []
 
     def ask(self, q):
         self.questions.append(q)
+        if not q.keep:
+            raise Abort("stopped without an answer; nothing saved")
         return None
 
     def say(self, text):
         self.said.append(text)
 
-    def set(self, pairs):
+    def set(self, items):
         pass
-
-    def show(self, pairs):
-        self.shown = pairs
 
     def done(self, **info):
         pass
 
 
-def match(d, shown: list) -> dict:
-    """show's (label, value) pairs -> {field key: (label, value, "")}, or for a list dialog
-    {field key: [(item, value), ...]}. The pairs come in the fields' order, skipping fields the
-    dialog does not show; a field whose label comes from the dialog matches any label."""
-    out: dict = {}
-    if d.kind == "list":
-        prefix = d.item.capitalize() + " "
-        item, k = None, 0
-        for label, value in shown:
-            if label == prefix.strip() + "s":    # "Tendon layers: none"
-                continue
-            if label.startswith(prefix):
-                item, k = label[len(prefix):], 0
-                continue
-            while k < len(d.fields):
-                f = d.fields[k]
-                k += 1
-                if f.question == label.strip() or f.label is not None:
-                    out.setdefault(f.key, []).append((item, value))
-                    break
-        return out
-    k = 0
-    for label, value in shown:
-        while k < len(d.fields):
-            f = d.fields[k]
-            k += 1
-            if f.question == label or f.label is not None:
-                out[f.key] = (label, value, "")
-                break
-    return out
+def survey(step: Step, inp: Path | None, out: Path, a) -> dict:
+    """{field key: question} for one step answered with Enter throughout."""
+    rec = Recorder()
+    try:
+        run_define(step, inp, out, a.response_dir, a.prefix, asker=rec)
+    except R2xError as e:            # a list with nothing to modify; an Add answered with Enter
+        rec.said.append(str(e))
+    asked: dict = {}
+    for q in rec.questions:          # the first of each (modify asks for "name" twice)
+        asked.setdefault(q.key, q)
+    return asked
 
 
 def precision(value: str, kind: str = "number") -> str:
@@ -101,38 +85,43 @@ def main() -> int:
     rows, times = [], []
     with tempfile.TemporaryDirectory() as tmp:
         work = Path(tmp) / "newbeam.r2t"
+        shutil.copyfile(NEWBEAM, work)
         for d in catalogue.DIALOGS:
-            rec = Recorder()
             t0 = time.monotonic()
             if d.kind == "wizard":
-                run_define(Step(d), None, Path(tmp) / "quick.r2t", a.response_dir, a.prefix,
-                           asker=rec)
-                values = {q.key: (q.text, q.value, q.unit) for q in rec.questions}
+                runs = [("", survey(Step(d), None, Path(tmp) / "quick.r2t", a))]
+            elif d.kind == "list":
+                first = survey(Step(d, "modify"), work, work, a)
+                names = first["name"].choices if "name" in first else []
+                runs = [(n, survey(Step(d, "modify", n), work, work, a)) for n in names]
+                if not runs:                 # none to modify: the fields an Add asks
+                    spare = Path(tmp) / "spare.r2t"
+                    shutil.copyfile(NEWBEAM, spare)
+                    runs = [("(add)", survey(Step(d, "add", "survey"), spare, spare, a))]
             else:
-                shutil.copyfile(NEWBEAM, work)
-                run_show(Step(d), work, a.response_dir, a.prefix, asker=rec)
-                values = match(d, rec.shown)
-            times.append((d.noun, time.monotonic() - t0))
+                runs = [("", survey(Step(d), work, work, a))]
+            times.append((d.noun, (time.monotonic() - t0) / max(1, len(runs))))
             for f in d.fields:
-                v = values.get(f.key)
-                if isinstance(v, list):
-                    shown = "; ".join(f"{i}: {x}" for i, x in v)
-                    prec = precision(v[0][1].split()[0], f.kind) if v else ""
-                elif v:
-                    shown = f"{v[1]} {v[2]}".strip() if v[1] != "" else "(blank)"
-                    prec = precision(v[1].split()[0], f.kind) if v[1] else "text"
-                elif d.kind == "list":
-                    shown, prec = f"no {d.item}s", ""
+                asked = [(item, qs[f.key]) for item, qs in runs if f.key in qs]
+                if not asked:
+                    shown, prec, frame, label = (f"no {d.item}s" if d.kind == "list" and not runs
+                                                 else "(not shown)"), "", "", ""
                 else:
-                    shown, prec = "(not shown)", ""
+                    q = asked[0][1]
+                    frame, label = q.frame, q.text
+                    values = [(item, f"{q.value} {q.unit}".strip() if q.value != "" else "(blank)")
+                              for item, q in asked]
+                    shown = "; ".join(f"{i}: {v}" if i else v for i, v in values)
+                    prec = precision(q.value.split()[0] if q.value else "", f.kind)
                 cid = f.id if f.id is not None else "/".join(str(o.id) for o in f.options)
-                rows.append(f"| {d.noun} | {f.key} | {f.question} | {cid} | {f.kind} | "
-                            f"{shown} | {prec} | {f.xml or '-'} |")
-    print("| Noun | Field | Question | Control | Kind | Newbeam shows | Precision | Saved as |")
-    print("|---|---|---|---|---|---|---|---|")
+                rows.append(f"| {d.noun} | {f.key} | {frame or '-'} | {label or f.question} | "
+                            f"{cid} | {f.kind} | {shown} | {prec} | {f.xml or '-'} |")
+    print("| Noun | Field | Frame | Question | Control | Kind | Newbeam shows | Precision | "
+          "Saved as |")
+    print("|---|---|---|---|---|---|---|---|---|")
     print("\n".join(rows))
     print()
-    print("| Noun | Seconds (show, or Quick Define with Enter throughout) |")
+    print("| Noun | Seconds (Enter throughout, per item for a list) |")
     print("|---|---|")
     for noun, s in times:
         print(f"| {noun} | {s:.1f} |")

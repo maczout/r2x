@@ -1,5 +1,5 @@
-"""r2x define, show and the session without Wine: the catalogue, the questions, the docker
-command, and the command line against the fake docker (tests/fake_docker.py)."""
+"""r2x define and the session without Wine: the catalogue, the questions, the docker command,
+and the command line against the fake docker (tests/fake_docker.py)."""
 import io
 import os
 import re
@@ -85,8 +85,16 @@ def test_parse_step():
 def test_help_text_lists_the_questions_in_order():
     text = catalogue.help_text(catalogue.BY_NOUN["quick"])
     assert text.index("Title") < text.index("Concrete Cylinder Strength") < text.index("Shape")
-    assert "Quick Define - Step 3 of 4:" in text
+    assert "Page 3 of 4:" in text and "Quick Define" not in text
     assert "add|modify|delete" in catalogue.help_text(catalogue.BY_NOUN["long"])
+
+
+def test_descriptions_say_what_is_set_not_where_in_response():
+    """The object is the section or the file: no menu paths (Define > ..., Options > ...)."""
+    for d in catalogue.DIALOGS:
+        assert ">" not in d.summary and "Define" not in d.summary, d.noun
+    for f in (catalogue.DIALOGS[0].fields):
+        assert not f.question.startswith(("Top, ", "Bottom, ", "Stirrups, ")), f.key
 
 
 # -- questions and answers -----------------------------------------------------------------------
@@ -123,10 +131,56 @@ def test_choices_by_number_text_or_unique_start():
 
 
 def test_prompt_shows_the_unit_and_the_value_enter_keeps():
-    assert Question("fc", "f'c", "number", "35.0", "MPa").prompt() == "  f'c (MPa) [35.0]: "
-    assert Question("a", "By area", "check", "y").prompt() == "  By area [y]: "
+    assert Question("fc", "f'c", "number", "35.0", "MPa").prompt() == "f'c (MPa) [35.0]: "
+    assert Question("a", "By area", "check", "y").prompt() == "By area [y]: "
     assert Question("r", "Response asks: x?", "yesno", keep=False).prompt() == \
-        "  Response asks: x?: "
+        "Response asks: x?: "
+
+
+def test_frames_are_headings_printed_once():
+    """A field in one of the dialog's frames is asked under the frame's text, printed once over
+    the frame's questions and not again when a question is asked again."""
+    out = io.StringIO()
+    p = Prompter(io.StringIO("2\nx\n3\n25M\n"), out)
+    ring = "Outer Non-Prestressed Reinforcement Ring"
+    p.answer(Question("n", "Number of Bars", "integer", "16", frame=ring))
+    p.answer(Question("n2", "Spacing", "integer", "4", frame=ring))       # x, then 3
+    p.answer(Question("bar", "Bar Designation", "bar", "20M", frame="Inner Ring"))
+    lines = out.getvalue().splitlines()
+    assert lines == [f"  {ring}",
+                     "    Number of Bars [16]: 2",
+                     "    Spacing [4]: x",
+                     "      'x' is not a number",
+                     "    Spacing [4]: 3",
+                     "  Inner Ring",
+                     "    Bar Designation [20M]: 25M"]
+    assert "?" not in out.getvalue()
+
+
+def test_choices_print_under_their_question():
+    out = io.StringIO()
+    p = Prompter(io.StringIO("t\n"), out)
+    q = Question("shape", "Shape", "shape", "Rectangle", "",
+                 ["Rectangle", "Circular", "T-Beam", "I-Beam"])
+    assert p.answer(q) == (True, "T-Beam")
+    assert out.getvalue().splitlines() == [
+        "  Shape [Rectangle]",
+        "    1) Rectangle  2) Circular  3) T-Beam  4) I-Beam",
+        "  > t"]
+
+
+def test_responses_bar_list_is_shown_by_name_not_number():
+    """Bar names can be numbers (10, 15, ...), so the list Response offers is not numbered and
+    the answer is the bar's name."""
+    out = io.StringIO()
+    p = Prompter(io.StringIO("10\n"), out)
+    q = Question("bar", "Response has no bar '99M': Bar Designation, from its list", "bar",
+                 choices=["10M", "15M", "10", "15"], keep=False)
+    assert p.answer(q) == (True, "10")
+    assert out.getvalue().splitlines() == [
+        "  Response has no bar '99M': Bar Designation, from its list",
+        "    10M, 15M, 10, 15",
+        "  > 10"]
 
 
 def test_prompter_with_piped_answers():
@@ -145,8 +199,15 @@ def test_file_names_and_set_lines():
     assert file_name_from("Pier cap (north)") == "pier-cap-north.r2t"
     assert report_for(Path("a/pier-cap.r2t")) == Path("a/pier-cap.r2x.html")
     assert set_line([]) == "  set: nothing, every answer as Response had it"
-    line = set_line([["Title", "Pier cap"], ["b", "900 mm"]])
+    line = set_line([["Title", "Pier cap", ""], ["b", "900 mm", ""]])
     assert line == "  set: Title Pier cap; b 900 mm"
+    # fields of a frame go together under its text, as they were asked
+    line = set_line([["Shape", "Circular", ""],
+                     ["Number of Bars", "12", "Outer Ring"], ["Bar Designation", "25M", "Outer Ring"],
+                     ["Number of Bars", "6", "Inner Ring"]])
+    assert line.splitlines() == ["  set: Shape Circular",
+                                 "       Outer Ring: Number of Bars 12; Bar Designation 25M",
+                                 "       Inner Ring: Number of Bars 6"]
 
 
 def test_split_words_keeps_backslashes():
@@ -171,8 +232,6 @@ def test_worker_command_mounts_the_file_and_its_folder(tmp_path):
                     "--input", "/in/pier cap.r2t", "--out", "/out/pier cap.r2t",
                     "--report", "/out/pier cap.r2x.html", "--date", "2026/10/27",
                     "--units", "us"]
-    show = worker_command(["docker"], "r2x", str, ["long"], input_file=f, mode="show")
-    assert ":/out" not in " ".join(show) and show[-1] == "--show"
     screen = worker_command(["docker"], "r2x", str, [], input_file=f, report=report_for(f),
                             screen="undo")
     assert screen[-2:] == ["--screen", "undo"] and f"{tmp_path}:/out" in screen
@@ -215,17 +274,9 @@ def test_define_usage_errors(tmp_path):
                       (["define", "beam", "x.r2t"], "no dialog 'beam'"),
                       (["define", "general", "missing.r2t"], "no file missing.r2t"),
                       (["define", "quick", "nope/x.r2t"], "no folder nope"),
-                      (["show", "quick", "x.r2t"], "no file")):
+                      (["show", "x.r2t"], "invalid choice: 'show'")):
         code, _, err = r2x(*argv, cwd=tmp_path)
         assert code == 2 and msg in err, err
-
-
-def test_show_on_the_command_line(tmp_path):
-    (tmp_path / "x.r2t").write_bytes(b"section")
-    code, out, err = r2x("show", "x.r2t", cwd=tmp_path)
-    assert code == 0 and "file: x.r2t (SHA-256 " in out and "record: none yet" in out
-    code, out, err = r2x("show", "long", "x.r2t", cwd=tmp_path)
-    assert code == 0 and "  Title: fake" in out
 
 
 def test_giving_up_at_a_question_saves_nothing(tmp_path):
@@ -237,53 +288,45 @@ def test_giving_up_at_a_question_saves_nothing(tmp_path):
 
 def test_session(tmp_path):
     script = "\n".join([
-        "help", "show", "define long add web", "define units", "US",
+        "help", "define long add web", "define units", "2",
         "define quick", "", "Pier cap",         # file name: the default, then Title
-        "show", "define general", "North",       # a second step on the same file
-        "undo", "show", "save copy", "undo", "show",
+        "define general", "North",               # a second step on the same file
+        "undo", "define quick", "copy", "Copy",  # a new file: undo leaves it, back to the first
+        "undo", "undo", "save", "show",
         "bogus", "help define", "help define long", "quit", "never read"]) + "\n"
     code, out, err = r2x(cwd=tmp_path, stdin=script)
     assert code == 0, err
     assert "r2x> help\nCommands" in out
-    assert out.count("no section yet: define quick, or open FILE") == 2
+    assert "define NOUN" in out and "  save [FILE]" not in out and "  show [NOUN]" not in out
+    assert out.count("no section yet: define quick, or open FILE") == 1
     assert "US Customary: for the section define quick makes" in out
     assert "  File name [new-cross-section.r2t]: " in out
     f = tmp_path / "new-cross-section.r2t"
     assert f.read_bytes() == b"<section/>\r\ntitle Pier cap\r\n"   # undo put it back
     assert "undone: new-cross-section.r2t is as it was before define general" in out
-    assert "file: new-cross-section.r2t" in out and "undo: back to before define quick" in out
-    assert (tmp_path / "copy.r2t").read_bytes() == f.read_bytes()
-    assert "save copy.r2t made copy.r2t, which stays as it is; back to new-cross-section.r2t" \
+    assert (tmp_path / "copy.r2t").read_bytes() == b"<section/>\r\ntitle Pier cap\r\n" \
+        b"title Copy\r\n"                     # the fake opens the session's file, adds the title
+    assert "define quick made copy.r2t, which stays as it is; back to new-cross-section.r2t" \
         in out
+    assert "nothing to undo" in out
+    assert "no command 'save'" in out and "no command 'show'" in out   # dropped in 0.4.0
     assert "no command 'bogus'" in out
     assert "long add|modify|delete [NAME]" in out and "Dist. from Bottom" in out
     assert "never read" not in out
 
 
 def test_session_without_a_file_asks_for_one(tmp_path):
-    code, out, err = r2x(cwd=tmp_path, stdin="solve\nshow long\nopen nope.r2t\nundo\nsave\n")
+    code, out, err = r2x(cwd=tmp_path, stdin="solve\ndefine long\nopen nope.r2t\nundo\n")
     assert code == 0
-    assert out.count("no section yet") == 3 and "no file" in out and "nothing to undo" in out
+    assert out.count("no section yet") == 2 and "no file" in out and "nothing to undo" in out
 
 
 def test_session_solve_options(tmp_path):
     (tmp_path / "x.r2t").write_bytes(b"section")
     code, out, err = r2x(cwd=tmp_path, stdin="open x.r2t\nsolve --stdout\nsolve --stage 3\n"
-                                              "show\n")
+                                              "solve --stage 3\n")
     assert code == 0, err
     assert "--stdout: not in a session" in out
-    assert "[x] solved: 10 stages, peak 7 -> x.r2x.txt, x.r2x.html" in err
-    assert "record: x.r2x.txt" in out
-
-
-def test_record_status_says_when_the_record_is_stale(tmp_path):
-    from r2x import record
-    from r2x.shell import record_status, sha
-    f = tmp_path / "x.r2t"
-    f.write_bytes(b"one")
-    assert record_status(f) == "none yet (solve)"
-    data = record.encode({"input-sha256": sha(f), "stage-count": "60", "peak-stage": "56"}, [])
-    (tmp_path / "x.r2x.txt").write_bytes(data)
-    assert record_status(f) == "x.r2x.txt, a solve of this file (60 stages, peak 56)"
-    f.write_bytes(b"two")
-    assert "stale" in record_status(f)
+    # a session's solves replace the record and the report beside the file, without asking
+    assert err.count("[x] solved: 10 stages, peak 7 -> x.r2x.txt, x.r2x.html") == 2
+    assert "replace" not in out + err

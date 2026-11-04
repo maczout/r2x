@@ -105,11 +105,11 @@ it once at build time (`python -m r2x.worker.prefix`). It does two things beyond
 ## r2x define (0.4.0)
 
 `python -m r2x.worker define NOUN [ACTION [NAME]] [--input FILE] --out FILE [--report HTML]
-[--date YYYY/MM/DD] [--units U]` is one define step (`src/r2x/worker/define.py`); `--show` only
-reads the dialog's values, and `--screen CAPTION` opens the file and rewrites the report with
-its input screen (and with `--out`, saves it there first: `save`, `undo`, `open` in a
-session). It writes questions to stdout and reads answers on stdin, one JSON object per line
-(`src/r2x/ask.py`); end of input stops it without saving. `docs/define.md` has the details.
+[--date YYYY/MM/DD] [--units U]` is one define step (`src/r2x/worker/define.py`);
+`--screen CAPTION` opens the file and rewrites the report with its input screen (and with
+`--out`, saves it there first: `undo` and `open` in a session). It writes questions to stdout
+and reads answers on stdin, one JSON object per line (`src/r2x/ask.py`); end of input stops it
+without saving. `docs/define.md` has the details.
 
 - **The catalogue**, `src/r2x/dialogs.json` (read by `r2x/catalogue.py`): each dialog's menu
   command, title, kind (wizard, sheet, dialog, list) and fields in order, with their control

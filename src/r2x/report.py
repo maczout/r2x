@@ -4,17 +4,18 @@ as intended.
 One self-contained file with a left-column index and two parts:
 
 - **Inputs**: Response's window before solving (section, materials and loads as Response
-  summarises them), and the two dialogs that hold what r2x sets and reads back, units and
-  material factors, and loads, as r2x leaves them.
+  summarises them), and the two dialogs that hold the analysis settings r2x applies for the
+  solve, units and material factors, and loads, as r2x leaves them. They are re-set on every
+  solve, and the factors' values show nowhere else.
 - **Outputs**: Response's window in each captured detail view at the peak stage. The control
   charts are in every window.
 
 No data: the raw record (.r2x.txt) is the result. The screenshots are drawn under Wine and live
 only here.
 
-`r2x define` writes the same report, with the inputs only (build_define): Response's input
-screen after the step, and the dialog just set. A define after a solve so takes the outputs out,
-and the report never shows results for an input that has changed since.
+`r2x define` writes the same report with the inputs only (build_define): Response's input
+screen after the step, which is the section as the file now holds it. A define after a solve so
+takes the outputs out.
 
 The page reloads itself when the file changes, so one browser tab can follow a session. A page
 opened from disk (file://) cannot read files, but it can frame one and be posted to by it: every
@@ -39,9 +40,9 @@ INPUTS = (
     ("input/screen", "Input screen",
      "Response-2000's window before solving, with r2x's settings applied"),
     ("input/preferences", "Units and material factors",
-     "Options > Preferences, as r2x leaves it before solving"),
+     "Units and material factors for this solve, as r2x leaves them before solving"),
     ("input/loading", "Loads",
-     "Loads > Sectional Loads (Define Loading), as r2x leaves it before solving"),
+     "Loads for this solve, as r2x leaves them before solving"),
 )
 
 
@@ -76,24 +77,13 @@ def build(rec: Record, pictures: dict[str, bytes]) -> str:
                              ("outputs", f"Outputs at stage {peak}", outputs)], made)
 
 
-def build_define(name: str, step: str, pictures: dict[str, bytes], saved: bytes = b"",
-                 made: str = "") -> str:
-    """The report after a define step: the inputs only. pictures: "input/screen" (Response's
-    window after Save As) and "dialog/1", "dialog/2", ... (the dialog, or a wizard's pages, as
-    the step left them)."""
-    pages = sorted((k for k in pictures if k.startswith("dialog/")),
-                   key=lambda k: int(k.split("/")[1]))
+def build_define(name: str, step: str, pictures: dict[str, bytes], made: str = "") -> str:
+    """The report after a define step: the inputs only, which is Response's input screen
+    ("input/screen", its window after Save As): the section as the file now holds it."""
     inputs = [("in-screen", "Input screen", f"Response-2000's window after {step}, as saved",
                pictures.get("input/screen"))]
-    for k in pages:
-        n = k.split("/")[1]
-        title = "Dialog" if len(pages) == 1 else f"Dialog, page {n}"
-        inputs.append((f"in-dialog-{n}", title, f"{step}: the dialog as r2x left it before "
-                       f"pressing {'OK' if len(pages) == 1 else 'Next or Finish'}",
-                       pictures[k]))
-    digest = hashlib.sha256(saved).hexdigest()[:12] if saved else ""
-    sub = (f"After <code>{html.escape(step)}</code>. Not solved since: <code>solve</code> adds "
-           f"the outputs." + (f" File SHA-256 {digest}…" if digest else ""))
+    sub = (f"After <code>{html.escape(step)}</code>. Inputs only: <code>solve</code> adds the "
+           f"outputs.")
     return _page(name, sub, [("inputs", "Inputs", inputs)], made)
 
 

@@ -33,7 +33,6 @@ class Field:
     question: str                # the words r2x asks with when the dialog has no label for it
     id: int | None = None        # control ID (none for a radio group: see options)
     label: int | None = None     # control showing the field's label, read when asking
-    prefix: str = ""             # put before a label read from the dialog ("Top, ")
     unit: int | None = None      # control showing the field's unit
     unless: int | None = None    # skip the field while this check box is ticked
     xml: str = ""                # where Response saves it, for reference
@@ -61,7 +60,7 @@ class Dialog:
     menu: int                    # main-menu command that opens it
     kind: str                    # wizard, sheet, dialog or list
     title: str                   # window title
-    summary: str                 # one line for the help
+    summary: str                 # one line for the help: what it sets on the section
     pages: tuple[Page, ...]
     item: str = ""               # list dialogs: what an item is called (layer, stirrup type)
     list: ListControls | None = None
@@ -75,7 +74,7 @@ def _field(d: dict) -> Field:
     if d["kind"] not in KINDS:
         raise CatalogueError(f"field {d['key']}: unknown kind {d['kind']!r}")
     return Field(d["key"], d["kind"], d["question"], d.get("id"), d.get("label"),
-                 d.get("prefix", ""), d.get("unit"), d.get("unless"), d.get("xml", ""),
+                 d.get("unit"), d.get("unless"), d.get("xml", ""),
                  tuple(Option(o["id"], o["text"]) for o in d.get("options", ())))
 
 
@@ -142,17 +141,18 @@ def parse_step(words: list[str]) -> Step:
 
 
 def help_text(dialog: Dialog) -> str:
-    """What define NOUN asks, in the dialog's order, for the help."""
+    """What define NOUN asks, in order, for the help. Questions whose words depend on the
+    section (a shape's dimensions, a ring or a layer) are asked in the words shown at the
+    time; the help gives their general names."""
     lines = [f"define {dialog.noun}"
              + (f" add|modify|delete [NAME]" if dialog.kind == "list" else "")
              + f"  —  {dialog.summary}"]
     if dialog.kind == "list":
         lines.append(f"  Asks for the {dialog.item}'s name if not given, then its fields;")
-        lines.append(f"  delete asks nothing more. Names are as Response lists them.")
-    for page in dialog.pages:
-        if dialog.kind == "wizard" and page.title:
-            lines.append(f"  {page.title}:")
+        lines.append(f"  delete asks nothing more.")
+    for k, page in enumerate(dialog.pages, 1):
+        if dialog.kind == "wizard":
+            lines.append(f"  Page {k} of {len(dialog.pages)}:")
         for f in page.fields:
-            extra = "  (labels from the dialog)" if f.label else ""
-            lines.append(f"    {f.question}{extra}")
+            lines.append(f"    {f.question}")
     return "\n".join(lines)

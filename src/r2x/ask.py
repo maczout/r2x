@@ -6,8 +6,7 @@ reads one JSON line of answer on stdin:
 
     {"ask": {...Question...}}          a question; the answer follows on stdin
     {"say": "text"}                    something to show: a message from Response, a note
-    {"set": [[label, value], ...]}     what the step set, read back from the dialog
-    {"show": [[label, value], ...]}    a dialog's values (show)
+    {"set": [[label, value, frame], ...]}   what the step set, read back from the dialog
     {"done": {...}}                    the step's outcome (saved file, title)
 
     stdin: {"answer": "text"}  or  {"answer": null}  (Enter: keep the value the dialog has)
@@ -20,7 +19,7 @@ from __future__ import annotations
 
 import json
 import math
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from typing import IO
 
 YES, NO = "y", "n"
@@ -35,15 +34,28 @@ class Question:
     unit: str = ""
     choices: list[str] = field(default_factory=list)
     keep: bool = True                # whether Enter keeps the value (False: an answer is needed)
-    hint: str = ""                   # shown on ?: the dialog's example, the choices' source
+    frame: str = ""                  # the dialog's frame around the field, as the dialog shows it
 
-    def prompt(self) -> str:
+    def is_menu(self) -> bool:
+        """Asked as a numbered list of choices, the answer on a line of its own."""
+        return bool(self.choices) and self.kind in ("choice", "shape", "radio")
+
+    def is_list(self) -> bool:
+        """Asked with a list of names under it, not numbered (Response's bar list: a bar's name
+        can be a number), the answer on a line of its own."""
+        return bool(self.choices) and self.kind == "bar"
+
+    def heading(self) -> str:
+        """The question with its unit and the value Enter keeps: 'f'c (MPa) [35.0]'."""
         unit = f" ({self.unit})" if self.unit else ""
         shown = self.value
         if self.kind in ("check", "yesno") and self.keep:
             shown = YES if self.value == YES else NO
         default = f" [{shown}]" if self.keep else ""
-        return f"  {self.text}{unit}{default}: "
+        return f"{self.text}{unit}{default}"
+
+    def prompt(self) -> str:
+        return f"{self.heading()}: "
 
 
 class AnswerError(ValueError):
@@ -120,6 +132,12 @@ def format_choices(choices: list[str], width: int = 76) -> list[str]:
     return lines + ([cur] if cur else [])
 
 
+def format_names(names: list[str], width: int = 76) -> list[str]:
+    """Names, comma-separated, wrapped into lines of at most width."""
+    import textwrap
+    return textwrap.wrap(", ".join(names), width, break_on_hyphens=False, break_long_words=False)
+
+
 # -- the wire -----------------------------------------------------------------------------------
 def write(stream: IO[str], **message):
     stream.write(json.dumps(message, ensure_ascii=False) + "\n")
@@ -131,7 +149,8 @@ def question_message(q: Question) -> dict:
 
 
 def read_question(data: dict) -> Question:
-    return Question(**data)
+    known = {f.name for f in fields(Question)}
+    return Question(**{k: v for k, v in data.items() if k in known})
 
 
 def read_line(line: str) -> dict:

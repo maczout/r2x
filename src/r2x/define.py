@@ -1,11 +1,11 @@
-"""The command-line side of r2x define and show: run one step in the container and put its
-questions to the person.
+"""The command-line side of r2x define: run one step in the container and put its questions to
+the person.
 
 A step is one container run (docs/define.md, How a define step works): Response opens the
 section's file, one of its dialogs is gone through question by question, and Response saves the
 file back with its own Save As; the section's report beside it is rewritten with Response's
-input screen and the dialog as set. The questions come from the worker over stdout and the
-answers go back on its stdin (r2x.ask). Standard library only.
+input screen. The questions come from the worker over stdout and the answers go back on its
+stdin (r2x.ask). Standard library only.
 """
 
 from __future__ import annotations
@@ -53,12 +53,18 @@ def file_name_from(title: str) -> str:
 # -- asking -------------------------------------------------------------------------------------
 class Prompter:
     """Asks the questions: at a terminal, or from lines piped in (one answer per line; at the
-    end of the input, Enter for every question that has a value to keep)."""
+    end of the input, Enter for every question that has a value to keep).
+
+    A field inside one of the dialog's frames is asked under the frame's text, printed once as a
+    heading over the frame's questions. A question with choices prints them under itself,
+    numbered (but for Response's bar list, whose names can be numbers), and its answer is typed
+    on the line after them."""
 
     def __init__(self, inp: IO[str] = sys.stdin, out: IO[str] = sys.stdout):
         self.inp, self.out = inp, out
         self.interactive = inp.isatty() if hasattr(inp, "isatty") else False
         self.ended = False
+        self.frame = ""            # the frame whose heading was printed last
 
     def print(self, text: str = ""):
         self.out.write(text + "\n")
@@ -82,24 +88,29 @@ class Prompter:
 
     def answer(self, q: Question) -> tuple[bool, str | None]:
         """(answered, the answer to send); not answered: the input ended or no answer came."""
-        if q.choices and q.kind in ("choice", "shape", "radio"):
-            for line in ask.format_choices(q.choices):
-                self.print("    " + line)
+        indent = "  "
+        if q.frame:
+            if q.frame != self.frame:
+                self.print(f"  {q.frame}")
+            indent = "    "
+        self.frame = q.frame
+        if q.is_menu() or q.is_list():
+            self.print(indent + q.heading())
+            lines = (ask.format_choices if q.is_menu() else ask.format_names)(
+                q.choices, 76 - len(indent))
+            for line in lines:
+                self.print(f"{indent}  {line}")
+            prompt = f"{indent}> "
+        else:
+            prompt = indent + q.prompt()
         while True:
-            text = self.line(q.prompt())
+            text = self.line(prompt)
             if text is None:
                 return (True, None) if q.keep else (False, None)
-            if text.strip() == "?":
-                help_lines = ([q.hint] if q.hint else ask.format_choices(q.choices)
-                              if q.choices else [])
-                help_lines.append(f"Enter keeps {q.value!r}" if q.keep else "an answer is needed")
-                for h in help_lines:
-                    self.print("    " + h)
-                continue
             try:
                 return True, ask.check_answer(q, text)
             except AnswerError as e:
-                self.print(f"    {e}; ? for help")
+                self.print(f"{indent}  {e}")
 
 
 # -- one step in the container -------------------------------------------------------------------
@@ -109,7 +120,6 @@ class StepResult:
     reason: str = ""
     saved: bool = False
     readback: list[list[str]] = field(default_factory=list)
-    shown: list[list[str]] = field(default_factory=list)
     title: str = ""
     seconds: float = 0.0
 
@@ -117,11 +127,10 @@ class StepResult:
 def worker_command(docker: list[str], image: str, docker_path: Callable[[Path], str],
                    words: list[str], *, input_file: Path | None = None, out: Path | None = None,
                    report: Path | None = None, date: str | None = None,
-                   settings: Settings = Settings(), mode: str | None = None,
-                   screen: str | None = None) -> list[str]:
-    """docker run for one define step (or, with mode="show", reading a dialog; with screen,
-    no dialog: the report's input screen, and Save As to out if given). The section's file is
-    mounted read-only at /in, the folder Response saves into and the report goes to at /out."""
+                   settings: Settings = Settings(), screen: str | None = None) -> list[str]:
+    """docker run for one define step (with screen, no dialog: the report's input screen, and
+    Save As to out if given). The section's file is mounted read-only at /in, the folder
+    Response saves into and the report goes to at /out."""
     mounts, args = [], []
     if input_file is not None:
         mounts += ["-v", f"{docker_path(input_file)}:/in/{input_file.name}:ro"]
@@ -141,8 +150,6 @@ def worker_command(docker: list[str], image: str, docker_path: Callable[[Path], 
         args += ["--units", settings.units]
     if settings.factors:
         args += ["--factors", settings.factors]
-    if mode:
-        args.append(f"--{mode}")
     if screen is not None:
         args += ["--screen", screen]
     return docker + ["run", "--rm", "-i", "--pull", "never", "--network", "none", *mounts,
@@ -153,6 +160,7 @@ def run_step(cmd: list[str], prompter: Prompter,
              on_note: Callable[[str], None] | None = None) -> StepResult:
     """Run a define step's container, answering its questions; return its outcome."""
     note = on_note or (lambda text: prompter.print(f"  note: {text}"))
+    prompter.frame = ""
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.PIPE, text=True, encoding="utf-8",
@@ -192,8 +200,6 @@ def run_step(cmd: list[str], prompter: Prompter,
                 prompter.print(f"  {msg['say']}")
             elif "set" in msg:
                 result.readback = msg["set"]
-            elif "show" in msg:
-                result.shown = msg["show"]
             elif "done" in msg:
                 d = msg["done"]
                 result.saved, result.title = d.get("saved", False), d.get("title", "")
@@ -215,17 +221,23 @@ def run_step(cmd: list[str], prompter: Prompter,
 
 
 def set_line(readback: list[list[str]], width: int = 78) -> str:
-    """What a step set, read back from the dialog, wrapped."""
+    """What a step set, read back from the dialog, wrapped. Fields of one frame go together
+    under the frame's text, as they were asked: [label, value] or [label, value, frame]."""
     import textwrap
     if not readback:
         return "  set: nothing, every answer as Response had it"
-    text = "set: " + "; ".join(f"{label} {value}" for label, value in readback)
-    return "\n".join(textwrap.wrap(text, width, initial_indent="  ", subsequent_indent="       ",
-                                   break_on_hyphens=False))
-
-
-def show_lines(shown: list[list[str]]) -> list[str]:
-    out = []
-    for label, value in shown:
-        out.append(f"  {label}" + (f": {value}" if value else ""))
-    return out
+    groups: list[tuple[str, list[str]]] = []
+    for item in readback:
+        label, value = item[0], item[1]
+        frame = item[2] if len(item) > 2 else ""
+        if not groups or groups[-1][0] != frame:
+            groups.append((frame, []))
+        groups[-1][1].append(f"{label} {value}")
+    lines = []
+    for frame, items in groups:
+        text = (f"{frame}: " if frame else "") + "; ".join(items)
+        first = "  set: " if not lines else "       "
+        lines += textwrap.wrap(text, width, initial_indent=first,
+                               subsequent_indent="       " + ("  " if frame else ""),
+                               break_on_hyphens=False)
+    return "\n".join(lines)

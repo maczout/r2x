@@ -113,17 +113,13 @@ def test_report_reloads_itself_when_rewritten():
 
 
 def test_define_report_has_the_inputs_only():
-    page = report.build_define("pier-cap.r2t", "define quick",
-                               {"input/screen": PNG, "dialog/1": PNG, "dialog/2": PNG,
-                                "dialog/10": PNG}, b"<xml/>")
+    """A define's report is the input screen alone: the section as the file now holds it."""
+    page = report.build_define("pier-cap.r2t", "define quick", {"input/screen": PNG})
     assert "<h2>Inputs</h2>" in page and "Outputs" not in page
-    heads = [page.index(h) for h in ("<h3>Input screen</h3>", "<h3>Dialog, page 1</h3>",
-                                     "<h3>Dialog, page 2</h3>", "<h3>Dialog, page 10</h3>")]
-    assert heads == sorted(heads)
-    assert page.count('<img src="data:image/png;base64,') == 4
+    assert "<h3>Input screen</h3>" in page and "Dialog" not in page
+    assert page.count('<img src="data:image/png;base64,') == 1
     assert "<code>define quick</code>" in page and "R2X_STAMP" in page
-    one = report.build_define("x.r2t", "define loads", {"input/screen": PNG, "dialog/1": PNG})
-    assert "<h3>Dialog</h3>" in one and "pressing OK" in one
+    assert "SHA-256" not in page
 
 
 def test_report_has_a_left_column_index():

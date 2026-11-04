@@ -12,9 +12,9 @@ export in four detail views, **General**, **Cracking**, **Reinforcement** and **
 charts in all). Input is any file Response-2000 opens (`.r2t`, `.rsp`), or none, which gives
 the section File > New gives. Not M–N, M–V or N–V interaction, and not full-member analysis.
 
-**Defining a section** (0.4.0): `r2x define` goes through one of Response's own Define dialogs
-question by question and lets Response save the file; `r2x` alone is a session in which a
-section is defined in steps and then solved, without opening Response.
+**Defining a section** (0.4.0): `r2x define` sets part of a section question by question, and
+Response saves the file; `r2x` alone is a session in which a section is defined in steps and
+then solved, without opening Response.
 
 ```
 PS> r2x solve .\Newbeam.r2t --report
@@ -31,9 +31,9 @@ PS> r2x solve .\Newbeam.r2t --report
   in `docs/raw-format.md`.
 - **`NAME.r2x.html`, the report** (`--report`). Screenshots for checking by eye that r2x drove
   Response as intended, with an index down the left: under **Inputs**, Response's window before
-  solving and the Preferences and Define Loading dialogs as r2x leaves them; under **Outputs**,
-  Response's window in each captured view at the peak stage. No data; the screenshots are taken
-  under Wine.
+  solving and the units and material factors and the loads as r2x set them for the solve; under
+  **Outputs**, Response's window in each captured view at the peak stage. No data; the
+  screenshots are taken under Wine.
 
 Charts that Response shows only as pictures (cross section, crack diagram, internal forces, N+M)
 have no data export, so they appear in the report's screenshots and nowhere else. Not captured:
@@ -59,14 +59,14 @@ directly.
 ## Usage
 
 ```powershell
-r2x solve                                    # no input: a new section, as File > New gives
+r2x solve                                    # no input: a new section, Response's default
 r2x solve .\Newbeam.r2t                      # one or more files, or a glob
 r2x solve .\Newbeam.r2t --stage all          # detail views at every stage (default: peak)
 r2x solve .\Newbeam.r2t --stage peak,0-5     # or at these stages; 0 is the initial load
 r2x solve .\Newbeam.r2t --views no-shear     # only these detail views (default: all four)
 r2x solve .\Newbeam.r2t --report             # also the HTML report
 r2x solve .\Newbeam.r2t --increment 0,1,1     # moment and shear, M/V = 1 m
-r2x solve .\Newbeam.r2t --more-detail 2       # refined twice with Solve > More Detail
+r2x solve .\Newbeam.r2t --more-detail 2       # refined twice (more load stages)
 r2x solve .\col.rsp --units si --initial -2000,0,0 --increment 0,1,0
 r2x solve .\cases\*.r2t --out .\results --parallel 4
 r2x solve .\Newbeam.r2t --stdout | py parse.py   # the record on stdout, no files
@@ -79,8 +79,9 @@ r2x solve .\Newbeam.r2t --stdout | py parse.py   # the record on stdout, no file
 - **More Detail.** `--more-detail N` presses Solve → More Detail N times after the solve (`max`:
   until Response refines no further, which it stops doing at 327 stages). Stage numbers are the
   refined solve's.
-- **Results** go next to each input, or to `--out`. An existing result is replaced only with
-  `--overwrite`.
+- **Results** go next to each input, or to `--out`. Existing results are replaced once you
+  say yes at the prompt, or without asking with `--overwrite`; with no terminal to ask at (a
+  script), r2x stops instead.
 - **Progress** goes to stderr, with a status line when stderr is a terminal; `-q` shows errors
   only.
 - **Exit status:** 0 solved, 1 failed, 2 usage error, 3 out of scope (reserved: since 0.3.0
@@ -95,19 +96,29 @@ behind it and what was confirmed in Response on Windows.
 
 ```
 PS> r2x
+r2x session: define a section, then solve it. help lists the commands.
 r2x> define quick
   File name [new-cross-section.r2t]: pier-cap.r2t
-  Title [New Cross Section]: Pier cap
-  Analysis By []: JM
-  Concrete Cylinder Strength (MPa) [35.0]: 40
-  ...
+  General Information
+    Title [New Cross Section]: Pier cap
+    Analysis By []: JM
+  Material Properties
+    Concrete Cylinder Strength (MPa) [35.0]: 40
+    ...
+  Shape [Rectangle]
     1) Rectangle  2) Circular  3) T-Beam  4) I-Beam
-  Shape [Rectangle]: t
+  > t
   btop (mm) [250]: 900
   h (mm) [600]: 1200
   ...
-  set: Title Pier cap; Analysis By JM; Concrete Cylinder Strength 40.0 MPa; Shape T-Beam; ...
-  saved pier-cap.r2t, report pier-cap.r2x.html updated (6.1 s)
+  Top Non-Prestressed Reinforcement
+    Number of Bars [1]: 4
+    ...
+  set: General Information: Title Pier cap; Analysis By JM
+       Material Properties: Concrete Cylinder Strength 40 MPa
+       Shape T-Beam; btop 900 mm; h 1200 mm
+       Top Non-Prestressed Reinforcement: Number of Bars 4
+  saved pier-cap.r2t, report pier-cap.r2x.html updated (6.3 s)
 r2x> define long add web
 r2x> define loads
 r2x> solve --increment 0,1,1
@@ -115,29 +126,32 @@ r2x> undo
 r2x> quit
 ```
 
-- **`define NOUN`** is one of Response's dialogs: `quick` (Quick Define: a new section),
-  `general`, `materials`, `section`, `long`, `trans` and `tendons` (each `add`, `modify` or
-  `delete NAME`), `loads`, `units`, `factors`. The questions are the dialog's fields, in its
-  order and in its words, each showing the value the dialog holds now: **Enter keeps it**, and
-  a field is touched only when the answer differs. `?` explains a question; `help define NOUN`
-  lists them.
+- **`define NOUN`** sets part of the section: `quick` (a new section from its basic
+  properties), `general` (title, comments, date, analysis spacing, moment axis), `materials`,
+  `section` (the concrete shape), `long`, `trans` and `tendons` (reinforcement layers, stirrup
+  types and tendon layers: each `add`, `modify` or `delete NAME`), `loads`, `units`,
+  `factors`. The questions are Response's own fields, in its order and its words, each showing
+  the value the section has now: **Enter keeps it**, and a field is touched only when the
+  answer differs. Fields that belong together are asked under their heading (Top
+  Non-Prestressed Reinforcement, or Outer Non-Prestressed Reinforcement Ring for a circle);
+  choices are listed under their question. `help define NOUN` lists the questions.
 - **Response checks the values.** Its own questions and messages come through word for word
   (an fy that would overwrite detailed material properties, a layer name that exists), and a
-  bar designation it does not know brings up its list of bars as a question.
+  bar designation it does not know brings up its list of bars to choose from.
 - **The file is the section; arguments are the analysis.** Each step opens the file in
-  Response, sets one dialog and saves it back with Response's Save As; `solve` takes r2x
-  solve's options and never changes the file. Loads, units and factors can go either way.
+  Response, sets that part of the section and saves the file with Response's Save As; `solve`
+  takes r2x solve's options and never changes the file. Loads, units and factors can go either
+  way.
 - **The report is the preview.** Every step rewrites `NAME.r2x.html` beside the file with
-  Response's input screen and the dialog as set, and the page reloads itself, so one browser
-  tab follows the session (the session opens it the first time). After a `solve` it has the
-  outputs too, until the next define takes them out.
-- **Session commands:** `define`, `open FILE`, `save [FILE]`, `show [NOUN]` (the file, its
-  report and whether its record is a solve of it; or a dialog's values), `solve [options]`,
-  `undo` (one step back), `report`, `help`, `quit`. Nothing besides the file, its report and its
-  record is written.
+  Response's input screen, the section as the file now holds it, and the page reloads itself,
+  so one browser tab follows the session (the session opens it the first time). After a
+  `solve` it has the outputs too, until the next define takes them out.
+- **Session commands:** `define`, `open FILE`, `solve [options]`, `undo` (one step back),
+  `report`, `help`, `quit`. Repeated steps and solves overwrite the file, its report and its
+  record, as saving does in Response; nothing else is written. To keep a copy, copy the file.
 - **On the command line**, each define names its file: `r2x define quick pier-cap.r2t` makes
-  it, `r2x define long add web pier-cap.r2t` opens it, asks and saves it back, and
-  `r2x show long pier-cap.r2t` shows a dialog's values.
+  it (asking first if a file of that name exists), and `r2x define long add web pier-cap.r2t`
+  opens it, asks and saves it back.
 
 Each step is one container run, about 3 to 7 s. `docs/define.md` has how it works, every
 dialog's fields and what was found in Response.
@@ -193,12 +207,13 @@ loadings (Newbeam under N and V, Response's own shear examples) rely on r2x's ow
 Wine. With shear, the strain profile can match several stages near the peak, and then r2x tells
 them apart by their exports (`docs/cli.md`, *Shear and More Detail*).
 
-**Defining a section (0.4.0)** is checked under Wine so far: Enter through every question of
+**Defining a section (0.4.0)** is checked under Wine: Enter through every question of
 `define quick` gives Newbeam's `input.r2t` byte for byte (dated as Newbeam is), adding a layer
 and deleting it again leaves a file as it was, and each dialog's answers land where Response
-saves them (`tests/test_define_wine.py`). The Windows references, the same thirteen sections
-made by hand in Response and by an r2x session (`tests/reference/define`), are still to be
-made; `check.ps1` there compares them.
+saves them (`tests/test_define_wine.py`). On Windows, the reference cases are sections made by
+hand in Response and by an r2x session from the same answers (`tests/reference/define`;
+`check.ps1` there compares them): the three Quick Define cases match; the others are still to
+be made.
 
 Two heuristics are worth knowing. Wine gives no "solve finished" signal, so the solve counts as
 finished once the bottom control curve has not changed for 1 s and Response's process is idle.

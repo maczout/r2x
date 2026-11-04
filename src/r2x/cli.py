@@ -27,7 +27,7 @@ from r2x import __version__, progress
 from r2x.ask import Question
 from r2x.catalogue import CatalogueError, parse_step
 from r2x.define import (SECTION_SUFFIXES, Prompter, record_for, report_for, run_step, set_line,
-                        show_lines, today, worker_command)
+                        today, worker_command)
 from r2x.display import Display, Job
 from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE
 from r2x.settings import FACTORS, UNITS, Settings, parse_loads, parse_more_detail
@@ -194,9 +194,9 @@ def cmd_solve(a) -> int:
     if clash:
         raise UsageError(f"several inputs would write {clash[0]}")
     existing = [p for p in records + reports if p is not None and p.exists()]
-    if existing and not a.overwrite:
-        more = f" (and {len(existing) - 1} more)" if len(existing) > 1 else ""
-        raise UsageError(f"{existing[0]} exists{more}; use --overwrite to replace")
+    if existing and not a.overwrite and not replace_ok(existing):
+        print("r2x: nothing solved", file=sys.stderr)
+        return SOLVED
     if a.out:
         a.out.mkdir(parents=True, exist_ok=True)
     for p in existing:
@@ -217,6 +217,19 @@ def cmd_solve(a) -> int:
             statuses = list(pool.map(solve, range(len(inputs))))
         display.summary()
     return overall_status(statuses)
+
+
+def replace_ok(existing: list[Path]) -> bool:
+    """Whether to replace results that exist: asked at a terminal, as Windows asks before Save
+    As replaces a file. With no one to ask (piped, a script), r2x stops: --overwrite says yes."""
+    if len(existing) == 1:
+        what = f"{existing[0]} exists: replace it"
+    else:
+        what = f"{existing[0]} and {len(existing) - 1} more exist: replace them"
+    if not (sys.stdin.isatty() and sys.stderr.isatty()):
+        raise UsageError(f"{what.split(':')[0]}; use --overwrite to replace")
+    ok, answer = Prompter(sys.stdin, sys.stderr).answer(Question("replace", what, "yesno", "n"))
+    return ok and answer == "y"
 
 
 def solve_to_stdout(inp: Path | None, a, live: bool) -> int:
@@ -252,7 +265,7 @@ def cmd_health(a) -> int:
         return FAILED
 
 
-# -- define, show and the session -----------------------------------------------------------------
+# -- define and the session ---------------------------------------------------------------------
 def step_command(image: str):
     """The docker command for one define step (r2x.define.worker_command)."""
     return functools.partial(worker_command, docker_command(), image, docker_path)
@@ -301,34 +314,6 @@ def cmd_define(a) -> int:
         prompter.print(f"r2x: saved {file}, report {report.name} ({result.seconds:.1f} s)")
     else:
         prompter.print(f"r2x: nothing changed; {file} is as it was")
-    return SOLVED
-
-
-def cmd_show(a) -> int:
-    from r2x.shell import record_status, sha
-    words, file = section_args(a.words, "show [NOUN]")
-    if not file.is_file():
-        raise UsageError(f"no file {file}")
-    prompter = Prompter()
-    if not words:
-        prompter.print(f"  file: {file} (SHA-256 {sha(file)[:12]})")
-        report = report_for(file)
-        prompter.print(f"  report: {report.name}" if report.exists() else "  report: none")
-        prompter.print(f"  record: {record_status(file)}")
-        return SOLVED
-    try:
-        step = parse_step(words[:1])
-    except CatalogueError as e:
-        raise UsageError(str(e))
-    if step.noun == "quick":
-        raise UsageError("Quick Define always starts a new section: show general, section, ...")
-    result = run_step(step_command(a.image)([step.noun], input_file=file, mode="show"),
-                      prompter)
-    if result.status != SOLVED:
-        print(f"r2x: show {step.noun} failed: {result.reason}", file=sys.stderr)
-        return result.status
-    for line in show_lines(result.shown):
-        prompter.print(line)
     return SOLVED
 
 
@@ -487,8 +472,8 @@ def add_solve_options(s: argparse.ArgumentParser):
                         "Default: input's, else 0,1,0.\n"
                         "N: tension positive. M: compression on top positive.")
     g.add_argument("--more-detail", type=more_detail_spec, default=0, metavar="N",
-                   help="Refine the solve with Solve > More Detail, N times,\n"
-                        "or max: until Response refines no further.\n"
+                   help="Refine the solve N times (more load stages), or\n"
+                        "max: until Response refines no further.\n"
                         "Default: 0.")
 
     g = s.add_argument_group("Output")
@@ -509,7 +494,8 @@ def add_solve_options(s: argparse.ArgumentParser):
                    help="Write the raw record to stdout and no files. One\n"
                         "input only; not with --report.")
     g.add_argument("--overwrite", action="store_true",
-                   help="Replace existing results. Default: stop.")
+                   help="Replace existing results without asking. Default:\n"
+                        "ask at a terminal, else stop.")
 
     g = s.add_argument_group("Running")
     g.add_argument("-p", "--parallel", type=positive_int, default=1, metavar="N",
@@ -522,7 +508,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--version", action="version", version=f"r2x {__version__}")
     p.add_argument("--image", default=os.environ.get("R2X_IMAGE", DEFAULT_IMAGE),
                    help="container image (default: $R2X_IMAGE or r2x)")
-    sub = p.add_subparsers(dest="command", metavar="{solve,define,show,health}",
+    sub = p.add_subparsers(dest="command", metavar="{solve,define,health}",
                            description="With no command: a session at the r2x> prompt "
                                        "(define, solve, ...; help there).")
 
@@ -535,26 +521,18 @@ def build_parser() -> argparse.ArgumentParser:
     g = s.add_argument_group("Input")
     g.add_argument("inputs", nargs="*", metavar="INPUT",
                    help=".rsp or .r2t files; globs allowed (cases\\*.r2t).\n"
-                        "Default: a new Quick Define section (Newbeam).")
+                        "Default: a new section, Response's default (Newbeam).")
 
     add_solve_options(s)
     s.set_defaults(func=cmd_solve)
 
-    d = sub.add_parser("define", help="set one of Response's dialogs for a section, by questions",
+    d = sub.add_parser("define", help="set part of a section, question by question",
                        usage="r2x define NOUN [ACTION [NAME]] FILE",
                        description=define_description(), formatter_class=HelpFormatter,
                        epilog="r2x with no command starts a session, where the file is kept "
                               "between steps and undo goes back one step.")
     d.add_argument("words", nargs="+", metavar="WORD", help=argparse.SUPPRESS)
     d.set_defaults(func=cmd_define)
-
-    sh = sub.add_parser("show", help="a section's file, report and record, or a dialog's values",
-                        usage="r2x show [NOUN] FILE", formatter_class=HelpFormatter,
-                        description="Without NOUN: the file, its report and whether its record "
-                                    "is a solve of it as it is.\nWith NOUN: the values one of "
-                                    "Response's dialogs shows for it (nothing is changed).")
-    sh.add_argument("words", nargs="+", metavar="WORD", help=argparse.SUPPRESS)
-    sh.set_defaults(func=cmd_show)
 
     health = sub.add_parser("health", help="show the image's r2x, Wine and Response-2000 versions")
     health.set_defaults(func=cmd_health)
@@ -563,9 +541,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def define_description() -> str:
     from r2x.shell import define_help
-    return ("Set one of Response-2000's dialogs for the section in FILE, question by question,\n"
-            "and let Response save the file (Save As). The section's report beside it\n"
-            "(FILE.r2x.html) is rewritten and reloads itself in the browser.\n\n"
+    return ("Set part of the section in FILE, question by question. The file is saved, and\n"
+            "its report beside it (NAME.r2x.html) is rewritten and reloads itself in the\n"
+            "browser.\n\n"
             + define_help())
 
 

@@ -4,9 +4,17 @@
 in r2x 0.2.0 (2026-10-26). Shear, loads as N,M,V, `--more-detail` and the slimmer report in r2x
 0.3.0 (2026-10-27), implemented ahead of the Windows reference captures. Phases 3 to 5, *All
 detail views* and *Shear and More Detail* below record how. `r2x solve --help` matches the text
-below plus one note, and `tests/test_cli.py` keeps them in step. `r2x define`, `r2x show` and
-the session (`r2x` alone) in r2x 0.4.0 (2026-10-28, under Wine): *Defining a section*, at the
-end, and `docs/define.md`.
+below plus one note, and `tests/test_cli.py` keeps them in step. `r2x define` and the session
+(`r2x` alone) in r2x 0.4.0 (2026-10-28, under Wine; reviewed 2026-11-03): *Defining a
+section*, at the end, and `docs/define.md`.
+
+**Existing results** (decided 2026-11-03): as in Response, solves are cheap to re-run and their
+results almost throwaway, so a solve replaces them, and a question to accept that is enough, as
+Windows asks before Save As replaces a file. At a terminal `r2x solve` asks once (`[n]`: Enter
+keeps them); `--overwrite` replaces them without asking; with no terminal to ask at (piped, a
+script) it stops with a usage error, as before. In a session `solve` replaces the record and the
+report beside the file without asking. Nothing checks whether a record is a solve of the file
+as it is now; the record's header keeps the input's SHA-256 for anyone who needs to.
 
 A stage number past the last stage is a usage error (exit status 2), found once the solve has
 given the stage count. With several inputs, the exit status is the most serious outcome: 1, then
@@ -76,7 +84,7 @@ input has none.
 
 Input:
   INPUT ...             .rsp or .r2t files; globs allowed (cases\*.r2t).
-                        Default: a new Quick Define section (Newbeam).
+                        Default: a new section, Response's default (Newbeam).
 
 Analysis:
   --units {si,us,kgcm}  Units for loads and results.
@@ -92,8 +100,8 @@ Analysis:
                         0,0,0 solves the initial load alone.
                         Default: input's, else 0,1,0.
                         N: tension positive. M: compression on top positive.
-  --more-detail N       Refine the solve with Solve > More Detail, N times,
-                        or max: until Response refines no further.
+  --more-detail N       Refine the solve N times (more load stages), or
+                        max: until Response refines no further.
                         Default: 0.
 
 Output:
@@ -108,7 +116,8 @@ Output:
   --out DIR             Folder for results. Default: next to each input.
   --stdout              Write the raw record to stdout and no files. One
                         input only; not with --report.
-  --overwrite           Replace existing results. Default: stop.
+  --overwrite           Replace existing results without asking. Default:
+                        ask at a terminal, else stop.
 
 Running:
   -p, --parallel N      Solve up to N inputs at once. Default: 1.
@@ -219,7 +228,8 @@ Each chart's picture sits beside a table of its Copy Chart Data export at the pe
 record, with Response's own text in a collapsed block below it. The settings in effect and the
 record header head and close the page. The record is the same bytes with or without `--report`
 (`tests/test_worker_wine.py`). `--report` is not allowed with `--stdout`, and an existing report
-needs `--overwrite` like an existing record; without `--report`, an existing report is left alone.
+is replaced as an existing record is (asked at a terminal, or `--overwrite`); without
+`--report`, an existing report is left alone.
 
 Under Wine the pictures need fonts that a bare image lacks: Wine's own (`fonts-wine`, which has
 Symbol) and Arial's metrics (`fonts-liberation`). Response writes the Greek letters in chart titles
@@ -373,27 +383,28 @@ Planned in the Claude Doc "r2x define and the r2x session — plan" (2026-10-27)
 Wine on 2026-10-28. How a step works, every dialog's fields and what was found in Response are
 in `docs/define.md`. The decisions:
 
-- **`define` is always the verb, a dialog the noun**, at the session's prompt and on the command
-  line alike: `define quick`, `define long add web`. The nouns: `quick`, `general`, `materials`,
-  `section`, `long`, `trans`, `tendons` (`add`, `modify` or `delete`, then the item's name, asked
-  if left out), `loads`, `units`, `factors`.
+- **`define` is always the verb, the part of the section the noun**, at the session's prompt
+  and on the command line alike: `define quick`, `define long add web`. The nouns: `quick`,
+  `general`, `materials`, `section`, `long`, `trans`, `tendons` (`add`, `modify` or `delete`,
+  then the item's name, asked if left out), `loads`, `units`, `factors`.
 - **Questions only.** A define asks its dialog's fields, in the dialog's order and words, each
   with the value the dialog shows now; Enter keeps it, and a field is set only when the answer
-  differs. No options give a define's values: automation writes the input file elsewhere and
-  hands it to `solve`. (Answers can be piped, one per line, which the tests use.)
+  differs. A field inside one of the dialog's frames is asked under the frame's text, printed
+  once as a heading; choices are listed under their question. No options give a define's
+  values: automation writes the input file elsewhere and hands it to `solve`. (Answers can be
+  piped, one per line, which the tests use.)
 - **Response checks the values**, and its own questions and messages are passed on in its
   words; r2x checks only that a number is a number and a choice one of the choices.
 - **The file chain.** Each step is one container run: Response opens the file, one dialog is
   set, and Response saves the file back (Save As). r2x never reads or writes the XML.
 - **The file is the section; arguments are the analysis.** `solve` takes `r2x solve`'s options
   for the session's file and never changes it. Loads, units and factors can go either way.
-- **The report is the preview**: every step rewrites `NAME.r2x.html` (the input screen after
-  Save As, the dialog as set) and the page reloads itself. In a session `solve` always writes
+- **The report is the preview and the summary**: every step rewrites `NAME.r2x.html` with the
+  input screen after Save As, and the page reloads itself. In a session `solve` always writes
   the report (with the outputs); `r2x solve` alone keeps it opt-in. A define after a solve takes
   the outputs out.
-- **Beside a section** there are only `NAME.r2t`, its report and, once solved, its record. Each
-  solve replaces the record, whose header has the input's SHA-256 and the settings, so `show`
-  can say whether it is a solve of the file as it is.
+- **Beside a section** there are only `NAME.r2t`, its report and, once solved, its record.
+  Repeated defines and solves overwrite them (*Existing results*, at the top).
 - **Undo** is one step back, inside a session only; the copy is held by the session.
 - **The date:** a new section gets today's date on the Windows side (Edit General's date);
   a way to set another comes later.
@@ -402,9 +413,10 @@ in `docs/define.md`. The decisions:
 
 ```
 usage: r2x define NOUN [ACTION [NAME]] FILE
-usage: r2x show [NOUN] FILE
-r2x                     (a session: define, open, save, show, solve, undo, report, help, quit)
+r2x                     (a session: define, open, solve, undo, report, help, quit)
 ```
 
-Exit status of `define` and `show`: 0 done (saved, or nothing changed), 1 failed (Response's
-message, or the person stopped answering: nothing is saved), 2 usage error.
+Exit status of `define`: 0 done (saved, or nothing changed), 1 failed (Response's message, or
+the person stopped answering: nothing is saved), 2 usage error. `show`, `save` and `?` on a
+question were dropped in the review (2026-11-03): the report is the summary, a define always
+saves, and `[default]` says what Enter keeps.

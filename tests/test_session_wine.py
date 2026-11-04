@@ -1,7 +1,7 @@
 """A whole r2x session through the command line, with the real worker under Wine in place of
 Docker (tests/fake_docker.py in wine mode): define a section by questions, solve it, undo."""
+import hashlib
 import os
-import re
 import subprocess
 import sys
 from pathlib import Path
@@ -28,9 +28,8 @@ def test_define_solve_undo(tmp_path):
         "define quick", "newbeam.r2t", *enter,
         "solve --views no-shear",
         "define long add web", "2", "", "15M", "300", "",
-        "show",
         "undo",
-        "show",
+        "solve --views no-shear",
     ], tmp_path)
     assert code == 0, err + out
     f = tmp_path / "newbeam.r2t"
@@ -42,10 +41,14 @@ def test_define_solve_undo(tmp_path):
     rec = record.read(tmp_path / "newbeam.r2x.txt")
     assert (rec.header["stage-count"], rec.header["peak-stage"]) == ("60", "56")
     assert "[newbeam] solved: 60 stages, peak 56 -> newbeam.r2x.txt, newbeam.r2x.html" in err
-    # the layer added, then taken away again by undo; the record is a solve of the file again
-    assert "set: Layer web; Number of Bars 2" in out
-    shows = re.findall(r"record: (.*)", out)
-    assert "stale" in shows[0] and "a solve of this file" in shows[1]
+    # the layer added, then taken away again by undo
+    assert "set: Layer web" in out and "Number of Bars 2" in out
     assert "undone: newbeam.r2t is as it was before define long add web" in out
+    # a define takes the outputs out of the report; solving again replaces the record and the
+    # report beside the file without asking
+    assert err.count("[newbeam] solved: 60 stages, peak 56 -> newbeam.r2x.txt, "
+                     "newbeam.r2x.html") == 2
+    assert record.read(tmp_path / "newbeam.r2x.txt").header["input-sha256"] == \
+        hashlib.sha256(f.read_bytes()).hexdigest()
     page = (tmp_path / "newbeam.r2x.html").read_text(encoding="utf-8")
-    assert "undo of define long add web" in page and "Outputs" not in page
+    assert "Outputs" in page and "replace" not in out

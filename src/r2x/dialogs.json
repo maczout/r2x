@@ -10,7 +10,9 @@
     "Fields: id is the control ID (RT_DIALOG of r2k.exe); label, the control holding the label",
     "Response shows beside it (labels can change: Select bar by area turns Bar Designation into",
     "Bar Area); unit, the control holding its unit; question, the words r2x asks with when",
-    "there is no label control. kind: text, number, integer, check (a check box, yes or no),",
+    "there is no label control (without the frame's words: a field's frame, the group box",
+    "around it, is read from the dialog as it is asked, since its text can carry the field's",
+    "meaning, Top or Outer Ring). kind: text, number, integer, check (a check box, yes or no),",
     "choice (a drop-down), shape (the list view of shapes), radio (one of several buttons), bar",
     "(a bar or strand designation, checked by Response against rebar.dat), first-line and",
     "other-lines (the title and the comments, which share one box). unless: skip the field when",
@@ -20,7 +22,7 @@
   "dialogs": [
     {
       "noun": "quick", "menu": 150, "kind": "wizard", "title": "Quick Define",
-      "summary": "Define > Quick Define: a new section",
+      "summary": "a new section: materials, shape, reinforcement",
       "pages": [
         {"title": "Quick Define - Step 1 of 4", "fields": [
           {"key": "title", "id": 5060, "kind": "text", "question": "Title", "xml": "r3g_beam name"},
@@ -40,17 +42,17 @@
           {"key": "dim6", "id": 101, "kind": "number", "label": 231, "unit": 235, "question": "Dimension 6", "xml": "shapesection par6"}
         ]},
         {"title": "Quick Define - Step 3 of 4", "fields": [
-          {"key": "top-number", "id": 5060, "kind": "integer", "question": "Top, Number of Bars", "xml": "longreinfx name=top num"},
-          {"key": "top-by-area", "id": 107, "kind": "check", "question": "Top, Select bar by area"},
-          {"key": "top-bar", "id": 5061, "kind": "bar", "label": 130, "prefix": "Top, ", "question": "Top, Bar Designation", "unit": 132, "xml": "longreinfx name=top bartitle"},
-          {"key": "bottom-number", "id": 5062, "kind": "integer", "question": "Bottom, Number of Bars", "xml": "longreinfx num"},
-          {"key": "bottom-by-area", "id": 5014, "kind": "check", "question": "Bottom, Select bar by area"},
-          {"key": "bottom-bar", "id": 5123, "kind": "bar", "label": 230, "prefix": "Bottom, ", "question": "Bottom, Bar Designation", "unit": 238, "xml": "longreinfx bartitle"}
+          {"key": "top-number", "id": 5060, "kind": "integer", "question": "Number of Bars", "xml": "longreinfx name=top num"},
+          {"key": "top-by-area", "id": 107, "kind": "check", "question": "Select bar by area"},
+          {"key": "top-bar", "id": 5061, "kind": "bar", "label": 130, "question": "Bar Designation", "unit": 132, "xml": "longreinfx name=top bartitle"},
+          {"key": "bottom-number", "id": 5062, "kind": "integer", "question": "Number of Bars", "xml": "longreinfx num"},
+          {"key": "bottom-by-area", "id": 5014, "kind": "check", "question": "Select bar by area"},
+          {"key": "bottom-bar", "id": 5123, "kind": "bar", "label": 230, "question": "Bar Designation", "unit": 238, "xml": "longreinfx bartitle"}
         ]},
         {"title": "Quick Define - Step 4 of 4", "fields": [
           {"key": "stirrup-type", "id": 5004, "kind": "choice", "question": "Stirrup Type", "xml": "transreinfz pattern"},
-          {"key": "stirrup-by-area", "id": 5067, "kind": "check", "question": "Stirrups, Select bar by area"},
-          {"key": "stirrup-bar", "id": 5061, "kind": "bar", "label": 130, "prefix": "Stirrups, ", "question": "Stirrups, Bar Designation", "unit": 132, "xml": "transreinfz bartitle"},
+          {"key": "stirrup-by-area", "id": 5067, "kind": "check", "question": "Select bar by area"},
+          {"key": "stirrup-bar", "id": 5061, "kind": "bar", "label": 130, "question": "Bar Designation", "unit": 132, "xml": "transreinfz bartitle"},
           {"key": "spacing", "id": 5062, "kind": "number", "question": "Spacing", "unit": 230, "xml": "transreinfz space"},
           {"key": "cover", "id": 5065, "kind": "number", "question": "Clear Cover", "unit": 238, "xml": "transreinfz disttop, distbot"},
           {"key": "strands", "id": 5041, "kind": "integer", "label": 237, "question": "Number of strands", "xml": "longreinfx num (a tendon layer)"},
@@ -60,7 +62,7 @@
     },
     {
       "noun": "general", "menu": 103, "kind": "dialog", "title": "General  Definitions",
-      "summary": "Define > Edit General: title, date, ...",
+      "summary": "title, comments, date, analysis spacing, moment axis",
       "pages": [
         {"fields": [
           {"key": "title", "id": 5032, "kind": "first-line", "question": "Title", "xml": "r3g_beam name"},
@@ -78,7 +80,7 @@
     },
     {
       "noun": "materials", "menu": 117, "kind": "sheet", "title": "Materials Page",
-      "summary": "Define > Material Properties: f'c, fy, fpu",
+      "summary": "material strengths: f'c, fy, fpu",
       "pages": [
         {"title": "Basic Properties", "fields": [
           {"key": "fc", "id": 104, "kind": "number", "question": "Concrete Cylinder Strength", "unit": 5019, "xml": "concrete fcp"},
@@ -89,7 +91,7 @@
     },
     {
       "noun": "section", "menu": 153, "kind": "sheet", "title": "Define Concrete Cross Section",
-      "summary": "Define > Concrete Section: basic shapes",
+      "summary": "the concrete shape and its dimensions",
       "pages": [
         {"title": "Basic Shapes", "fields": [
           {"key": "shape", "id": 5025, "kind": "shape", "question": "Shape", "xml": "shapesection name, sectionSOLID"},
@@ -104,7 +106,7 @@
     },
     {
       "noun": "long", "menu": 156, "kind": "list", "title": "Define Longitudinal Reinforcement",
-      "summary": "Define > Longitudinal Reinforcement",
+      "summary": "longitudinal reinforcement layers",
       "item": "layer",
       "list": {"box": 5072, "name": 5081, "add": 5075, "modify": 5076, "delete": 5077},
       "pages": [
@@ -119,7 +121,7 @@
     },
     {
       "noun": "trans", "menu": 154, "kind": "list", "title": "Define Transverse Reinforcement",
-      "summary": "Define > Transverse Reinforcement",
+      "summary": "transverse reinforcement (stirrup types)",
       "item": "stirrup type",
       "list": {"box": 5072, "name": 5081, "add": 5075, "modify": 5076, "delete": 5077},
       "pages": [
@@ -136,7 +138,7 @@
     },
     {
       "noun": "tendons", "menu": 5098, "kind": "list", "title": "Define Tendons",
-      "summary": "Define > Tendons",
+      "summary": "tendon layers",
       "item": "tendon layer",
       "list": {"box": 5072, "name": 5081, "add": 5075, "modify": 5076, "delete": 5077},
       "pages": [
@@ -153,7 +155,7 @@
     },
     {
       "noun": "loads", "menu": 152, "kind": "dialog", "title": "Define Loading",
-      "summary": "Loads > Sectional Loads: N, M, V",
+      "summary": "loads: N, M, V and their increments",
       "pages": [
         {"fields": [
           {"key": "axial", "id": 101, "kind": "number", "question": "Axial Load, Constant", "unit": 5059, "xml": "sectloading BN"},
@@ -167,7 +169,7 @@
     },
     {
       "noun": "units", "menu": 321, "kind": "sheet", "title": "Response-2000 Preferences",
-      "summary": "Options > Preferences: units",
+      "summary": "units",
       "pages": [
         {"title": "General", "fields": [
           {"key": "units", "kind": "radio", "question": "Units", "xml": "r3g_beam units",
@@ -177,12 +179,12 @@
     },
     {
       "noun": "factors", "menu": 321, "kind": "sheet", "title": "Response-2000 Preferences",
-      "summary": "Options > Preferences: material factors",
+      "summary": "material factors",
       "pages": [
         {"title": "General", "fields": [
-          {"key": "concrete", "id": 5041, "kind": "number", "question": "Material Factors, Concrete", "xml": "analysisoptions phic"},
-          {"key": "steel", "id": 5044, "kind": "number", "question": "Material Factors, Steel", "xml": "analysisoptions phis"},
-          {"key": "prestress", "id": 5045, "kind": "number", "question": "Material Factors, Prestress", "xml": "analysisoptions phip"}
+          {"key": "concrete", "id": 5041, "kind": "number", "question": "Concrete", "xml": "analysisoptions phic"},
+          {"key": "steel", "id": 5044, "kind": "number", "question": "Steel", "xml": "analysisoptions phis"},
+          {"key": "prestress", "id": 5045, "kind": "number", "question": "Prestress", "xml": "analysisoptions phip"}
         ]}
       ]
     }

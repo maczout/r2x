@@ -1,33 +1,30 @@
-"""The r2x session: `r2x` with no command. A prompt at which a section is defined step by step
-through Response's own dialogs, then solved, without opening Response.
+"""The r2x session: `r2x` with no command. A prompt at which a section is defined step by step,
+then solved.
 
-    r2x> define quick                 a new section: Quick Define, question by question
-    r2x> define long add web          one of Response's dialogs, by its name
+    r2x> define quick                 a new section, question by question
+    r2x> define long add web          add a longitudinal reinforcement layer
     r2x> solve --increment 0,1,1      solve the session's file (any r2x solve options)
 
-The session works on one file. Each step is one container run: Response opens the file, one
-dialog is set, Response saves the file back (Save As), and the section's report beside it is
-rewritten; the report reloads itself, so one browser tab follows the session. The file from
-before the last step is kept in the session for undo; nothing else is written. Standard library
-only.
+The session works on one file. Each step is one container run: Response opens the file, one of
+its dialogs is set, Response saves the file back (Save As), and the section's report beside it
+is rewritten; the report reloads itself, so one browser tab follows the session. Repeated steps
+and solves overwrite the file, its report and its record. The file from before the last step is
+kept in the session for undo; nothing else is written. Standard library only.
 """
 
 from __future__ import annotations
 
-import argparse
-import hashlib
 import os
-import sys
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from r2x import catalogue, record
+from r2x import catalogue
 from r2x.ask import Question
 from r2x.catalogue import CatalogueError, parse_step
-from r2x.define import (SECTION_SUFFIXES, Prompter, StepResult, file_name_from, record_for,
-                        report_for, run_step, set_line, show_lines, today)
+from r2x.define import (SECTION_SUFFIXES, Prompter, StepResult, file_name_from, report_for,
+                        run_step, set_line, today)
 from r2x.progress import SOLVED
 from r2x.settings import Settings
 
@@ -35,12 +32,10 @@ NEW_TITLE = "New Cross Section"   # Response's title for a new section
 UNITS = {"SI Metric": "si", "US Customary": "us", "kg/cm Metric": "kgcm"}
 
 HELP = """\
-Commands (Response's own dialogs do the work; see help define):
-  define NOUN ...      set one of Response's dialogs, question by question; Enter keeps the
-                       value the dialog shows, ? explains a question
+Commands:
+  define NOUN ...      set part of the section, question by question; Enter keeps the value
+                       shown (help define lists the nouns)
   open FILE            work on this file (.r2t or .rsp)
-  save [FILE]          Response's Save As, to FILE; the session goes on with FILE
-  show [NOUN]          the file, its report and its record; or one dialog's values
   solve [OPTIONS]      solve the file and update its report (r2x solve --help for OPTIONS)
   undo                 put the file back as it was before the last step
   report               open the section's report in the browser
@@ -68,10 +63,6 @@ def split_words(line: str) -> list[str]:
     return words
 
 
-def sha(path: Path) -> str:
-    return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
 @dataclass
 class Undo:
     file: Path                 # the file the step wrote
@@ -97,8 +88,7 @@ class Shell:
 
     # -- the loop -------------------------------------------------------------------------------
     def run(self) -> int:
-        self.p.print("r2x session: define a section in Response's dialogs, then solve it. "
-                     "help for commands.")
+        self.p.print("r2x session: define a section, then solve it. help lists the commands.")
         while True:
             line = self.p.line("r2x> ")
             if line is None:
@@ -120,9 +110,8 @@ class Shell:
         cmd, rest = words[0].lower(), words[1:]
         if cmd in ("quit", "exit", "q"):
             return False
-        handler = {"define": self.define, "open": self.open, "save": self.save,
-                   "show": self.show, "solve": self.solve, "undo": self.do_undo,
-                   "help": self.help, "?": self.help, "report": self.report}.get(cmd)
+        handler = {"define": self.define, "open": self.open, "solve": self.solve,
+                   "undo": self.do_undo, "help": self.help, "report": self.report}.get(cmd)
         if handler is None:
             self.p.print(f"  no command {words[0]!r}; help lists them")
         else:
@@ -222,66 +211,6 @@ class Shell:
                                            screen=f"open {p.name}"), self.p)
             if self.outcome(result, "the report"):
                 self.p.print(f"  report {report.name} written")
-        self.summary()
-
-    def save(self, words: list[str]):
-        if self.file is None:
-            self.p.print("  no section yet: define quick, or open FILE")
-            return
-        if not words:
-            self.p.print(f"  {self.file.name} is saved after every step")
-            return
-        if len(words) != 1:
-            self.p.print("  save [FILE]")
-            return
-        target = self.path(words[0] if Path(words[0]).suffix.lower() in SECTION_SUFFIXES
-                           else words[0] + ".r2t")
-        if not target.parent.is_dir():
-            self.p.print(f"  no folder {target.parent}")
-            return
-        if target.exists():
-            ok, a = self.p.answer(Question("replace", f"{target.name} exists: replace it",
-                                           "yesno", "n"))
-            if not ok or a != "y":
-                self.p.print("  nothing done")
-                return
-        before = target.read_bytes() if target.exists() else None
-        report = report_for(target)
-        result = run_step(self.command([], input_file=self.file, out=target, report=report,
-                                       screen=f"save {target.name}"), self.p)
-        if self.outcome(result, "save"):
-            self.undo = Undo(target, before, self.file, f"save {target.name}")
-            self.file = target
-            self.saved(result, report)
-
-    def show(self, words: list[str]):
-        if self.file is None:
-            self.p.print("  no section yet: define quick, or open FILE")
-            return
-        if not words:
-            return self.summary()
-        try:
-            step = parse_step(words[:1])
-        except CatalogueError as e:
-            self.p.print(f"  {e}")
-            return
-        if step.noun == "quick":
-            self.p.print("  Quick Define always starts a new section; show general, section, "
-                         "long ... instead")
-            return
-        result = run_step(self.command([step.noun], input_file=self.file, mode="show"), self.p)
-        if self.outcome(result, f"show {step.noun}"):
-            for line in show_lines(result.shown):
-                self.p.print(line)
-
-    def summary(self):
-        f = self.file
-        self.p.print(f"  file: {f.name} (SHA-256 {sha(f)[:12]})")
-        report = report_for(f)
-        self.p.print(f"  report: {report.name}" if report.exists() else "  report: none yet")
-        self.p.print("  record: " + record_status(f))
-        if self.undo:
-            self.p.print(f"  undo: back to before {self.undo.what}")
 
     def solve(self, words: list[str]):
         if self.file is None:
@@ -329,26 +258,10 @@ class Shell:
 
 
 def define_help() -> str:
-    lines = ["define NOUN: one of Response's dialogs, its questions in the dialog's order.",
-             "Enter keeps the value the dialog shows; ? explains a question."]
+    lines = ["define NOUN: set part of the section, question by question. Enter keeps the",
+             "value shown."]
     for d in catalogue.DIALOGS:
         lines.append(f"  {d.noun + (' add|modify|delete [NAME]' if d.kind == 'list' else ''):<34}"
                      f"{d.summary}")
     lines.append("At the session's prompt, help define NOUN lists a dialog's questions.")
     return "\n".join(lines)
-
-
-def record_status(section: Path) -> str:
-    """Whether the section's record is a solve of the file as it is now."""
-    rec_path = record_for(section)
-    if not rec_path.exists():
-        return "none yet (solve)"
-    try:
-        h = record.read(rec_path).header
-    except (record.RecordError, OSError) as e:
-        return f"{rec_path.name} cannot be read ({e})"
-    solved = f"{h.get('stage-count', '?')} stages, peak {h.get('peak-stage', '?')}"
-    if h.get("input-sha256") == sha(section):
-        return f"{rec_path.name}, a solve of this file ({solved})"
-    return (f"{rec_path.name} is stale: it is a solve of another version of the file "
-            f"({solved}); solve again")

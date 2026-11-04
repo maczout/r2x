@@ -63,10 +63,31 @@ def test_quick_every_default_is_newbeam(tmp_path):
     assert (q["fc"]["value"], q["fc"]["unit"]) == ("35.0", "MPa")
     assert (q["dim1"]["text"], q["dim1"]["value"], q["dim1"]["unit"]) == ("b", "250", "mm")
     assert q["shape"]["choices"] == ["Rectangle", "Circular", "T-Beam", "I-Beam"]
+    # each field's frame, read from the dialog; the questions carry no frame words of their own
+    assert (q["top-number"]["frame"], q["top-number"]["text"]) == \
+        ("Top Non-Prestressed Reinforcement", "Number of Bars")
+    assert (q["bottom-bar"]["frame"], q["bottom-bar"]["text"]) == \
+        ("Bottom Non-Prestressed Reinforcement", "Bar Designation")
+    assert q["stirrup-bar"]["frame"] == "Transverse Steel"
+    assert q["strands"]["frame"] == "Bottom Tendons" and q["shape"]["frame"] == ""
     assert r.set == [] and r.done["saved"] and r.done["title"] == "New Cross Section"
     page = report.read_text(encoding="utf-8")
-    assert page.count("data:image/png;base64,") == 1 + 4        # input screen, four pages
+    assert page.count("data:image/png;base64,") == 1             # the input screen only
     assert "Outputs" not in page and "R2X_STAMP" in page
+
+
+def test_quick_circular_asks_for_rings(tmp_path):
+    """The frames carry the meaning: a circle's reinforcement is rings, not top and bottom
+    layers, and the questions say so (Jamie's review, 2026-10-28)."""
+    out = tmp_path / "column.r2t"
+    r = define(["quick"], {"shape": "Circular", "dim1": "500", "top-number": "12",
+                           "top-bar": "25M"}, out=out, date=NEWBEAM_DATE)
+    assert r.status == 0, r.stderr
+    q = {q["key"]: q for q in r.questions}
+    assert q["top-number"]["frame"] == "Outer Non-Prestressed Reinforcement Ring"
+    assert q["bottom-number"]["frame"] == "Inner Non-Prestressed Reinforcement Ring"
+    assert r.setting("Number of Bars", "Outer Non-Prestressed Reinforcement Ring") == "12"
+    assert attrs(out.read_text(), "shapesection")[0]["name"] == "CIRCLE"
 
 
 def test_quick_t_beam_with_a_bar_response_does_not_know(tmp_path):
@@ -81,6 +102,8 @@ def test_quick_t_beam_with_a_bar_response_does_not_know(tmp_path):
     # Response offered its Reinforcement Types list for 99M; r2x asked for a bar from it
     (chooser,) = r.asked("bar")
     assert "99M" in chooser["text"] and not chooser["keep"]
+    assert chooser["choices"][:3] == ["10M", "15M", "20M"] and len(chooser["choices"]) == 125
+    assert chooser["frame"] == "Top Non-Prestressed Reinforcement"
     xml = out.read_text()
     beam = attrs(xml, "r3g_beam")[0]
     assert (beam["name"], beam["doneby"], beam["date"]) == ("Pier cap", "JM", "2026/10/27")
@@ -93,7 +116,7 @@ def test_quick_t_beam_with_a_bar_response_does_not_know(tmp_path):
     assert {l["bartitle"] for n, l in layers.items() if n != "top"} == {"30M"}
     stirrup = attrs(xml, "transreinfz")[0]
     assert (stirrup["bartitle"], stirrup["pattern"], stirrup["space"]) == ("15M", "3", "300.0")
-    assert dict(r.set)["Top, Bar Designation"] == "20M"           # the bar picked, read back
+    assert r.setting("Bar Designation", "Top Non-Prestressed Reinforcement") == "20M"   # picked
     assert r.done["title"] == "Pier cap"
 
 
@@ -144,8 +167,8 @@ def test_loads_land_where_response_saves_them(tmp_path):
     assert r.status == 0, r.stderr
     assert attrs(f.read_text(), "sectloading")[0] == {"BN": "-2000.0", "MM": "0.000",
                                                       "MV": "1.000"}
-    assert dict(r.set) == {"Axial Load, Constant": "-2000.00 kN",
-                           "Moment, Increment": "0.00 kNm", "Shear, Increment": "1.00 kN"}
+    assert r.set == [["Axial Load, Constant", "-2000.00 kN", ""],
+                     ["Moment, Increment", "0.00 kNm", ""], ["Shear, Increment", "1.00 kN", ""]]
 
 
 def test_units_and_factors(tmp_path):
@@ -179,9 +202,9 @@ def test_general(tmp_path, resaved):
     assert beam == {"name": "Pier cap\nNorth pier", "doneby": "JM", "date": NEWBEAM_DATE,
                     "smx": "300.0", "axialloc": "250.0"}
     # only the fields answered differently come back
-    assert [k for k, _ in r.set] == ["Title", "Comments", "Analysis By",
-                                    "Automatic Longitudinal Spacing", "Longitudinal Spacing",
-                                    "Centroidal Moment axis", "Moment axis"]
+    assert [k for k, _, _ in r.set] == ["Title", "Comments", "Analysis By",
+                                       "Automatic Longitudinal Spacing", "Longitudinal Spacing",
+                                       "Centroidal Moment axis", "Moment axis"]
 
 
 def test_materials_passes_on_responses_question(tmp_path, resaved):
@@ -246,7 +269,7 @@ def test_long_add_with_a_duplicate_name_asks_as_response_does(tmp_path, resaved)
     f = copy(resaved, tmp_path, "no.r2t")
     r = define(["long", "add", "top"], {"number": "2", "response": "n"}, input_file=f, out=f)
     assert r.status == 0, r.stderr
-    assert r.said == ["Response named the new layer 'top1'"] and r.set[0] == ["Layer", "top1"]
+    assert r.said == ["Response named the new layer 'top1'"] and r.set[0] == ["Layer", "top1", ""]
     names = [l.get("name", "bot") for l in attrs(f.read_text(), "longreinfx")]
     assert sorted(names) == ["bot", "top", "top1"]
 
@@ -270,13 +293,3 @@ def test_tendons_add(tmp_path, resaved):
     t = [l for l in attrs(f.read_text(), "longreinfx") if l.get("name") == "t1"]
     assert t == [{"z": "100.00", "type": "Low Relax", "num": "4", "A": "396.0",
                   "bartitle": "S13", "dep": "6.50", "name": "t1"}]
-
-
-def test_show_reads_a_dialog_and_changes_nothing(tmp_path, resaved):
-    f = copy(resaved, tmp_path)
-    r = define(["long"], input_file=f, show=True)
-    assert r.status == 0, r.stderr
-    shown = dict(r.shown)
-    assert "Layer bot" in shown and "Layer top" in shown
-    assert ["  Dist. from Bottom", "64 mm"] in r.shown
-    assert f.read_bytes() == resaved.read_bytes()

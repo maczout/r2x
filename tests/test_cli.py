@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from r2x import __version__, record
+from r2x import __version__, cli, record
 from r2x.cli import (build_parser, expand_inputs, join_pair_values, main, overall_status,
                      record_path, report_path, UsageError, windows_to_wsl)
 from r2x.display import Display
@@ -184,6 +184,27 @@ def test_existing_record_needs_overwrite(cases):
     assert (cases / "beam.r2x.txt").read_text() == "old"
     status, _, _ = r2x("solve", str(cases / "beam.r2t"), "--overwrite")
     assert status == 0 and record.read(cases / "beam.r2x.txt").stages() == [7]
+
+
+class Terminal(io.StringIO):
+    def isatty(self):
+        return True
+
+
+def test_solve_asks_before_replacing_results_at_a_terminal(monkeypatch, tmp_path):
+    """As Windows asks before Save As replaces a file: yes replaces, Enter keeps (no)."""
+    err = Terminal()
+    monkeypatch.setattr(sys, "stderr", err)
+    monkeypatch.setattr(sys, "stdin", Terminal("y\n"))
+    assert cli.replace_ok([tmp_path / "beam.r2x.txt"])
+    assert f"{tmp_path / 'beam.r2x.txt'} exists: replace it [n]: " in err.getvalue()
+    monkeypatch.setattr(sys, "stdin", Terminal("\n"))
+    assert not cli.replace_ok([tmp_path / "a.r2x.txt", tmp_path / "b.r2x.txt"])
+    assert "a.r2x.txt and 1 more exist: replace them [n]: " in err.getvalue()
+    # with no one to ask, stop and say how to replace them
+    monkeypatch.setattr(sys, "stdin", io.StringIO("y\n"))
+    with pytest.raises(cli.UsageError, match="beam.r2x.txt exists; use --overwrite"):
+        cli.replace_ok([tmp_path / "beam.r2x.txt"])
 
 
 @pytest.mark.parametrize("name, status, message", [

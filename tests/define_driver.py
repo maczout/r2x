@@ -27,18 +27,22 @@ class Result:
     status: int
     questions: list[dict] = field(default_factory=list)
     said: list[str] = field(default_factory=list)
-    set: list[list[str]] = field(default_factory=list)
-    shown: list[list[str]] = field(default_factory=list)
+    set: list[list[str]] = field(default_factory=list)     # [label, value, frame]
     done: dict = field(default_factory=dict)
     stderr: str = ""
 
     def asked(self, key: str) -> list[dict]:
         return [q for q in self.questions if q["key"] == key]
 
+    def setting(self, label: str, frame: str = "") -> str:
+        """The value a field was set to, by its label and (in a frame) the frame's text."""
+        (value,) = [v for l, v, f in self.set if l == label and f == frame]
+        return value
+
 
 def define(words: list[str], answers: dict | None = None, input_file: Path | None = None,
            out: Path | None = None, report: Path | None = None, date: str | None = None,
-           extra: list[str] = (), show: bool = False) -> Result:
+           extra: list[str] = ()) -> Result:
     answers = {k: (list(v) if isinstance(v, list) else [v]) for k, v in (answers or {}).items()}
     cmd = [sys.executable, "-m", "r2x.worker", "define", *words,
            "--response-dir", response_dir(), "--prefix", str(prefix()), *extra]
@@ -50,8 +54,6 @@ def define(words: list[str], answers: dict | None = None, input_file: Path | Non
         cmd += ["--report", str(report)]
     if date is not None:
         cmd += ["--date", date]
-    if show:
-        cmd.append("--show")
     proc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.PIPE, text=True, encoding="utf-8")
     result = Result(0)
@@ -71,8 +73,6 @@ def define(words: list[str], answers: dict | None = None, input_file: Path | Non
             result.said.append(msg["say"])
         elif "set" in msg:
             result.set = msg["set"]
-        elif "show" in msg:
-            result.shown = msg["show"]
         elif "done" in msg:
             result.done = msg["done"]
     result.stderr = proc.stderr.read()
@@ -88,13 +88,12 @@ if __name__ == "__main__":   # python tests/define_driver.py WORDS... -- key=val
     r = define(words, {k: v for k, v in opts.items() if not k.startswith("@")},
                Path(opts["@in"]) if "@in" in opts else None,
                Path(opts["@out"]) if "@out" in opts else None,
-               Path(opts["@report"]) if "@report" in opts else None, opts.get("@date"),
-               show="@show" in opts)
+               Path(opts["@report"]) if "@report" in opts else None, opts.get("@date"))
     for q in r.questions:
-        print("Q", q["key"], repr(q["text"]), q["unit"], repr(q["value"]), q["choices"][:6])
+        print("Q", q["key"], repr(q["frame"]), repr(q["text"]), q["unit"], repr(q["value"]),
+              q["choices"][:6])
     for s in r.said:
         print("SAY", s)
     print("SET", r.set)
-    print("SHOW", r.shown)
     print("DONE", r.done, "status", r.status)
     print(r.stderr)
