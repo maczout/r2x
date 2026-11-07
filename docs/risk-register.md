@@ -1,0 +1,75 @@
+# Risk register: where r2x's results could differ from Response on Windows
+
+Item 5 of *Before setting r2x down* starts here, not from runs. Each risk is something that
+could make r2x's record or report differ from what an engineer would get by running Response by
+hand on Windows. For each: whether the engineer can see it, what covers it today, and the
+cheapest check that would catch it.
+
+**Seeing it** decides the kind of check. An error the engineer can see (the section is not the
+one asked for, a load is wrong) is caught the way it is in the GUI: by looking at the input
+before trusting the output, so the report must show it. An error the engineer cannot see (a
+wrong stage, a solve read early, a digit off under Wine) needs a mechanical check against an
+independent oracle, and only hand captures on Windows are independent of r2x.
+
+Tiers, cheapest last: **A**, hand captures on Windows (the only independent oracle; Jamie's
+time); **B**, r2x's worker run natively on Windows against Wine (not in the first pass);
+**C**, checks on records alone, at scale, no oracle.
+
+## Solving
+
+| # | Risk | Seen? | Covered today | First pass |
+|---|---|---|---|---|
+| S1 | A setting applied wrong: units, factors, initial or increment | Yes: the solve report shows Preferences and Define Loading as set; the header reads them back from the same dialogs | Tier A: US units, CSA factors, constant N, N increment, V increment | Nothing new. kg/cm units and two settings combined stay on the gap list, low |
+| S2 | An input opened differently: `.rsp` files, File Override, units stored in the file | Partly: the input screen | Cm4.rsp and Response's shear examples run, no reference | **Tier A**: Marshall.rsp |
+| S3 | The wrong stage picked where several look alike (common near a shear peak) | No: the record names the stage, nothing shows it was the right one | r2x's paging check (exports compared stage by stage); no Windows reference for a case that needs the fallback | **Tier A**: Marshall.rsp (its peak matches 5 stages) |
+| S4 | A solve read before it finished (Wine gives no signal) | No: a short solve looks like a real one | Finish rule: bottom curve unchanged 1 s and Response idle; every Tier A case | **Tier C**: solve each case twice, same bytes |
+| S5 | Wine numerics: signed zeros, last-digit rounding | No | Tier A byte comparisons in nine cases; one known signed zero | Accepted for now; breadth is Tier B's, in the clone project |
+| S6 | A chart read from the wrong cell or menu item | No, but loud: every export's title is checked | Title check, `views.json`, the menu-width check | Nothing new |
+| S7 | Stages away from the peak paged to wrongly | No | Identification at every stage; Tier A at Newbeam 36 and newbeam-shear 20 | **Tier A**: Cm4.rsp at a stage well below its peak; **Tier C**: stages in order, control curve monotonic in the loading parameter |
+| S8 | Shear with an axial load: N and V together | No | r2x's own checks under Wine | **Tier A**: Newbeam, constant N with an M and V increment |
+| S9 | An increment with N, M and V all non-zero | No | None | **Tier A**: Newbeam, increment with all three |
+| S10 | More Detail: presses miscounted, the limit misread | Partly: the header's `more-detail` | newbeam-moredetail (twice); `max` under Wine | Nothing new |
+| S11 | Results that are Response's but wrong for the section: equilibrium, closed forms | Only by engineering judgment | None: r2x returns Response's bytes and checks none of them | **Tier C**: equilibrium of the exported stresses against N and M; squash load; cracking moment |
+
+## Defining a section
+
+| # | Risk | Seen? | Covered today | First pass |
+|---|---|---|---|---|
+| D1 | A field set in the wrong control, or not set | Partly: the input screen (see *What the report leaves out*) | Wine: every dialog lands where Response saves it; Windows: five cases | Short Tier A cases aimed at what the screen does not show |
+| D2 | Response reacting differently as values go in (fields enabled by shape, bars checked, Modify's precision) | Sometimes: Response's messages come through | The five Windows cases; Modify's precision known (63.90 becomes 64.00) | The other eight define cases cut to two or three short ones |
+| D3 | A new section's layers in another order | No, and harmless: same section, same record | Matched by solving (`compare.py`) | Nothing new |
+
+## The program folder (new with linking)
+
+| # | Risk | Seen? | Covered today | First pass |
+|---|---|---|---|---|
+| L1 | Another build of `r2k.exe` | Yes: refused unless `--allow-unverified`, and then marked in the header | SHA-256 check at setup and every run | Built with linking (item 2) |
+| L2 | The user's own `rebar.dat` or `shape.dat` (bar and shape lists) | Only through the header's files hash | None | A files hash in the header; `r2x health` names the files that differ from the verified folder |
+| L3 | `Response.ini` and the user's own sections in the folder | No | Not copied into the job (only the files Response reads) | Built with linking |
+
+## The image
+
+| # | Risk | Seen? | Covered today | First pass |
+|---|---|---|---|---|
+| E1 | A rebuild drifts (the base is `ubuntu:24.04` by tag; only Wine is pinned) | No | Rerun the Wine tests after any rebuild | The verified image published (GHCR), so users run the bytes that were checked |
+
+## What the report leaves out
+
+To fill in from a report's input screen before deciding whether inspection is enough for v1.0
+(D1, and Jamie's idea under item 2). Known so far:
+
+- Bar depths as numbers (layers are drawn, not dimensioned).
+- A tendon's prestrain.
+- The material factors, in a define's report (the solve report shows them in Preferences).
+- Stages other than the peak.
+- How the stage was identified (the record says which stage, not why).
+
+## First pass, in short
+
+- **Tier A, four captures** aimed at what the engineer cannot see: Marshall.rsp (S2, S3);
+  Cm4.rsp at a stage well below its peak (S2, S7); Newbeam under a constant N with an M and V increment
+  (S8); Newbeam with N, M and V all in the increment (S9).
+- **Define:** the other eight cases cut to two or three short ones aimed at D1 and D2.
+- **Tier C prototype:** repeat solves (S4), stage order (S7), equilibrium and closed forms
+  (S11).
+- **Not now:** Tier B; kg/cm units and two settings combined (S1 is visible).
