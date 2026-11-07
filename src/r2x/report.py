@@ -22,6 +22,11 @@ opened from disk (file://) cannot read files, but it can frame one and be posted
 second and a half it loads itself, hidden, in a frame, and that copy posts its stamp (a hash of
 the page) back and stops loading. A different stamp means the file has changed: reload, which
 keeps the place on the page. No server, no files besides the page. Standard library only.
+
+A page cannot bring its own window forward, so a reload that comes while the page is out of
+sight flags its title instead ("● Solved · ...", or "● Updated" after a define), which shows
+in the tab and the taskbar, until the page is looked at. The flag survives the reload in
+window.name, which belongs to the tab.
 """
 
 from __future__ import annotations
@@ -74,7 +79,7 @@ def build(rec: Record, pictures: dict[str, bytes]) -> str:
     sub = (f"Peak stage {peak} of {stages}{detail}. Screenshots for checking by eye that r2x "
            f"drove Response as intended; the data is in the raw record (<code>.r2x.txt</code>).")
     return _page(name, sub, [("inputs", "Inputs", inputs),
-                             ("outputs", f"Outputs at stage {peak}", outputs)], made)
+                             ("outputs", f"Outputs at stage {peak}", outputs)], made, "Solved")
 
 
 def build_define(name: str, step: str, pictures: dict[str, bytes], made: str = "") -> str:
@@ -84,10 +89,10 @@ def build_define(name: str, step: str, pictures: dict[str, bytes], made: str = "
                pictures.get("input/screen"))]
     sub = (f"After <code>{html.escape(step)}</code>. Inputs only: <code>solve</code> adds the "
            f"outputs.")
-    return _page(name, sub, [("inputs", "Inputs", inputs)], made)
+    return _page(name, sub, [("inputs", "Inputs", inputs)], made, "Updated")
 
 
-def _page(name: str, sub: str, groups, made: str = "") -> str:
+def _page(name: str, sub: str, groups, made: str = "", flag: str = "Updated") -> str:
     """The page: an index down the left, then each group of screenshots."""
     index = ['<nav class="index" aria-label="Contents"><p class="brand">r2x report</p>',
              f'<p class="case">{html.escape(name)}</p>']
@@ -108,7 +113,7 @@ def _page(name: str, sub: str, groups, made: str = "") -> str:
     body.append('<footer><p>Drawn under Wine; fonts and line weights can differ slightly from '
                 f"Windows.{' ' + html.escape(made) + '.' if made else ''} This page reloads "
                 "itself when r2x rewrites it.</p></footer>")
-    body.append("</main></div>" + _RELOAD + "</body></html>\n")
+    body.append("</main></div>" + _RELOAD.replace("{flag}", flag) + "</body></html>\n")
     text = "".join(body)
     stamp = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
     return _HEAD.format(title=html.escape(f"{name} · r2x report"), css=_CSS, stamp=stamp) + text
@@ -137,14 +142,32 @@ if (window.parent !== window) {{ window.parent.postMessage({{r2xStamp: R2X_STAMP
 </head><body>
 """
 
-# Load the page again every 1.5 s in a hidden frame; reload when its stamp differs.
+# Load the page again every 1.5 s in a hidden frame; reload when its stamp differs. After a
+# reload, flag the title until the page is in sight.
 _RELOAD = """<script>(function () {
   if (window.parent !== window) return;
+  var CHANGED = "r2x-changed";
+  if (window.name === CHANGED) {
+    window.name = "";
+    var plain = document.title;
+    var seen = function () { return !document.hidden && document.hasFocus(); };
+    var clear = function () {
+      if (!seen()) return;
+      document.title = plain;
+      window.removeEventListener("focus", clear);
+      document.removeEventListener("visibilitychange", clear);
+    };
+    if (!seen()) {
+      document.title = "\u25cf {flag} \u00b7 " + plain;
+      window.addEventListener("focus", clear);
+      document.addEventListener("visibilitychange", clear);
+    }
+  }
   var frame = null;
   window.addEventListener("message", function (e) {
     if (!e.data || typeof e.data.r2xStamp !== "string") return;
     if (frame) { frame.remove(); frame = null; }
-    if (e.data.r2xStamp !== R2X_STAMP) location.reload();
+    if (e.data.r2xStamp !== R2X_STAMP) { window.name = CHANGED; location.reload(); }
   });
   setInterval(function () {
     if (frame) frame.remove();

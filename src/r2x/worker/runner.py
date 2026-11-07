@@ -16,6 +16,7 @@ from typing import Callable, Iterator
 
 from r2x import __version__, record, report as html_report
 from r2x.progress import Event, note
+from r2x.response import ALLOW_ENV, Program, ResponseError, read_program, unverified_message
 from r2x.settings import Settings
 from r2x.stages import PEAK, StageSpec, format_ranges
 from r2x.views import ALL, format_views
@@ -82,6 +83,19 @@ class Running:
     session: Session
     job: Path                 # the job's own folder: Response's program folder copy, scratch
     input: Path | None        # the input as Response opened it (a copy in job), if any
+    program: Program          # the program folder the job's copy was made from
+
+
+def check_program(response_dir: Path) -> Program:
+    """The program folder, checked: another build of r2k.exe runs only with $R2X_ALLOW_UNVERIFIED
+    set to 1 (r2x setup --allow-unverified), and the record says so."""
+    try:
+        program = read_program(response_dir)
+    except ResponseError as e:
+        raise R2xError(str(e))
+    if not program.verified and os.environ.get(ALLOW_ENV) != "1":
+        raise R2xError(unverified_message(program))
+    return program
 
 
 @contextmanager
@@ -94,8 +108,7 @@ def start_response(input_file: Path | None, response_dir: Path, prefix: Path,
     With no input, Response starts with its start-up section and nothing else is done.
     """
     response_dir = Path(response_dir)
-    if not (response_dir / "r2k.exe").is_file():
-        raise R2xError(f"no r2k.exe in {response_dir}")
+    program = check_program(response_dir)
     cache = cache or Path.home() / ".cache" / "r2x"
     helper_exe = ensure_helper(cache)
 
@@ -110,10 +123,13 @@ def start_response(input_file: Path | None, response_dir: Path, prefix: Path,
         stack.callback(lambda: subprocess.run(["wineserver", "-k"], env=env,
                                               stderr=subprocess.DEVNULL))
 
-        # Each job gets its own copy of the program folder (Response writes Response.ini there).
+        # Each job gets its own copy of the program (Response writes Response.ini there): only
+        # the files Response reads, so a linked folder's Response.ini and sections stay out.
         job = Path(tempfile.mkdtemp(prefix="r2x-job-"))
         stack.callback(shutil.rmtree, job, ignore_errors=True)
-        shutil.copytree(response_dir, job / "Response")
+        (job / "Response").mkdir()
+        for name in program.hashes:
+            shutil.copyfile(response_dir / name, job / "Response" / name)
         args, job_input = [], None
         if input_file is not None:
             job_input = job / Path(input_file).name
@@ -135,7 +151,7 @@ def start_response(input_file: Path | None, response_dir: Path, prefix: Path,
             wait_until(lambda: helper.try_ask("main"), 60, "Response to start", 0.1)
         time.sleep(0.2)
         session.check_no_dialog()
-        yield Running(session, job, job_input)
+        yield Running(session, job, job_input, program)
 
 
 def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path,
@@ -165,7 +181,7 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
             raise R2xError(f"no folder {path.parent} to write {what} in")
 
     with start_response(input_file, response_dir, prefix, display, cache, on_event) as running:
-        session, job = running.session, running.job
+        session, job, program = running.session, running.job, running.program
         if input_file is None:
             dialogs.quick_define(session)
         dialogs.apply(session, settings)
@@ -182,6 +198,8 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
     header = {
         "r2x-version": __version__,
         "response-exe-sha256": sha256(exe),
+        "response-files-sha256": program.files_sha256,
+        "response-verified": "yes" if program.verified else "no",
         "wine-version": wine_version,
         **({"input-name": input_file.name, "input-sha256": sha256(input_file)} if input_file
            else {"input-name": NEW_INPUT}),

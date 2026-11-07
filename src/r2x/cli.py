@@ -3,10 +3,16 @@
 The interface is specified in docs/cli.md. The container runs once per input: in Docker inside
 WSL on Windows (`wsl --exec docker ...`), with `docker` directly elsewhere. Standard library only.
 
+Response-2000 is the user's own: `r2x setup --response FOLDER` links its program folder once
+(r2x/config.py), and every run mounts it read-only at /opt/response.
+
 Environment:
-  R2X_IMAGE        image name (default r2x)
-  R2X_DOCKER       command that runs docker, e.g. "sudo docker" (default: see above)
-  R2X_WSL_DISTRO   WSL distribution with Docker (default: WSL's default distribution)
+  R2X_IMAGE            image name (default ghcr.io/maczout/r2x:VERSION, this client's version)
+  R2X_DOCKER           command that runs docker, e.g. "sudo docker" (default: see above)
+  R2X_WSL_DISTRO       WSL distribution with Docker (default: WSL's default distribution)
+  R2X_RESPONSE         Response-2000's program folder, instead of the one setup linked
+  R2X_ALLOW_UNVERIFIED 1: run a build of r2k.exe that r2x has not been checked against
+  R2X_CONFIG           the settings file, instead of the usual place (r2x/config.py)
 """
 
 from __future__ import annotations
@@ -23,18 +29,20 @@ import tempfile
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PureWindowsPath
 
-from r2x import __version__, progress
+from r2x import __version__, config, progress
 from r2x.ask import Question
 from r2x.catalogue import CatalogueError, parse_step
 from r2x.define import (SECTION_SUFFIXES, Prompter, record_for, report_for, run_step, set_line,
                         today, worker_command)
 from r2x.display import Display, Job
 from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE
+from r2x.response import (ALLOW_ENV, Program, ResponseError, read_program,
+                          unverified_message)
 from r2x.settings import FACTORS, UNITS, Settings, parse_loads, parse_more_detail
 from r2x.stages import StageError, StageSpec, parse_stages
 from r2x.views import ViewError, format_views, parse_views
 
-DEFAULT_IMAGE = "r2x"
+DEFAULT_IMAGE = f"ghcr.io/maczout/r2x:{__version__}"   # the published image, this version
 RECORD_SUFFIX = ".r2x.txt"
 REPORT_SUFFIX = ".r2x.html"
 NEW_NAME = "newbeam"     # record name without an input: Response's name for a new section
@@ -70,6 +78,39 @@ def docker_path(p: Path) -> str:
     if os.name == "nt" and not os.environ.get("R2X_DOCKER"):
         return windows_to_wsl(str(p))
     return str(p)
+
+
+# -- Response-2000, linked ------------------------------------------------------------------------
+NOT_LINKED = ("Response-2000 is not linked: r2x setup --response FOLDER, where FOLDER is its "
+              "program folder (the one with r2k.exe)")
+
+
+def linked_program() -> tuple[Program, bool]:
+    """The linked program folder, checked, and whether an unverified r2k.exe is allowed."""
+    try:
+        link = config.link()
+    except ValueError as e:
+        raise UsageError(str(e))
+    if link.folder is None:
+        raise UsageError(NOT_LINKED)
+    try:
+        program = read_program(link.folder)
+    except (ResponseError, OSError) as e:
+        raise UsageError(f"{e} (linked in {link.source}; r2x setup --response FOLDER links "
+                         f"another)")
+    if not program.verified and not link.allow_unverified:
+        raise UsageError(unverified_message(program))
+    return program, link.allow_unverified
+
+
+def response_mounts(program: Program, allow_unverified: bool) -> list[str]:
+    """docker run options that give the container the program folder, read-only."""
+    allow = ["-e", f"{ALLOW_ENV}=1"] if allow_unverified and not program.verified else []
+    return ["-v", f"{docker_path(program.folder)}:/opt/response:ro", *allow]
+
+
+def linked_mounts() -> list[str]:
+    return response_mounts(*linked_program())
 
 
 # -- inputs and outputs -------------------------------------------------------------------------
@@ -116,13 +157,13 @@ def overall_status(statuses: list[int]) -> int:
 # -- one input ----------------------------------------------------------------------------------
 def container_command(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
                       image: str, report: Path | None = None, views=None,
-                      more_detail: int | str = 0) -> list[str]:
+                      more_detail: int | str = 0, link: list[str] = ()) -> list[str]:
     """docker run for one input; without an input the worker defines a new section (--new).
-    The report, if any, goes in the record's folder."""
+    The report, if any, goes in the record's folder; link mounts Response (linked_mounts)."""
     mounts = ["-v", f"{docker_path(inp)}:/in/{inp.name}:ro"] if inp is not None else []
     worker_input = [f"/in/{inp.name}"] if inp is not None else ["--new"]
     return docker_command() + [
-        "run", "--rm", "--pull", "never", "--network", "none", *mounts,
+        "run", "--rm", "--pull", "never", "--network", "none", *link, *mounts,
         "-v", f"{docker_path(record.parent)}:/out",
         image, "python", "-m", "r2x.worker", *worker_input, f"/out/{record.name}",
         "--stage", str(stages), *(["--views", format_views(views)] if views else []),
@@ -135,9 +176,10 @@ def container_command(inp: Path | None, record: Path, stages: StageSpec, setting
 def run_container(inp: Path | None, record: Path, stages: StageSpec, settings: Settings,
                   image: str, display: Display, job: Job,
                   report: Path | None = None, views=None,
-                  more_detail: int | str = 0) -> tuple[int, str]:
+                  more_detail: int | str = 0, link: list[str] = ()) -> tuple[int, str]:
     """Solve one input in its own container; return its exit status and, if it failed, why."""
-    cmd = container_command(inp, record, stages, settings, image, report, views, more_detail)
+    cmd = container_command(inp, record, stages, settings, image, report, views, more_detail,
+                            link)
     display.start(job)
     try:
         proc = subprocess.Popen(cmd, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
@@ -165,6 +207,8 @@ def run_container(inp: Path | None, record: Path, stages: StageSpec, settings: S
     if code in (FAILED, USAGE, OUT_OF_SCOPE) and reason:
         return code, reason
     detail = " / ".join(other[-3:]) if other else "no message"
+    if "Unable to find image" in detail or "No such image" in detail:
+        return FAILED, f"no image {image} here: r2x setup pulls it"
     return FAILED, f"exit status {code}: {detail}"
 
 
@@ -183,10 +227,11 @@ def cmd_solve(a) -> int:
     check_solve_args(a)
     inputs: list[Path | None] = expand_inputs(a.inputs) if a.inputs else [None]
     live = sys.stderr.isatty()
+    link = linked_mounts()
     if a.stdout:
         if len(inputs) != 1:
             raise UsageError(f"--stdout takes one input; {len(inputs)} given")
-        return solve_to_stdout(inputs[0], a, live)
+        return solve_to_stdout(inputs[0], a, live, link)
 
     records = [record_path(i, a.out) for i in inputs]
     reports = [report_path(r) if a.report else None for r in records]
@@ -208,7 +253,7 @@ def cmd_solve(a) -> int:
         def solve(k: int) -> int:
             status, reason = run_container(inputs[k], records[k], a.stage, settings_from(a),
                                            a.image, display, jobs[k], reports[k], a.views,
-                                           a.more_detail)
+                                           a.more_detail, link)
             where = str(records[k]) + (f", {reports[k].name}" if reports[k] else "")
             display.finish(jobs[k], status, reason, where)
             return status
@@ -232,7 +277,7 @@ def replace_ok(existing: list[Path]) -> bool:
     return ok and answer == "y"
 
 
-def solve_to_stdout(inp: Path | None, a, live: bool) -> int:
+def solve_to_stdout(inp: Path | None, a, live: bool, link: list[str]) -> int:
     """Solve into a temporary folder, then copy the record's bytes to stdout unchanged."""
     with tempfile.TemporaryDirectory(prefix="r2x-") as tmp:
         record = Path(tmp) / f"{job_name(inp)}{RECORD_SUFFIX}"
@@ -240,7 +285,7 @@ def solve_to_stdout(inp: Path | None, a, live: bool) -> int:
             job = display.add(job_name(inp))
             status, reason = run_container(inp, record, a.stage, settings_from(a), a.image,
                                            display, job, views=a.views,
-                                           more_detail=a.more_detail)
+                                           more_detail=a.more_detail, link=link)
             display.finish(job, status, reason, "stdout")
         if status == SOLVED:
             # The binary buffer, so that Windows cannot rewrite the record's line endings.
@@ -254,21 +299,91 @@ def solve_to_stdout(inp: Path | None, a, live: bool) -> int:
     return status
 
 
-def cmd_health(a) -> int:
-    cmd = docker_command() + ["run", "--rm", "--pull", "never", "--network", "none", a.image,
-                              "python", "-m", "r2x.worker.info"]
-    print(f"r2x client {__version__}; image {a.image}; docker: {' '.join(docker_command())}")
+def describe_link() -> list[str]:
+    """r2x health's and setup's line on the linked Response, and its mounts if usable."""
     try:
-        return subprocess.run(cmd).returncode
+        link = config.link()
+    except ValueError as e:
+        print(f"Response-2000: {e}")
+        return []
+    if link.folder is None:
+        print(f"Response-2000: not linked (r2x setup --response FOLDER)")
+        return []
+    try:
+        program = read_program(link.folder)
+    except (ResponseError, OSError) as e:
+        print(f"Response-2000: {e} (linked in {link.source})")
+        return []
+    allowed = "; allowed (--allow-unverified)" if link.allow_unverified and not \
+        program.verified else ""
+    print(f"Response-2000: {program.folder} (linked in {link.source})")
+    print(f"  {program.describe()}{allowed}")
+    return response_mounts(program, link.allow_unverified)
+
+
+def cmd_health(a) -> int:
+    print(f"r2x client {__version__}; image {a.image}; docker: {' '.join(docker_command())}")
+    mounts = describe_link()
+    cmd = docker_command() + ["run", "--rm", "--pull", "never", "--network", "none", *mounts,
+                              a.image, "python", "-m", "r2x.worker.info"]
+    try:
+        code = subprocess.run(cmd).returncode
     except FileNotFoundError:
         print(f"cannot run {cmd[0]!r}", file=sys.stderr)
         return FAILED
+    if code != 0:
+        print(f"r2x: the image did not run: is it here? (r2x setup pulls {a.image})",
+              file=sys.stderr)
+        return FAILED
+    return SOLVED
+
+
+def image_present(image: str) -> bool:
+    cmd = docker_command() + ["image", "inspect", "--format", "{{.Id}}", image]
+    try:
+        return subprocess.run(cmd, stdout=subprocess.DEVNULL,
+                              stderr=subprocess.DEVNULL).returncode == 0
+    except FileNotFoundError:
+        hint = "is WSL installed?" if os.name == "nt" else "is Docker installed?"
+        raise UsageError(f"cannot run {docker_command()[0]!r} ({hint})")
+
+
+def cmd_setup(a) -> int:
+    """Link Response-2000's program folder (once), then make sure the image is here."""
+    if a.response is not None:
+        try:
+            program = read_program(a.response)
+        except (ResponseError, OSError) as e:
+            raise UsageError(str(e))
+        if not program.verified and not a.allow_unverified:
+            raise UsageError(unverified_message(program))
+        try:
+            settings = config.load()
+        except ValueError:
+            settings = {}            # a damaged settings file is replaced
+        settings["response"] = str(program.folder.resolve())
+        settings["allow_unverified"] = bool(a.allow_unverified)
+        path = config.save(settings)
+        print(f"r2x: linked Response-2000 in {path}")
+    elif a.allow_unverified:
+        raise UsageError("--allow-unverified goes with --response FOLDER")
+    if not describe_link():
+        return USAGE
+    if image_present(a.image):
+        print(f"image {a.image}: here")
+        return SOLVED
+    print(f"image {a.image}: pulling it (about 1.3 GB, once)")
+    if subprocess.run(docker_command() + ["pull", a.image]).returncode != 0:
+        print(f"r2x: could not pull {a.image}", file=sys.stderr)
+        return FAILED
+    return SOLVED
 
 
 # -- define and the session ---------------------------------------------------------------------
 def step_command(image: str):
     """The docker command for one define step (r2x.define.worker_command)."""
-    return functools.partial(worker_command, docker_command(), image, docker_path)
+    return functools.partial(worker_command, docker_command(), image, docker_path,
+                             link=linked_mounts())
 
 
 def section_args(words: list[str], what: str):
@@ -339,10 +454,15 @@ def session_solve(options: list[str], file: Path, image: str) -> int:
               f"report always go beside the file)")
         return USAGE
     record, report = record_for(file), report_for(file)
+    try:
+        link = linked_mounts()
+    except UsageError as e:
+        print(f"  {e}")
+        return USAGE
     with Display(sys.stderr, sys.stderr.isatty(), o.quiet) as display:
         job = display.add(file.stem)
         status, reason = run_container(file, record, o.stage, settings_from(o), image, display,
-                                       job, report, o.views, o.more_detail)
+                                       job, report, o.views, o.more_detail, link)
         display.finish(job, status, reason, f"{record.name}, {report.name}")
     return status
 
@@ -507,8 +627,8 @@ def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="r2x", description="Run Response-2000 from the command line.")
     p.add_argument("--version", action="version", version=f"r2x {__version__}")
     p.add_argument("--image", default=os.environ.get("R2X_IMAGE", DEFAULT_IMAGE),
-                   help="container image (default: $R2X_IMAGE or r2x)")
-    sub = p.add_subparsers(dest="command", metavar="{solve,define,health}",
+                   help=f"container image (default: $R2X_IMAGE or {DEFAULT_IMAGE})")
+    sub = p.add_subparsers(dest="command", metavar="{solve,define,setup,health}",
                            description="With no command: a session at the r2x> prompt "
                                        "(define, solve, ...; help there).")
 
@@ -534,7 +654,20 @@ def build_parser() -> argparse.ArgumentParser:
     d.add_argument("words", nargs="+", metavar="WORD", help=argparse.SUPPRESS)
     d.set_defaults(func=cmd_define)
 
-    health = sub.add_parser("health", help="show the image's r2x, Wine and Response-2000 versions")
+    setup = sub.add_parser("setup", help="link your Response-2000 and get the image (once)",
+                           usage="r2x setup [--response FOLDER] [--allow-unverified]",
+                           description="Link your own copy of Response-2000 (its program "
+                                       "folder, the one with r2k.exe) and pull the image if it "
+                                       "is not here. With no options: check both.")
+    setup.add_argument("--response", type=Path, metavar="FOLDER",
+                       help="Response-2000's program folder")
+    setup.add_argument("--allow-unverified", action="store_true",
+                       help="link it even if r2k.exe is not a build r2x has been checked "
+                            "against; every record says so")
+    setup.set_defaults(func=cmd_setup)
+
+    health = sub.add_parser("health", help="show the linked Response-2000 and the image's "
+                                           "r2x and Wine versions")
     health.set_defaults(func=cmd_health)
     return p
 

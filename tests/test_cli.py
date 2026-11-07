@@ -1,5 +1,7 @@
 """The command line, with tests/fake_docker.py standing in for Docker (no Wine needed)."""
+import hashlib
 import io
+import json
 import os
 import subprocess
 import sys
@@ -7,7 +9,8 @@ from pathlib import Path
 
 import pytest
 
-from r2x import __version__, cli, record
+from r2x import __version__, cli, record, response
+from r2x.settings import Settings
 from r2x.cli import (build_parser, expand_inputs, join_pair_values, main, overall_status,
                      record_path, report_path, UsageError, windows_to_wsl)
 from r2x.display import Display
@@ -34,7 +37,8 @@ def test_defaults():
     a = parse("a.r2t", "b.rsp")
     assert a.inputs == ["a.r2t", "b.rsp"] and a.stage == PEAK and a.parallel == 1
     assert a.out is None and not (a.stdout or a.overwrite or a.quiet or a.report)
-    assert a.units is None and a.initial is None and a.image == "r2x"
+    assert a.units is None and a.initial is None and a.image == cli.DEFAULT_IMAGE
+    assert cli.DEFAULT_IMAGE == f"ghcr.io/maczout/r2x:{__version__}"
     assert a.views == ALL_VIEWS
 
 
@@ -327,6 +331,99 @@ def test_settings_reach_the_worker(cases):
 def test_health(cases):
     code, out, _ = r2x("health")
     assert code == 0 and b"r2x client" in out and b'"r2x_version": "fake"' in out
+    assert b"Response-2000: " in out and b'"response_dir": "' in out    # mounted
+
+
+# -- linking Response-2000 (r2x setup) ----------------------------------------------------------
+@pytest.fixture
+def unlinked(cases, tmp_path, monkeypatch):
+    """No folder linked yet, and a Response folder with an r2k.exe that is not a verified build."""
+    monkeypatch.delenv("R2X_RESPONSE", raising=False)
+    monkeypatch.delenv("R2X_ALLOW_UNVERIFIED", raising=False)
+    folder = tmp_path / "My Response"
+    folder.mkdir()
+    (folder / "r2k.exe").write_bytes(b"another build")
+    (folder / "Response.ini").write_text("[Recent File List]\n")
+    return folder
+
+
+def test_not_linked_is_a_usage_error(unlinked, cases):
+    code, _, err = r2x("solve", str(cases / "beam.r2t"))
+    assert code == 2 and "Response-2000 is not linked: r2x setup --response FOLDER" in err
+    code, out, _ = r2x("health")
+    assert code == 0 and b"Response-2000: not linked" in out
+
+
+def test_setup_refuses_an_unverified_build(unlinked, cases):
+    code, _, err = r2x("setup", "--response", str(unlinked))
+    assert code == 2 and "is not a build of Response-2000 that r2x has been checked" in err
+    assert "--allow-unverified" in err and not Path(os.environ["R2X_CONFIG"]).exists()
+    code, _, err = r2x("setup", "--response", str(unlinked.parent / "nowhere"))
+    assert code == 2 and "no folder" in err
+    code, _, err = r2x("setup", "--response", str(cases))
+    assert code == 2 and "has no r2k.exe" in err
+
+
+def test_setup_links_and_solves_with_the_folder_mounted(unlinked, cases):
+    code, out, err = r2x("setup", "--response", str(unlinked), "--allow-unverified")
+    assert code == 0, err
+    assert b"r2k.exe NOT verified" in out and b"allowed (--allow-unverified)" in out
+    assert b"image ghcr.io/maczout/r2x:" in out and b": here" in out
+    saved = json.loads(Path(os.environ["R2X_CONFIG"]).read_text())
+    assert saved == {"response": str(unlinked.resolve()), "allow_unverified": True}
+    code, out, err = r2x("solve", str(cases / "beam.r2t"), "--stdout")
+    assert code == 0, err
+    code, out, _ = r2x("health")
+    assert f'"response_dir": "{unlinked.resolve()}"'.encode() in out
+
+
+def test_setup_pulls_a_missing_image(unlinked, cases, monkeypatch):
+    monkeypatch.setenv("FAKE_DOCKER_NO_IMAGE", "1")
+    code, out, _ = r2x("setup", "--response", str(unlinked), "--allow-unverified")
+    assert code == 0 and b"pulling it" in out and b"fake pull ghcr.io/maczout/r2x:" in out
+
+
+def test_an_unverified_build_needs_allowing_every_run(unlinked, cases, monkeypatch):
+    monkeypatch.setenv("R2X_RESPONSE", str(unlinked))
+    code, _, err = r2x("solve", str(cases / "beam.r2t"))
+    assert code == 2 and "--allow-unverified" in err
+    monkeypatch.setenv("R2X_ALLOW_UNVERIFIED", "1")
+    assert r2x("solve", str(cases / "beam.r2t"))[0] == 0
+
+
+def test_container_command_mounts_response_read_only(tmp_path):
+    program = response.read_program(response_folder(tmp_path))
+    link = cli.response_mounts(program, allow_unverified=True)
+    assert link == ["-v", f"{program.folder.resolve()}:/opt/response:ro",
+                    "-e", "R2X_ALLOW_UNVERIFIED=1"]
+    cmd = cli.container_command(None, tmp_path / "x.r2x.txt", PEAK, Settings(), "img",
+                                link=link)
+    after = cmd.index("none") + 1                       # --network none, then the link
+    assert cmd[after:after + 4] == link and cmd.index("img") > after + 4
+
+
+def response_folder(tmp_path: Path) -> Path:
+    folder = tmp_path / "Response"
+    folder.mkdir()
+    for name, data in [("r2k.exe", b"exe"), ("owl.DLL", b"dll"), ("rebar.dat", b"bars"),
+                       ("r3g.dtd", b"dtd"), ("Response.ini", b"recent"), ("Newbeam.r2t", b"x"),
+                       ("Marshall.rsp", b"y")]:
+        (folder / name).write_bytes(data)
+    return folder
+
+
+def test_program_files_are_the_ones_response_reads(tmp_path):
+    program = response.read_program(response_folder(tmp_path))
+    assert sorted(program.hashes) == ["owl.DLL", "r2k.exe", "r3g.dtd", "rebar.dat"]
+    assert not program.verified
+    # SHA-256 of sha256sum's lines, sorted by name: reproducible outside r2x
+    lines = "".join(f"{response.sha256(tmp_path / 'Response' / n)}  {n}\n"
+                    for n in ["owl.DLL", "r2k.exe", "r3g.dtd", "rebar.dat"])
+    assert program.files_sha256 == hashlib.sha256(lines.encode()).hexdigest()
+    (tmp_path / "Response" / "Response.ini").write_bytes(b"other recent files")
+    assert response.read_program(tmp_path / "Response").files_sha256 == program.files_sha256
+    assert "rebar.dat" in program.differences() and "msvcp140.dll (missing)" in \
+        program.differences()
 
 
 # -- the status line ----------------------------------------------------------------------------

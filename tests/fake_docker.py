@@ -3,7 +3,9 @@
     R2X_DOCKER="python tests/fake_docker.py" r2x solve ...
 
 It reads the `docker run` command the command line builds and maps the container's /in and /out
-paths back to the host folders mounted there.
+paths back to the host folders mounted there, and /opt/response (the linked Response-2000) to
+$R2X_RESPONSE_DIR for the real worker. `docker image inspect` says the image is here unless
+$FAKE_DOCKER_NO_IMAGE is set; `docker pull` succeeds.
 
 FAKE_DOCKER_MODE=fake (default) imitates the worker without Wine. The input's text decides:
     fail   -> "failed", exit 1          outofscope -> "out of scope", exit 3
@@ -32,11 +34,16 @@ from pathlib import Path
 
 
 def parse_run(args: list[str]) -> tuple[dict[str, str], list[str]]:
-    """docker run options -> ({container path: host path}, command run in the container)."""
+    """docker run options -> ({container path: host path}, command run in the container).
+    -e options are put in this process's environment, as the container's would be."""
     mounts, i = {}, 0
     while i < len(args):
         a = args[i]
         if a in ("--pull", "--network"):
+            i += 2
+        elif a == "-e":
+            key, _, value = args[i + 1].partition("=")
+            os.environ[key] = value
             i += 2
         elif a == "-v":
             spec = args[i + 1].removesuffix(":ro")
@@ -168,11 +175,19 @@ def define_worker(mounts: dict[str, str], args: list[str]) -> int:
 
 
 def main(argv: list[str]) -> int:
+    if argv[:2] == ["image", "inspect"]:
+        return 1 if os.environ.get("FAKE_DOCKER_NO_IMAGE") else 0
+    if argv[:1] == ["pull"]:
+        print(f"fake pull {argv[-1]}")
+        return 0
     if not argv or argv[0] != "run":
         raise SystemExit(f"fake docker: only 'run' is supported, not {argv[:1]}")
     mounts, command = parse_run(argv[1:])
+    if "/opt/response" in mounts:          # the linked Response, for the real worker
+        os.environ["R2X_RESPONSE_DIR"] = mounts["/opt/response"]
     if command[:3] == ["python", "-m", "r2x.worker.info"]:
-        print(json.dumps({"r2x_version": "fake", "wine_version": None}))
+        print(json.dumps({"r2x_version": "fake", "wine_version": None,
+                          "response_dir": mounts.get("/opt/response")}))
         return 0
     if command[:4] == ["python", "-m", "r2x.worker", "define"]:
         return define_worker(mounts, command[4:])

@@ -1,8 +1,10 @@
-# r2x image: Response-2000 under Wine on a virtual display.
+# r2x image: Wine on a virtual display, ready to run Response-2000.
 #
-#   docker build -t r2x .
+#   docker build -t ghcr.io/maczout/r2x:VERSION .
 #
-# Response-2000 is not included: put its program folder in ./Response before building.
+# Response-2000 is not in the image: each user links their own copy (r2x setup), and every run
+# mounts its program folder read-only at /opt/response. So the image holds nothing of Response's
+# and can be published.
 
 ARG BASE=ubuntu:24.04
 
@@ -17,10 +19,13 @@ RUN i686-w64-mingw32-gcc -O2 -o /build/helper.exe /build/helper.c -luser32 -lgdi
 # --- runtime ----------------------------------------------------------------------------------
 FROM ${BASE}
 
-# Verified versions. Exports are only known to match Windows for these.
+LABEL org.opencontainers.image.source=https://github.com/maczout/r2x \
+      org.opencontainers.image.description="r2x: Response-2000 under Wine, from the command line. Response-2000 itself is not included." \
+      org.opencontainers.image.licenses=MIT
+
+# The verified Wine. Exports are only known to match Windows for it; the verified builds of
+# Response's r2k.exe are in src/r2x/response.py.
 ARG WINE_VERSION=9.0~repack-4build3
-ARG R2K_SHA256=bbf4bc595ee80167ea73a76d597b2223cbc5e9c47d97d452025cde4bb85e4e74
-ARG RESPONSE_DIR=Response
 
 ENV DEBIAN_FRONTEND=noninteractive LANG=C.UTF-8 TZ=UTC
 RUN dpkg --add-architecture i386 \
@@ -32,10 +37,8 @@ RUN dpkg --add-architecture i386 \
       xvfb xauth python3 python3-venv ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
-# Response-2000, checked against the verified r2k.exe.
-COPY ${RESPONSE_DIR}/ /opt/response/
-RUN echo "${R2K_SHA256}  /opt/response/r2k.exe" | sha256sum -c - \
- && rm -f /opt/response/Response.ini
+# Where each run mounts the user's own Response-2000 (read-only).
+RUN mkdir /opt/response
 
 COPY --from=helper /build/helper.exe /opt/r2x/helper.exe
 

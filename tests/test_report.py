@@ -112,6 +112,17 @@ def test_report_reloads_itself_when_rewritten():
     assert "location.reload()" in page and "setInterval" in page
 
 
+def test_a_reload_out_of_sight_flags_the_title():
+    """A page cannot come forward, so a reload while it is out of sight flags its title until
+    it is looked at (checked in Chrome on 2026-11-07, focus stood in for headless)."""
+    solved, defined = build(), report.build_define("x.r2t", "define quick", {})
+    flag = '"\u25cf {} \u00b7 " + plain'          # the characters themselves
+    assert flag.format("Solved") in solved and flag.format("Updated") in defined
+    assert "{flag}" not in solved
+    assert 'window.name = CHANGED; location.reload()' in solved
+    assert "document.hasFocus()" in solved and "visibilitychange" in solved
+
+
 def test_define_report_has_the_inputs_only():
     """A define's report is the input screen alone: the section as the file now holds it."""
     page = report.build_define("pier-cap.r2t", "define quick", {"input/screen": PNG})

@@ -127,10 +127,11 @@ class StepResult:
 def worker_command(docker: list[str], image: str, docker_path: Callable[[Path], str],
                    words: list[str], *, input_file: Path | None = None, out: Path | None = None,
                    report: Path | None = None, date: str | None = None,
-                   settings: Settings = Settings(), screen: str | None = None) -> list[str]:
+                   settings: Settings = Settings(), screen: str | None = None,
+                   link: list[str] = ()) -> list[str]:
     """docker run for one define step (with screen, no dialog: the report's input screen, and
     Save As to out if given). The section's file is mounted read-only at /in, the folder
-    Response saves into and the report goes to at /out."""
+    Response saves into and the report goes to at /out; link mounts Response itself."""
     mounts, args = [], []
     if input_file is not None:
         mounts += ["-v", f"{docker_path(input_file)}:/in/{input_file.name}:ro"]
@@ -152,8 +153,8 @@ def worker_command(docker: list[str], image: str, docker_path: Callable[[Path], 
         args += ["--factors", settings.factors]
     if screen is not None:
         args += ["--screen", screen]
-    return docker + ["run", "--rm", "-i", "--pull", "never", "--network", "none", *mounts,
-                     image, "python", "-m", "r2x.worker", "define", *words, *args]
+    return docker + ["run", "--rm", "-i", "--pull", "never", "--network", "none", *link,
+                     *mounts, image, "python", "-m", "r2x.worker", "define", *words, *args]
 
 
 def run_step(cmd: list[str], prompter: Prompter,
