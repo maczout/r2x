@@ -194,6 +194,9 @@ R2X_RESPONSE_DIR=$PWD/Response pytest   # everything, under Wine (about 10 min)
   and by an r2x session from the same answers; `check.ps1` compares them on Windows,
   `tests/test_define_cases_wine.py` under Wine. `cases.json` holds the answers;
   `tools/define_cases.py` writes each case's files from it.
+- **Checks on records alone** (Tier C, `docs/risk-register.md`): `python tools/tier_c.py
+  RECORD SECTION ...` checks equilibrium, stage order and the squash load; `--same A B`
+  compares two records of one solve. `tests/test_tier_c.py` runs it on the Windows references.
 - Rerun the Wine tests on any change to Wine, the image or r2x.
 
 ## Releasing

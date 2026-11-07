@@ -339,3 +339,32 @@ def test_more_detail(tmp_path):
         "than 327 stages"]
     assert solve(tmp_path, PEAK, "max", views=NO_SHEAR, more_detail="max").sections == \
         most.sections
+
+
+# -- the first verification pass's hand captures (docs/risk-register.md, Tier A) -----------------
+# Each case solves under Wine now, as found on 2026-11-07; once its exports have been captured
+# on Windows (tests/reference/<case>/control and stages/NNN), they are compared byte for byte.
+TIER_A = [
+    ("marshall", "Marshall.rsp", Settings(), 40, 34),
+    ("cm4", "Cm4.rsp", Settings(), 101, 58),
+    ("newbeam-axial-shear", None, Settings(initial=(-1000, 0, 0), increment=(0, 1, 1)), 39, 36),
+    ("newbeam-nmv", None, Settings(increment=(-1, 1, 1)), 46, 39),
+]
+
+
+@pytest.mark.parametrize("case, source, settings, count, peak", TIER_A,
+                         ids=[c[0] for c in TIER_A])
+def test_tier_a_case(tmp_path, case, source, settings, count, peak):
+    src = Path(RESPONSE) / source if source else REF / case / "input.r2t"
+    if not src.is_file():
+        pytest.skip(f"no {src.name} in the Response folder")
+    stages_dir = REF / case / "stages"
+    captured = sorted(int(p.name) for p in stages_dir.iterdir() if p.name.isdigit()) \
+        if stages_dir.is_dir() else []
+    rec = solve(tmp_path, parse_stages(",".join(map(str, captured))) if captured else PEAK,
+                case, settings=settings, source=src)
+    assert (rec.header["stage-count"], rec.header["peak-stage"]) == (str(count), str(peak))
+    if not (REF / case / "control").is_dir():
+        pytest.skip(f"{case}: solves as found under Wine; not captured on Windows yet")
+    assert_matches(rec, case)
+

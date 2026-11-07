@@ -36,7 +36,7 @@ class KeyAsker(Asker):
         self.answers = dict(answers)
         self.asked: list[tuple[dict, str | None]] = []      # (question, answer given)
 
-    def ask(self, q):
+    def ask(self, q, back=False):
         a = self.answers.pop(q.key, None)
         if a is None and not q.keep:
             raise SystemExit(f"no answer for {q.key}: {q.text}")
@@ -53,13 +53,25 @@ class KeyAsker(Asker):
         pass
 
 
+# Where each noun's dialog is in Response's menus, for the hand-made recipes. (The catalogue's
+# summaries describe what a noun sets on the section, for r2x's own help, since 0.4.0's review.)
+MENUS = {"quick": "Define > Quick Define", "general": "Define > Edit General",
+         "materials": "Define > Material Properties", "section": "Define > Concrete Section",
+         "long": "Define > Longitudinal Reinforcement",
+         "trans": "Define > Transverse Reinforcement", "tendons": "Define > Tendons",
+         "loads": "Loads > Sectional Loads", "units": "Options > Preferences",
+         "factors": "Options > Preferences"}
+
+
 def gui_lines(step_words: list[str], asked) -> list[str]:
     """How to give the same answers in Response's dialog, for the case's README: numbered
-    steps, with the values to set as indented items under them."""
+    steps, with the values to set as indented items under them. A field in one of the
+    dialog's frames is named with the frame's text (Top or Bottom, Outer or Inner Ring)."""
     step = parse_step(step_words)
     d = step.dialog
-    menu = d.summary.split(":")[0]
-    value = lambda q, a: f"{q.text}: {a}" + (f" {q.unit}" if q.unit else "")
+    menu = MENUS[step.noun]
+    label = lambda q: f"{q.frame}, {q.text}" if q.frame else q.text
+    value = lambda q, a: f"{label(q)}: {a}" + (f" {q.unit}" if q.unit else "")
     if d.kind == "wizard":
         out = [f"{menu}. Set only these, pressing Next after each page and Finish after the "
                f"last:"]

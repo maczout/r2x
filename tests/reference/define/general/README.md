@@ -1,17 +1,14 @@
 # define case: general
 
-Edit General: title, comments, crack spacing, moment axis.
+Edit General: crack spacing and moment axis, each behind its Automatic box.
 
 **By hand**, in Response-2000 on Windows (anything not listed stays as Response shows it):
 
 1. File > Open `..\..\newbeam\input.r2t` (Newbeam).
 2. Define > Edit General: set:
-   - Title: Newbeam edited
-   - Comments: by r2x define
-   - Analysis By: JM
-   - Automatic Longitudinal Spacing: n
-   - Longitudinal Spacing: 300 mm
-   - Centroidal Moment axis: n
+   - Crack Spacing, Automatic Longitudinal Spacing: n
+   - Crack Spacing, Longitudinal Spacing: 300 mm
+   - Moment Axis, Centroidal Moment axis: n
    - Moment axis: 250 mm from bottom
    - then OK
 3. File > Save As `hand.r2t` in this folder.

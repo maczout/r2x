@@ -1,18 +1,26 @@
 # r2x define: reference cases
 
-Thirteen sections, each made twice: by hand in Response-2000 on Windows (`hand.r2t`) and by an
+Eight sections, each made twice: by hand in Response-2000 on Windows (`hand.r2t`) and by an
 r2x session from the same answers (`session.txt`). They match when they are the same bytes (the
 three Quick Define cases but for the date, since Response dates a new section with the day it
 is made), or else when they are the same section with the longitudinal layers in another order
 and solve to the same record: Response keeps a new section's layers in the order it made them,
 which differed between the hand-made Quick Define sections and r2x's, and sorts them by depth
-whenever it opens the file (`compare.py`; `docs/history.md`, *Defining a section*, *Findings*). Cases starting from
-Newbeam open `..\newbeam\input.r2t`, so its layers are sorted by depth as in r2x's file chain.
+whenever it opens the file (`compare.py`; `docs/history.md`, *Defining a section*,
+*Findings*). Cases starting from Newbeam open `..\newbeam\input.r2t`, so its layers are
+sorted by depth as in r2x's file chain.
 
 Made by hand so far: `quick-tbeam`, `quick-column`, `quick-ibeam-strands` (2026-10-28),
 `add-delete` and `long-modify` (2026-11-07). The column is the same bytes but for the date;
 the T-beam and the I-girder differ only in where one layer sits, and solve to the same record;
-`add-delete` and `long-modify` are the same bytes. The other eight are still to be made.
+`add-delete` and `long-modify` are the same bytes. The other three are still to be made.
+
+Cut from thirteen to eight on 2026-11-07 (the first verification pass, `docs/risk-register.md`,
+D1 and D2): the three kept test how r2x works Response's dialogs where Response reacts as
+values go in (a shape picked from a list view, fields behind an Automatic box, a strand picked
+from the bar list), each in a few answers. Dropped, since the input screen shows what they set
+or another case covers how they set it: `materials`, `long-add`, `trans-modify`, `loads`,
+`units`.
 
 | Case | What it checks |
 |---|---|
@@ -20,21 +28,15 @@ the T-beam and the I-girder differ only in where one layer sits, and solve to th
 | `quick-column` | Quick Define: a circular column with hoops |
 | `quick-ibeam-strands` | Quick Define: an I-beam with 12 strands |
 | `add-delete` | a layer added then deleted gives Newbeam as opened and saved |
-| `general` | Edit General: title and comments, analysis by, crack spacing, moment axis |
-| `materials` | Material Properties: f'c and fpu, fy left as "Detailed" |
-| `section` | Concrete Section: Newbeam as a T-beam |
-| `long-add` | Longitudinal Reinforcement: a layer added |
+| `general` | Edit General: crack spacing and moment axis, each behind its Automatic box |
+| `section` | Concrete Section: Newbeam as a T-beam (a shape picked from a list view) |
 | `long-modify` | a layer modified: its depth taken at the dialog's precision (63.90 to 64.00) |
-| `trans-modify` | Transverse Reinforcement: spacing and bar type |
-| `tendons-add` | Tendons: a layer of strands |
-| `loads` | Sectional Loads: constant N, increment M and V |
-| `units` | Preferences: US Customary |
+| `tendons-add` | Tendons: a layer of strands (a strand picked from the bar list) |
 
 ## Checking on Windows
 
 1. In Response-2000, make each case's `hand.r2t` as its `README.md` says (Save As into the
-   case folder). The first five matter most: the three Quick Define cases, `add-delete` and
-   `long-modify`.
+   case folder). Five are made; `general`, `section` and `tendons-add` remain.
 2. From this folder: `powershell -ExecutionPolicy Bypass -File check.ps1`. For each case with a
    `hand.r2t` it runs `session.txt` in an r2x session (piped into `r2x`), which writes `r2x.r2t`
    and its report `r2x.r2x.html` in the case folder, and prints `MATCH` or `DIFFERS`;

@@ -73,12 +73,35 @@ It does not show:
 - Stages other than the peak, and how the stage was identified (the record says which stage,
   not why).
 
-## First pass, in short
+## First pass
 
-- **Tier A, four captures** aimed at what the engineer cannot see: Marshall.rsp (S2, S3);
-  Cm4.rsp at a stage well below its peak (S2, S7); Newbeam under a constant N with an M and V increment
-  (S8); Newbeam with N, M and V all in the increment (S9).
-- **Define:** the other eight cases cut to two or three short ones aimed at D1 and D2.
-- **Tier C prototype:** repeat solves (S4), stage order (S7), equilibrium and closed forms
-  (S11).
-- **Not now:** Tier B; kg/cm units and two settings combined (S1 is visible).
+Status on 2026-11-07:
+
+- **Tier A, four captures, ready to make** on Windows, each aimed at what the engineer cannot
+  see: `tests/reference/marshall` (S2, S3: an `.rsp` whose peak needs the paging fallback),
+  `cm4` (S2, S7: an `.rsp`, at its peak and 38 stages below), `newbeam-axial-shear` (S8) and
+  `newbeam-nmv` (S9). Each README has the recipe and what r2x gives under Wine, to confirm the
+  stage on Windows. `tests/test_worker_wine.py` solves each now and compares it byte for byte
+  once its exports are in the folder.
+- **Define:** the eight cases not yet made cut to three short ones (`general`, `section`,
+  `tendons-add`), aimed at how r2x works Response's dialogs where Response reacts as values go
+  in (D1, D2). `tests/reference/define/README.md` says why the other five went.
+- **Tier C prototype**, `tools/tier_c.py` (plain reinforced sections, SI):
+  - *Equilibrium* (S11): the exported concrete and bar stresses against the stage's N and M.
+    Under Wine, Newbeam at every stage under a moment, an axial load alone, a constant N, M
+    and V together, and at the peak with N and V, N, M and V, and Marshall.rsp: 187 stages,
+    every residual within 0.5 % of the internal forces. On the Windows exports in
+    `tests/reference` too (`tests/test_tier_c.py`). Response's concrete is net of the bars:
+    counting it gross leaves the top bar's share (about 10 kN in Newbeam) unbalanced. It
+    catches garbage and a wrong stage far from the right one, not a neighbour near the peak,
+    where stages differ by fractions of a kNm.
+  - *Stage order* (S7): the bottom chart's deformation moves one way up to the peak. εx at the
+    centroid reverses early as a section cracks, and shear failures unload after their peak,
+    so only the bottom chart, and only up to the peak, is checked.
+  - *Squash load* (S11), for judgment: Newbeam's axial peak is 0.912 of f'c (Ag − As) + fy As;
+    with the bars at fy, the concrete carries 0.899 f'c. Whether that is what Response intends
+    is Jamie's call.
+  - *Repeat* (S4): Newbeam solved twice gives the same sections, at the peak in the container
+    against the host, and at every stage on the host.
+- **Not now:** Tier B; kg/cm units and two settings combined (S1 is visible); a cracking-moment
+  check; sections with tendons and other units in Tier C.

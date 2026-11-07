@@ -35,7 +35,7 @@ class Recorder(Asker):
     def __init__(self):
         self.questions, self.said = [], []
 
-    def ask(self, q):
+    def ask(self, q, back=False):
         self.questions.append(q)
         if not q.keep:
             raise Abort("stopped without an answer; nothing saved")

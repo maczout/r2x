@@ -29,29 +29,18 @@
     {"name": "add-delete", "from": "newbeam", "about": "Add a layer, then delete it: Newbeam as opened and saved",
      "steps": [{"define": "long add web", "answers": {"number": "2", "bar": "15M", "depth": "300"}},
                {"define": "long delete web", "answers": {}}]},
-    {"name": "general", "from": "newbeam", "about": "Edit General: title, comments, crack spacing, moment axis",
+    {"name": "general", "from": "newbeam", "about": "Edit General: crack spacing and moment axis, each behind its Automatic box",
      "steps": [{"define": "general", "answers": {
-       "title": "Newbeam edited", "comments": "by r2x define", "analysis-by": "JM",
        "auto-long-spacing": "n", "long-spacing": "300", "centroidal-axis": "n",
        "moment-axis": "250"}}]},
-    {"name": "materials", "from": "newbeam", "about": "Material Properties: f'c and fpu (fy left as Detailed)",
-     "steps": [{"define": "materials", "answers": {"fc": "45", "fpu": "1700"}}]},
     {"name": "section", "from": "newbeam", "about": "Concrete Section: Newbeam as a T-beam",
      "steps": [{"define": "section", "answers": {"shape": "T-Beam", "dim1": "600", "dim3": "250",
                                                   "dim4": "150"}}]},
-    {"name": "long-add", "from": "newbeam", "about": "Longitudinal Reinforcement: add a layer web",
-     "steps": [{"define": "long add web", "answers": {"number": "2", "bar": "15M", "depth": "300"}}]},
     {"name": "long-modify", "from": "newbeam", "about": "Longitudinal Reinforcement: 4 bars in bot (its depth, shown as 64, becomes 64.00)",
      "steps": [{"define": "long modify bot", "answers": {"number": "4"}}]},
-    {"name": "trans-modify", "from": "newbeam", "about": "Transverse Reinforcement: closed stirrups at 200",
-     "steps": [{"define": "trans modify stirrup", "answers": {"spacing": "200", "bar-type": "Closed Stirrup"}}]},
     {"name": "tendons-add", "from": "newbeam", "about": "Tendons: add 4 strands at 100 mm",
      "steps": [{"define": "tendons add t1", "answers": {"number": "4", "strand": "S13",
                                                         "prestrain": "6.5", "depth": "100",
-                                                        "slope": "0", "type": "Low Relax"}}]},
-    {"name": "loads", "from": "newbeam", "about": "Sectional Loads: N = -2000 kN, increment 0,1,1",
-     "steps": [{"define": "loads", "answers": {"axial": "-2000", "shear-increment": "1"}}]},
-    {"name": "units", "from": "newbeam", "about": "Preferences: US Customary",
-     "steps": [{"define": "units", "answers": {"units": "US Customary"}}]}
+                                                        "slope": "0", "type": "Low Relax"}}]}
   ]
 }
