@@ -1,11 +1,12 @@
 # r2x define and the r2x session
 
-**Status:** built under Wine on 2026-10-27/28 from the plan (the Claude Doc "r2x define and the
-r2x session — plan", phases D0, D1 and D2), on the branch `define`, with Jamie's review changes
-of 2026-10-28 built on 2026-11-03 (*Review changes*, below). On Windows the smoke test, the
-report's reload and the three Quick Define reference cases passed (2026-10-28); `add-delete`
-and `long-modify` are still to be made by hand, and the branch to be checked again on the
-Framework after the review changes. r2x 0.4.0 is released once they match.
+**Status:** released in r2x 0.4.0 (2026-11-07). Built under Wine on 2026-10-27/28 from the
+plan (the Claude Doc "r2x define and the r2x session — plan", phases D0, D1 and D2), with
+Jamie's review changes of 2026-10-28 built on 2026-11-03 (*Review changes*, below). On
+Windows the smoke test, the report's reload and the three Quick Define reference cases passed
+on 2026-10-28; after the review changes, on 2026-11-07, the five reference cases made by hand
+(the three Quick Define ones, `add-delete` and `long-modify`) matched and a session was
+smoke-tested again on the Framework.
 
 `r2x define` sets part of a section, question by question, through one of Response-2000's
 dialogs, and lets Response save the file; `r2x` with no command is a session at an `r2x>`

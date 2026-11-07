@@ -9,9 +9,10 @@ which differed between the hand-made Quick Define sections and r2x's, and sorts 
 whenever it opens the file (`compare.py`; `docs/define.md`, *Findings*). Cases starting from
 Newbeam open `..\newbeam\input.r2t`, so its layers are sorted by depth as in r2x's file chain.
 
-Made by hand so far (2026-10-28): `quick-tbeam`, `quick-column`, `quick-ibeam-strands`. The
-column is the same bytes; the T-beam and the I-girder differ only in where one layer sits, and
-solve to the same record.
+Made by hand so far: `quick-tbeam`, `quick-column`, `quick-ibeam-strands` (2026-10-28),
+`add-delete` and `long-modify` (2026-11-07). The column is the same bytes but for the date;
+the T-beam and the I-girder differ only in where one layer sits, and solve to the same record;
+`add-delete` and `long-modify` are the same bytes. The other eight are still to be made.
 
 | Case | What it checks |
 |---|---|

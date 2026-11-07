@@ -212,8 +212,8 @@ them apart by their exports (`docs/cli.md`, *Shear and More Detail*).
 and deleting it again leaves a file as it was, and each dialog's answers land where Response
 saves them (`tests/test_define_wine.py`). On Windows, the reference cases are sections made by
 hand in Response and by an r2x session from the same answers (`tests/reference/define`;
-`check.ps1` there compares them): the three Quick Define cases match; the others are still to
-be made.
+`check.ps1` there compares them): five match (the three Quick Define cases, a layer added and
+deleted, and a layer modified); the other eight are still to be made.
 
 Two heuristics are worth knowing. Wine gives no "solve finished" signal, so the solve counts as
 finished once the bottom control curve has not changed for 1 s and Response's process is idle.
