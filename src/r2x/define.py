@@ -1,7 +1,7 @@
 """The command-line side of r2x define: run one step in the container and put its questions to
 the person.
 
-A step is one container run (docs/define.md, How a define step works): Response opens the
+A step is one container run (docs/internals.md, How a define step works): Response opens the
 section's file, one of its dialogs is gone through question by question, and Response saves the
 file back with its own Save As; the section's report beside it is rewritten with Response's
 input screen. The questions come from the worker over stdout and the answers go back on its

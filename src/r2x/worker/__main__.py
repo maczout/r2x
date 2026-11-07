@@ -4,7 +4,7 @@ python -m r2x.worker define NOUN [ACTION [NAME]] [options]  — one define step 
 With --new instead of an input, the section is a new one with Quick Define's defaults, as
 File > New gives.
 
-Needs Wine, Xvfb and mingw-w64 (see docs/development.md). Progress goes to stderr in the fixed
+Needs Wine, Xvfb and mingw-w64 (see docs/internals.md). Progress goes to stderr in the fixed
 form of r2x.progress. Exit status: 0 solved, 1 failed, 2 usage error, 3 out of scope.
 """
 

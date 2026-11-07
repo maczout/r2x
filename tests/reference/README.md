@@ -51,6 +51,6 @@ already there, so it can be rerun to fill gaps.
    `stages\056`) once the Longitudinal Strain export has been matched to the control curves:
    by curvature against Moment–φ (mind the units), and by εx, the strain at mid-depth, against
    an εx curve, whichever the case has. With shear there is one of them, and where several
-   stages match, the case's other exports decide (docs/cli.md, *Shear and More Detail*).
+   stages match, the case's other exports decide (docs/history.md, *Shear and More Detail*).
 5. Write the case's `README.md`: what the case is, the settings applied and how, the status bar
    at the captured stage, and the capture details (date, Windows and Response versions, by whom).

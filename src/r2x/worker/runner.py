@@ -166,7 +166,7 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
     more_detail: Solve > More Detail presses after the solve, or "max" (r2x.settings).
 
     With no input file, Response starts empty and the section is defined by accepting every
-    default of Quick Define, as File > New does (docs/cli.md). Settings are applied through
+    default of Quick Define, as File > New does (docs/history.md, The command line). Settings are applied through
     Response's dialogs before solving, and the settings in effect are read back into the header.
     The record is written only once the export is complete, under a temporary name first, so a
     failed job leaves no file behind. With report, an HTML report (r2x/report.py) of the inputs

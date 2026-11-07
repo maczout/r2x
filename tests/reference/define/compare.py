@@ -8,7 +8,7 @@
 Exit status 0 when they are the same, 1 when not; one line says which.
 
 The layers' order is left out because Response keeps a section's layers in the order it made
-them until it opens the file again, when it sorts them by depth (docs/define.md, Findings): two
+them until it opens the file again, when it sorts them by depth (docs/history.md, Defining a section: Findings): two
 files that differ only there are the same section once Response has read either. This compares
 the saved text as a test does; r2x itself never reads a section's XML.
 """

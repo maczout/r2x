@@ -3,7 +3,7 @@ settings in effect, with a picture of each dialog for the report when asked.
 
 Control IDs are from r2k.exe's RT_DIALOG resources (`python tools/dialogs.py r2k.exe`): dialog
 320 is the Preferences page, dialog 5 is Define Loading. Units are set before loads, because
-switching units converts the loads already entered (docs/cli.md).
+switching units converts the loads already entered (docs/history.md, The command line).
 """
 
 from __future__ import annotations

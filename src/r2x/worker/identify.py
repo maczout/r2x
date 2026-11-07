@@ -13,7 +13,7 @@ its Longitudinal Strain export, which is a straight strain profile over the sect
 Without shear in the increment there are both curves, or the εx curve alone (axial-only
 increment); with shear, one of them, beside Shear–γxy. Shear–γxy is no key: its γxy is the
 average shear strain weighted by shear force (∫ τ γxy b dy / V), which needs the section's width
-at each depth, and no export has that (docs/cli.md, Shear and More Detail).
+at each depth, and no export has that (docs/history.md, Shear and More Detail).
 
 A stage matches when every available check agrees. Several stages can match (a shear solve's
 curvature hardly changes near its peak); export.py then tells them apart by their exports.

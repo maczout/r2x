@@ -113,7 +113,7 @@ first):
 | shear alone | `shear_gxy`, `shear_ex` |
 
 Shear–γxy's γxy is the average shear strain weighted by shear force over the section
-(∫ τ γxy b dy / V), not the strain at any one depth (docs/cli.md, *Shear and More Detail*).
+(∫ τ γxy b dy / V), not the strain at any one depth (docs/history.md, *Shear and More Detail*).
 An increment of 0,0,0 gives two stages, 0 and 1, both at the initial load.
 
 Detail views, for each stage N in `detail-stages` (N without leading zeros):

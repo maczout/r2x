@@ -2,243 +2,84 @@
 
 Run Response-2000 from the command line.
 
-r2x drives an unmodified copy of Response-2000, Bentz and Collins' sectional analysis program for
-reinforced and prestressed concrete, under Wine in a Linux container. It returns Response's own
-exported data, byte for byte, and does not re-compute, filter or interpret anything.
+r2x drives your own copy of Response-2000, Bentz and Collins' sectional analysis program for
+reinforced and prestressed concrete, under Wine in a Linux container. It solves sections and
+returns Response's own exported data, byte for byte, without re-computing, filtering or
+interpreting anything; and it defines sections question by question through Response's own
+dialogs.
 
-**Scope:** the sectional response (Solve → Sectional Response) to axial load, moment and shear,
-optionally refined with Solve → More Detail: both control charts, and every chart with a data
-export in four detail views, **General**, **Cracking**, **Reinforcement** and **No Shear** (21
-charts in all). Input is any file Response-2000 opens (`.r2t`, `.rsp`), or none, which gives
-the section File > New gives. Not M–N, M–V or N–V interaction, and not full-member analysis.
+> r2x is unofficial and does not check designs. See *Disclaimer*, below.
 
-**Defining a section** (0.4.0): `r2x define` sets part of a section question by question, and
-Response saves the file; `r2x` alone is a session in which a section is defined in steps and
-then solved, without opening Response.
+**Scope:** the sectional response to axial load, moment and shear (Solve > Sectional
+Response), optionally refined with More Detail: both control charts, and every chart with a
+data export in four detail views (General, Cracking, Reinforcement, No Shear). Not M–N, M–V or
+N–V interaction, and not full-member analysis.
+
+## Quick start (Windows)
+
+1. WSL 2 with Ubuntu 24.04, and Docker Engine inside it: `sudo apt-get install docker.io
+   docker-buildx`, then `sudo usermod -aG docker $USER` and reopen Ubuntu.
+2. Python 3.10+ in Windows, then r2x:
+   `py -m pip install https://github.com/maczout/r2x/archive/refs/tags/v0.5.0.zip`
+3. Response-2000 from [hadrianworks.com](https://www.hadrianworks.com/), installed as usual.
+4. Link it and get the image (about 1.3 GB, once):
+   `r2x setup --response "C:\path\to\Response"` (its program folder, with `r2k.exe`).
+5. `r2x health` shows the linked Response and the image's versions.
 
 ```
 PS> r2x solve .\Newbeam.r2t --report
 [Newbeam] solved: 60 stages, peak 56 -> Newbeam.r2x.txt, Newbeam.r2x.html (6.2 s)
 ```
 
-## Results
+- `NAME.r2x.txt`, **the record**: Response's Copy Chart Data text for both control charts at
+  every stage and every detail chart at the peak (or the stages you ask for), behind a header
+  that says where it came from.
+- `NAME.r2x.html`, **the report** (`--report`): Response's screens, for checking by eye that it
+  was given what you meant.
 
-- **`NAME.r2x.txt`, the raw record**, one per input. Response's Copy Chart Data text for both
-  control charts (every load stage) and the detail views' charts (the peak stage by default),
-  each chart once even where it appears in several views, behind
-  a header with the r2x, Wine and Response versions, the input's SHA-256 and the settings in
-  effect. It is the result, and r2x's contract with whatever reads it: layout and a Python reader
-  in `docs/raw-format.md`.
-- **`NAME.r2x.html`, the report** (`--report`). Screenshots for checking by eye that r2x drove
-  Response as intended, with an index down the left: under **Inputs**, Response's window before
-  solving and the units and material factors and the loads as r2x set them for the solve; under
-  **Outputs**, Response's window in each captured view at the peak stage. No data; the
-  screenshots are taken under Wine.
-
-Charts that Response shows only as pictures (cross section, crack diagram, internal forces, N+M)
-have no data export, so they appear in the report's screenshots and nowhere else. Not captured:
-the Load Deformation Plot (a whole-member result) and Mohr's Circles.
-
-## Setup (Windows)
-
-1. WSL 2 with Ubuntu 24.04, and Docker Engine inside it: `sudo apt-get install docker.io
-   docker-buildx`, then add yourself to the `docker` group.
-2. Response-2000 is not included. Download it from its author (see below) and put its program
-   folder in `./Response/` in this repo.
-3. Build the image once, in Ubuntu from the repo folder: `docker build -t r2x .` The build pins
-   the Wine version and stops unless `Response/r2k.exe` has the verified SHA-256.
-4. Install the command line tool in Windows (Python 3.10+, no other dependencies):
-
-   ```powershell
-   py -m pip install https://github.com/maczout/r2x/archive/main.zip
-   ```
-
-`r2x health` shows the image's r2x, Wine and Response versions. On Linux, r2x calls `docker`
-directly.
-
-## Usage
-
-```powershell
-r2x solve                                    # no input: a new section, Response's default
-r2x solve .\Newbeam.r2t                      # one or more files, or a glob
-r2x solve .\Newbeam.r2t --stage all          # detail views at every stage (default: peak)
-r2x solve .\Newbeam.r2t --stage peak,0-5     # or at these stages; 0 is the initial load
-r2x solve .\Newbeam.r2t --views no-shear     # only these detail views (default: all four)
-r2x solve .\Newbeam.r2t --report             # also the HTML report
-r2x solve .\Newbeam.r2t --increment 0,1,1     # moment and shear, M/V = 1 m
-r2x solve .\Newbeam.r2t --more-detail 2       # refined twice (more load stages)
-r2x solve .\col.rsp --units si --initial -2000,0,0 --increment 0,1,0
-r2x solve .\cases\*.r2t --out .\results --parallel 4
-r2x solve .\Newbeam.r2t --stdout | py parse.py   # the record on stdout, no files
-```
-
-- **Settings are overrides.** `--units`, `--factors`, `--initial` and `--increment` are applied
-  through Response's own dialogs; r2x never edits the input. Loads are N,M,V, as Define Loading
-  has them. An option left out keeps the input's value, or Response's start-up default. The
-  settings in effect are in the record header.
-- **More Detail.** `--more-detail N` presses Solve → More Detail N times after the solve (`max`:
-  until Response refines no further, which it stops doing at 327 stages). Stage numbers are the
-  refined solve's.
-- **Results** go next to each input, or to `--out`. Existing results are replaced once you
-  say yes at the prompt, or without asking with `--overwrite`; with no terminal to ask at (a
-  script), r2x stops instead.
-- **Progress** goes to stderr, with a status line when stderr is a terminal; `-q` shows errors
-  only.
-- **Exit status:** 0 solved, 1 failed, 2 usage error, 3 out of scope (reserved: since 0.3.0
-  nothing is); with several inputs, the most serious of these (1, then 2, then 3).
-- **Environment:** `R2X_IMAGE` (image name, default `r2x`), `R2X_DOCKER` (the command that runs
-  docker), `R2X_WSL_DISTRO` (the WSL distribution with Docker).
-
-`r2x solve --help` has the details. `docs/cli.md` is the full specification, with the decisions
-behind it and what was confirmed in Response on Windows.
-
-## Defining a section
+`r2x` alone starts a session in which a section is defined in steps and then solved, with the
+report as a preview that updates itself:
 
 ```
 PS> r2x
-r2x session: define a section, then solve it. help lists the commands.
 r2x> define quick
-  File name [new-cross-section.r2t]: pier-cap.r2t
-  General Information
-    Title [New Cross Section]: Pier cap
-    Analysis By []: JM
-  Material Properties
-    Concrete Cylinder Strength (MPa) [35.0]: 40
-    ...
-  Shape [Rectangle]
-    1) Rectangle  2) Circular  3) T-Beam  4) I-Beam
-  > t
-  btop (mm) [250]: 900
-  h (mm) [600]: 1200
-  ...
-  Top Non-Prestressed Reinforcement
-    Number of Bars [1]: 4
-    ...
-  set: General Information: Title Pier cap; Analysis By JM
-       Material Properties: Concrete Cylinder Strength 40 MPa
-       Shape T-Beam; btop 900 mm; h 1200 mm
-       Top Non-Prestressed Reinforcement: Number of Bars 4
-  saved pier-cap.r2t, report pier-cap.r2x.html updated (6.3 s)
 r2x> define long add web
-r2x> define loads
 r2x> solve --increment 0,1,1
-r2x> undo
-r2x> quit
 ```
 
-- **`define NOUN`** sets part of the section: `quick` (a new section from its basic
-  properties), `general` (title, comments, date, analysis spacing, moment axis), `materials`,
-  `section` (the concrete shape), `long`, `trans` and `tendons` (reinforcement layers, stirrup
-  types and tendon layers: each `add`, `modify` or `delete NAME`), `loads`, `units`,
-  `factors`. The questions are Response's own fields, in its order and its words, each showing
-  the value the section has now: **Enter keeps it**, and a field is touched only when the
-  answer differs. Fields that belong together are asked under their heading (Top
-  Non-Prestressed Reinforcement, or Outer Non-Prestressed Reinforcement Ring for a circle);
-  choices are listed under their question. `help define NOUN` lists the questions.
-- **Response checks the values.** Its own questions and messages come through word for word
-  (an fy that would overwrite detailed material properties, a layer name that exists), and a
-  bar designation it does not know brings up its list of bars to choose from.
-- **The file is the section; arguments are the analysis.** Each step opens the file in
-  Response, sets that part of the section and saves the file with Response's Save As; `solve`
-  takes r2x solve's options and never changes the file. Loads, units and factors can go either
-  way.
-- **The report is the preview.** Every step rewrites `NAME.r2x.html` beside the file with
-  Response's input screen, the section as the file now holds it, and the page reloads itself,
-  so one browser tab follows the session (the session opens it the first time). After a
-  `solve` it has the outputs too, until the next define takes them out.
-- **Session commands:** `define`, `open FILE`, `solve [options]`, `undo` (one step back),
-  `report`, `help`, `quit`. Repeated steps and solves overwrite the file, its report and its
-  record, as saving does in Response; nothing else is written. To keep a copy, copy the file.
-- **On the command line**, each define names its file: `r2x define quick pier-cap.r2t` makes
-  it (asking first if a file of that name exists), and `r2x define long add web pier-cap.r2t`
-  opens it, asks and saves it back.
+## Documents
 
-Each step is one container run, about 3 to 7 s. `docs/define.md` has how it works, every
-dialog's fields and what was found in Response.
-
-## How it works
-
-```
-r2x (Windows)  ──docker run──▶  container in WSL: Xvfb + Wine + Response-2000 + helper.exe
-```
-
-`r2x solve` runs the container once per input, with the input mounted read-only and the results
-written straight to the output folder. Inside, a small Win32 helper drives Response on a virtual
-display: it applies the settings through Response's dialogs, runs **Solve → Sectional
-Response** (and **More Detail**, if asked), then reads every chart with **Copy Chart Data** from
-the clipboard, paging through the load stages and checking each one against the control curves.
-At each stage it goes through the detail views with Response's view list. Every container has its own
-display and Wine prefix, so several run at once (`--parallel`). `docs/development.md` has the
-details and how to run it without Docker.
-
-`r2x define` runs the container once per step with its stdin open (`docker run -i`): the worker
-opens the section's dialog and sends each question to the command line, which prompts and sends
-the answer back.
-
-## Verification
-
-Each reference case was solved in Response-2000 on Windows and its charts copied by hand
-(`tests/reference/`). r2x's record matches every one byte for byte: the control charts at every
-stage and the five No Shear charts at the peak in every case, and all 21 charts of the four
-views for Newbeam at the peak and 20 stages below it and for the shear and More Detail cases.
-One known exception: two exports of the moment-and-shear case at stage 20 each have one zero
-printed with the opposite sign (`-0.0000` against `0.0000`), floating-point noise under Wine.
-
-| Case | Settings | Stages, peak |
-|---|---|---|
-| Newbeam (250 × 600 rectangle, 3–25M / 1–20M) | none: moment increment; every view at stages 56 and 36 | 60, peak 56 |
-| Newbeam, US units | `--units us` | 60, peak 56 |
-| Newbeam, CSA factors | `--factors csa` | 57, peak 46 |
-| Newbeam, axial load | `--initial=-2000,0,0` | 46, peak 37 |
-| Newbeam, axial increment only | `--increment=-1,0,0` | 35, peak 22 |
-| No input (File > New) | none | 60, peak 56 |
-| Newbeam, moment and shear (M/V = 1 m) | `--increment 0,1,1`; every view at stages 30 and 20 | 43, peak 30 |
-| Newbeam, shear alone | `--increment 0,0,1`; every view | 52, peak 16 |
-| Newbeam, More Detail twice | `--more-detail 2`; every view | 228, peak 224 |
-
-Other stages, and other cases' views, rely on r2x's own checks: each stage is identified from its strain
-profile against the control curves before it is copied, and Longitudinal Strain, which every
-view shows, must export the same bytes in each view, as must any other chart two views share. The report's pictures are checked by
-eye against Windows. Rerun the tests (`docs/development.md`) on any change to Wine, the image or
-r2x.
-
-**Shear and More Detail (0.3.0)** are checked on Windows by the last three cases; other
-loadings (Newbeam under N and V, Response's own shear examples) rely on r2x's own checks under
-Wine. With shear, the strain profile can match several stages near the peak, and then r2x tells
-them apart by their exports (`docs/cli.md`, *Shear and More Detail*).
-
-**Defining a section (0.4.0)** is checked under Wine: Enter through every question of
-`define quick` gives Newbeam's `input.r2t` byte for byte (dated as Newbeam is), adding a layer
-and deleting it again leaves a file as it was, and each dialog's answers land where Response
-saves them (`tests/test_define_wine.py`). On Windows, the reference cases are sections made by
-hand in Response and by an r2x session from the same answers (`tests/reference/define`;
-`check.ps1` there compares them): five match (the three Quick Define cases, a layer added and
-deleted, and a layer modified); the other eight are still to be made.
-
-Two heuristics are worth knowing. Wine gives no "solve finished" signal, so the solve counts as
-finished once the bottom control curve has not changed for 1 s and Response's process is idle.
-Copy Chart Data is chosen by its position in each chart's right-click menu; every export's title
-is checked, and r2x opens a menu item only if the menu is a data chart's (charts that are only
-pictures have a different menu), so a change there fails loudly.
-
-## Server (optional, not used by the CLI)
-
-The repo also has an HTTP server (`python -m r2x.server`) for running jobs on another machine: a
-token-protected API with a job queue and parallel workers. See `docs/development.md`.
+- [`docs/guide.md`](docs/guide.md): the user guide. Installing and linking Response, solving,
+  defining a section, reading the results, what has been verified.
+- [`docs/raw-format.md`](docs/raw-format.md): the record's layout and a Python reader; r2x's
+  contract with whatever reads it.
+- [`docs/internals.md`](docs/internals.md): how it works, the tests, releasing.
+- [`docs/risk-register.md`](docs/risk-register.md): what could still make a result differ from
+  Response on Windows.
+- [`docs/history.md`](docs/history.md): the decisions behind r2x and what was found in
+  Response along the way. [`docs/dialogs.md`](docs/dialogs.md): every field `define` asks.
 
 ## Response-2000
 
 Response-2000 is free software by Evan C. Bentz and Michael P. Collins, available from Bentz's
-site, [hadrianworks.com](https://www.hadrianworks.com/). The authors ask that work using it cite
-Bentz's PhD thesis: E. C. Bentz, *Sectional Analysis of Reinforced Concrete Members*, University
-of Toronto, 2000. r2x is not affiliated with or endorsed by them or the University of Toronto.
-Check the authors' terms before running it as a service for others.
+site, [hadrianworks.com](https://www.hadrianworks.com/). r2x does not include it: you link your
+own copy. The authors ask that work using it cite Bentz's PhD thesis: E. C. Bentz, *Sectional
+Analysis of Reinforced Concrete Members*, University of Toronto, 2000. Check the authors' terms
+before running it as a service for others.
 
 ## Disclaimer
 
-r2x automates Response-2000; it does not check or validate designs. The engineer of record is
-responsible for any use of its results.
+r2x is unofficial software that automates Response-2000. It is not affiliated with or endorsed
+by Response-2000's authors or the University of Toronto. It runs your own copy of Response-2000
+under Wine and returns Response's exported results without checking, changing or interpreting
+them.
+
+Those results have been compared with Response running on Windows only for the cases listed in
+the user guide, under *What has been verified*; anything else relies on r2x's own consistency
+checks, which cannot catch every way a result could differ. r2x does not check designs. As with
+any analysis software, the engineer who uses its results is responsible for judging whether
+they are fit for that use.
 
 ## License
 
-MIT (r2x code only).
+MIT, r2x's code only, without warranty of any kind.

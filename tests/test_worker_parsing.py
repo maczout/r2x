@@ -264,7 +264,7 @@ def test_a_chart_not_in_the_view_on_screen_is_an_error():
 # -- stage keys with shear --------------------------------------------------------------------------
 def test_shear_with_moment_identifies_by_curvature_alone():
     """With V and M in the increment the control charts are Shear-γxy and Moment-φ: curvature
-    is the only key (γxy needs the section's widths, docs/cli.md)."""
+    is the only key (γxy needs the section's widths, docs/history.md)."""
     controls, _, _ = case("newbeam")
     gxy = retitled(controls["moment_ex"], "Control : Shear - |g_x_y")
     keys = StageKeys(control_exports(gxy, controls["moment_phi"]))

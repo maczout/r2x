@@ -1,12 +1,25 @@
-# Command line
+# History
+
+Why r2x is as it is, and what was found in Response-2000 along the way, kept as it was written
+at each version. Using r2x is in `docs/guide.md`; how it works now is in `docs/internals.md`.
+Where these notes and those documents differ, the notes are history and the documents are
+current. The Wine spike that came before 0.1.0 is in `docs/wine-spike.md`.
+
+Versions: 0.1.0 (2026-10-25) the command line; 0.2.0 (2026-10-26) all detail views; 0.3.0
+(2026-10-27) shear and More Detail; 0.4.0 (2026-11-07) defining a section and the session;
+0.5.0 (2026-11-07) linking the user's own Response, and what came before setting r2x down.
+
+
+## The command line (0.1.0)
 
 **Status:** agreed 2026-10-25; implemented in full in r2x 0.1.0 (2026-10-25). `--views` added
 in r2x 0.2.0 (2026-10-26). Shear, loads as N,M,V, `--more-detail` and the slimmer report in r2x
 0.3.0 (2026-10-27), implemented ahead of the Windows reference captures. Phases 3 to 5, *All
-detail views* and *Shear and More Detail* below record how. `r2x solve --help` matches the text
-below plus one note, and `tests/test_cli.py` keeps them in step. `r2x define` and the session
+detail views* and *Shear and More Detail* below record how. The help text, then agreed here, is
+now in `docs/guide.md`, and `tests/test_cli.py` keeps them in step. `r2x define` and the session
 (`r2x` alone) in r2x 0.4.0 (2026-10-28, under Wine; reviewed 2026-11-03): *Defining a
-section*, at the end, and `docs/define.md`.
+section*, at the end, and `docs/define.md` (since 0.5.0 split between `docs/internals.md`,
+`docs/dialogs.md` and this file).
 
 **Existing results** (decided 2026-11-03): as in Response, solves are cheap to re-run and their
 results almost throwaway, so a solve replaces them, and a question to accept that is enough, as
@@ -20,7 +33,7 @@ A stage number past the last stage is a usage error (exit status 2), found once 
 given the stage count. With several inputs, the exit status is the most serious outcome: 1, then
 2, then 3.
 
-## Decisions
+### Decisions
 
 - **r2x is a kernel.** It drives Response-2000 and returns Response's own exports. Parsing them
   into a structured schema belongs to the wider toolbox (r2k), so r2x does not have to change as
@@ -68,82 +81,7 @@ given the stage count. With several inputs, the exit status is the most serious 
 - **Out of scope.** Exit status 3 is reserved for an analysis r2x does not cover; since 0.3.0
   nothing triggers it (until then, any loading with shear did).
 
-## `r2x solve --help`
-
-```
-usage: r2x solve [INPUT ...] [options]
-
-Run a full sectional response in Response-2000 1.9.7 and capture the data
-from its control charts and detail views.
-
-Scope: axial load, moment and shear. Not interaction diagrams or member
-response.
-r2x never edits the input file. Options override the input. Options you
-leave out keep the input's value, or Response's start-up default if the
-input has none.
-
-Input:
-  INPUT ...             .rsp or .r2t files; globs allowed (cases\*.r2t).
-                        Default: a new section, Response's default (Newbeam).
-
-Analysis:
-  --units {si,us,kgcm}  Units for loads and results.
-                        Default: input's, else si.
-                          si     kN    kN·m    mm   MPa
-                          us     kip   kip·ft  in   psi, ksi
-                          kgcm   ton   ton·m   cm   kg/cm2, t/cm2
-  --factors {none,csa}  Material reduction factors.
-                        Default: input's, else none.
-  --initial N,M,V       Initial load, in the units in effect.
-                        Default: input's, else 0,0,0.
-  --increment N,M,V     Load increment; only signs and ratio matter.
-                        0,0,0 solves the initial load alone.
-                        Default: input's, else 0,1,0.
-                        N: tension positive. M: compression on top positive.
-  --more-detail N       Refine the solve N times (more load stages), or
-                        max: until Response refines no further.
-                        Default: 0.
-
-Output:
-  --stage STAGES        Stages for the detail views: peak, all, or numbers
-                        and ranges (0,10,20-30 or peak,0-5). 0 is the
-                        initial load. Control charts always cover every
-                        stage. Default: peak.
-  --views VIEWS         Detail views: all, or any of general, cracking,
-                        reinforcement, no-shear. Default: all.
-  --report              Also write an HTML report: screenshots of the
-                        inputs and of the peak stage. Default: off.
-  --out DIR             Folder for results. Default: next to each input.
-  --stdout              Write the raw record to stdout and no files. One
-                        input only; not with --report.
-  --overwrite           Replace existing results without asking. Default:
-                        ask at a terminal, else stop.
-
-Running:
-  -p, --parallel N      Solve up to N inputs at once. Default: 1.
-  -q, --quiet           Errors only. Default: off.
-
-Results (NAME is the input file name, or newbeam without one):
-  NAME.r2x.txt          Raw record: exported chart data, byte for byte, with
-                        versions, input SHA-256 and the settings in effect.
-  NAME.r2x.html         Report (--report only).
-
-Exit status: 0 solved · 1 failed · 2 usage error · 3 out of scope
-
-Examples:
-  r2x solve
-  r2x solve beam.r2t --report
-  r2x solve beam.r2t --stage all
-  r2x solve beam.r2t --views cracking,no-shear
-  r2x solve beam.r2t --increment 0,1,1 --more-detail 2
-  r2x solve col.rsp --units si --initial -2000,0,0 --increment 0,1,0
-  r2x solve cases\*.r2t --out results --parallel 4
-  r2x solve beam.r2t --stdout | py parse.py
-```
-
-`r2x health` is unchanged.
-
-## Confirmed in Response-2000 on Windows
+### Confirmed in Response-2000 on Windows
 
 Checked by hand on 2026-10-25 (Phase 0). Screenshots are in Jamie's `_archive/phase0`; the
 reference cases are in `tests/reference/`.
@@ -379,9 +317,17 @@ how r2x 0.3.0 follows from it. Checked on Windows on 2026-10-27 with three hand-
 
 ## Defining a section (0.4.0)
 
+**Status:** released in r2x 0.4.0 (2026-11-07). Built under Wine on 2026-10-27/28 from the
+plan (the Claude Doc "r2x define and the r2x session — plan", phases D0, D1 and D2), with
+Jamie's review changes of 2026-10-28 built on 2026-11-03 (*Review changes*, below). On
+Windows the smoke test, the report's reload and the three Quick Define reference cases passed
+on 2026-10-28; after the review changes, on 2026-11-07, the five reference cases made by hand
+(the three Quick Define ones, `add-delete` and `long-modify`) matched and a session was
+smoke-tested again on the Framework.
+
 Planned in the Claude Doc "r2x define and the r2x session — plan" (2026-10-27); built under
 Wine on 2026-10-28. How a step works, every dialog's fields and what was found in Response are
-in `docs/define.md`. The decisions:
+in `docs/define.md` (since 0.5.0, `docs/internals.md` and `docs/dialogs.md`). The decisions:
 
 - **`define` is always the verb, the part of the section the noun**, at the session's prompt
   and on the command line alike: `define quick`, `define long add web`. The nouns: `quick`,
@@ -420,3 +366,243 @@ Exit status of `define`: 0 done (saved, or nothing changed), 1 failed (Response'
 the person stopped answering: nothing is saved), 2 usage error. `show`, `save` and `?` on a
 question were dropped in the review (2026-11-03): the report is the summary, a define always
 saves, and `[default]` says what Enter keeps.
+
+### Why a file per step, and units first
+
+**Why a file per step:** a section defined in memory exports slightly differently from the
+same section read back from its file (found with File > New in 0.1.0): Response sorts the
+longitudinal layers by depth when it opens a file, and keeps a section defined in memory in the
+order they were added. A file opened and saved again keeps its bytes from then on. So after its
+first step a section is always the file Response wrote, and anyone who opens it gets the same.
+
+**Units first.** Quick Define's defaults follow the units in effect: in US units they are a
+10 × 24 in beam with #6 and #8 bars, f'c 5000 psi. So `define quick` on an existing file opens
+that file first (its units, through File Override), and in a session with no file yet,
+`define units` is remembered for the `define quick` that follows. Switching units with
+`define units` converts the section in memory as Preferences does, and the file is saved in
+those units, with Response's rounding (found in 0.1.0).
+
+### Response's own dialogs
+
+| What Response shows | When | What r2x does |
+|---|---|---|
+| "Do you wish to create a new section?" (Yes/No) | Quick Define on an existing section | answers Yes: `define quick` always starts a new section |
+| any other Yes/No message box | e.g. setting fy while Materials shows "Detailed" ("Changing this value will overwrite the detailed parameters"); Add with a name that exists; Modify with a new name | asks it, word for word, with no default answer |
+| a message box with OK | a message | shows it, presses OK |
+| **Reinforcement Types** (a list) | leaving a Quick Define page, or Add/Modify, with a bar designation Response does not know | asks for a bar from Response's list, printed under the question by name (not numbered: bar names such as 10 and 15 are numbers): its rows are the lines of `rebar.dat` in order, so the answer picks the row with that name. No default: Response's own Cancel quietly takes the first row (10M) |
+| **View Data** ("Errors in defining Section ...") | after Finish, for errors Response has already fixed ("Negative width found ... Made positive") | shows the text; the section is as Response made it (the report's input screen shows it; undo in a session) |
+
+Response checks little. Quick Define takes a negative f'c or width and makes it positive
+(f'c −5 is saved as 5.0), and takes "abc" for f'c; r2x refuses anything that is not a number
+before it reaches the dialog. Bars are the exception: an unknown designation brings up the list.
+
+### Findings
+
+Found under Wine on 2026-10-27 and 28, on Newbeam and on sections made with Quick Define.
+
+- **Quick Define with every default gives Newbeam**: saved straight away, the file is
+  `tests/reference/newbeam/input.r2t` byte for byte once the date is Newbeam's (the first
+  test in `tests/test_define_wine.py`). It needs no File > New (24331, which does not answer
+  a posted message under Wine): Define > Quick Define opens the same wizard.
+- **Quick Define's derived values:** Response works out the bar layers (six 30M bars in a
+  300 mm web become two layers, `bot3` and an unnamed one), `fu` (1.5 fy), the member length
+  and the moment diagram. Those are Response's; r2x only answers its questions.
+- **A file opened and saved sorts its layers**; opened and saved again it keeps its bytes.
+  Adding a layer and deleting it again leaves the file byte for byte as it was before.
+- **The order of a new section's layers is not reliable** (found with the Windows references,
+  2026-10-28). Quick Define's T-beam and I-girder made by hand on Windows and by r2x hold the
+  same layers with the same values, but the layer Quick Define splits off (`bot3`, the fourth
+  strand layer) comes last in the hand-made file and first in r2x's. Opened and saved again by
+  Response, the two are the same bytes, and they solve to the same record. Whether typing
+  through the wizard or Windows against Wine makes the difference is not known; nothing after
+  Response's first opening of the file sees it. So a reference case matches when its files are
+  the same bytes, or else the same section with the layers in another order that solves to the
+  same record (`tests/reference/define/compare.py`).
+- **Modify takes every field as the dialog shows it**, as in the GUI: Newbeam's bottom layer
+  at 63.90 shows as 64 (Dist. from Bottom has no decimals), so a modify that changes only its
+  bar count stores z = 64.00. Quick Define's derived depths survive only until a layer is
+  modified. Add uses the fields shown too; its defaults are the selected layer's.
+- **Names:** Response lists the unnamed bottom layer as `bot` (and saves no `name` for it).
+  Add with a name that exists asks whether to modify the existing layer, and then, since the
+  layer selected is another, whether to overwrite it; answered No, Response adds the layer as
+  `top1`, and r2x follows the name Response gave. Modify with a new name asks whether to
+  overwrite the existing type; answered No, Response adds a new type beside the old one.
+- **Materials:** with more than one rebar type of the same strength (Newbeam: Steel 1 and
+  Trans), Basic Properties shows fy as "Detailed". Setting it asks to overwrite the detailed
+  parameters; Yes merges every type into one, Steel 1 (Trans goes, and the stirrups use
+  Steel 1). Enter leaves it alone.
+- **Concrete Section** changes the shape only: the bars stay where they were.
+- **Loads** are saved in `<sectloading>` as `BN`, `BM`, `BV` (constant) and `MN`, `MM`, `MV`
+  (increment), each only when it differs from Response's default, as found in 0.3.0.
+- **Title and comments** share Edit General's one box: the first line is the title, the
+  others the comments, saved together in `name` (and in the member's material type). The main
+  window's title then has a line break, which the helper now turns into a space.
+- **Tendons** are `longreinfx` layers with a prestrain (`dep`); Define Tendons lists only
+  those. Strand designations come from `rebar.dat` as bars do (S13, ...).
+- **Quick Define and prestressing None:** the strands field stays enabled, labelled
+  "Number of 13 mm strands".
+- **A circular section** in Quick Define has 16 top bars and no bottom bars by default, and
+  hoops.
+
+### Frames
+
+Response groups a dialog's fields in frames (group boxes), and a frame's text can carry the
+meaning of the fields in it: Quick Define's third page has "Top Non-Prestressed Reinforcement"
+and "Bottom Non-Prestressed Reinforcement" for a rectangle, T or I, but "Outer Non-Prestressed
+Reinforcement Ring" and "Inner Non-Prestressed Reinforcement Ring" for a circle, around the
+same controls. Before the review r2x put "Top, " and "Bottom, " before the labels from the
+catalogue, so a circle read as linear layers (found by Jamie on Windows, 2026-10-28).
+
+So a field's frame is read from the dialog as its question is asked, never fixed in the
+catalogue: the worker lists the page's windows (`kids`, with their rectangles) and takes the
+innermost visible Button with text whose rectangle encloses the field's control (a check box
+or radio button encloses nothing). No change to the helper was needed. A frame whose text only
+repeats the question (Preferences' "Units" around the units) is left out. The command line
+prints a frame's text once, as a heading over its questions; the `set:` line groups the fields
+it read back the same way. The catalogue's own question words leave out the frame's (Number of
+Bars, not Top, Number of Bars; Concrete under Material Factors). Define Loading has no frames;
+its questions keep their own words (Axial Load, Constant).
+
+### The report reloads itself
+
+A define step rewrites the section's report, the same `NAME.r2x.html` that `solve --report`
+writes, with the inputs only: Response's input screen after Save As, which is the section as
+the file now holds it (decided 2026-10-28: the dialog pictures, nested dialogs or only the last
+one set, did not communicate). A define after a solve so takes the outputs out; a solve in a
+session writes it whole again. A solve's report keeps its Preferences and Define Loading
+pictures (decided 2026-11-03): those are the analysis settings, re-set on every solve as its
+arguments, and the material factors' values show nowhere else.
+
+Every report reloads itself when r2x rewrites it, with no server and no files besides it. A
+page opened from disk (`file://`) cannot read files, but it can frame one and be posted to by
+it: every 1.5 s it loads itself, hidden, in a frame; that copy posts its stamp (a hash of the
+page, at the top) to the page and stops loading there (`window.stop()`). A different stamp
+means the file has changed: the page reloads, which keeps the place on it. Checked in
+Chromium from `file://` (scroll position kept), and on the Framework (2026-10-28). The
+pictures are inside the page, as before.
+
+### Time per step
+
+Under Wine in the cloud environment, the worker's time (Response starting, the dialog, Save
+As, the input screen's picture; the container adds about a second on the Framework). Measured
+with four dialog pictures per Quick Define before 2026-11-03; a step now takes one picture.
+
+| Step | Seconds |
+|---|---|
+| `define quick`, Enter throughout (four pages) | 4.2 to 6.5 |
+| `define quick` with answers on every page | 5.4 to 7.2 |
+| `define general`, `section`, `loads`, `units`, `factors` | 2.7 to 3.3 |
+| `define long add`, `delete`; `tendons add` | 3.2 to 3.9 |
+| a step with one of Response's questions (`materials` fy, `trans` rename) | 4.1 to 5.2 |
+
+### Decisions taken in building it
+
+Confirmed by Jamie on 2026-11-03 ("good enough for now"); the plan's settled points are kept as
+they were:
+
+- **The file name is asked by every `define quick` in a session**, defaulting to the
+  session's file (or `new-cross-section.r2t`, from Response's title for a new section); the
+  plan has it asked by the first define only. A file that exists, other than the session's,
+  is replaced only after a yes; on the command line, `r2x define quick FILE` asks the same
+  when FILE exists.
+- **`define units` with no section yet** is remembered for the next `define quick` (units
+  only: factors do not change Quick Define's defaults). Other defines need a section.
+- **`undo`** (one level) puts back the file from before the last step and rewrites the report with its
+  input screen; a step that made a new file has nothing to put back (the file stays, and the
+  session goes back to its file before).
+- **The report opens in the browser** the first time a session writes it (only at a
+  terminal); `report` opens it again.
+- **Answers can be piped**, one per line (Enter: an empty line); at the end of the input
+  every question is answered with Enter, and a question that needs an answer stops the step.
+  The tests and `tests/reference/define/check.ps1` use this; it is not meant as an
+  automation interface (that is a script that writes the input file).
+- **Response's View Data errors after Finish** are shown, not asked again: the wizard has
+  closed, and the section is as Response made it.
+
+### Review changes (Jamie's review of 2026-10-28, decided 2026-11-03)
+
+- **The report's inputs are the input screen only** (above, *The report reloads itself*).
+- **Frames are headings.** A field's frame text is read from the dialog as the question is
+  asked (*Frames*, below) and printed once, as a heading over that frame's questions, which
+  are indented under it; not again when a question is asked again after a wrong answer.
+- **Choices print under their question**, numbered, and the answer is typed on the line after
+  them (`> `), so they cannot read as the previous question's.
+- **No `?`** on a question: it only restated the default, and `[default]` says that.
+- **No `save`**: a successful define always saves the file; to save it under another name,
+  copy it in the shell. `open FILE` stays.
+- **No `show`**, in the session or as `r2x show`: the report is the section's summary. With
+  it goes the check of whether the record is a solve of the file as it is now; there is none
+  anywhere. As in Response, settings are light and solves cheap to re-run, almost throwaway:
+  repeated defines and solves overwrite the file, its report and its record, and a prompt to
+  accept an overwrite is enough. In a session nothing asks (the session's file is the one being
+  worked on, as with Save in Response); `define quick` asks before replacing another file;
+  `r2x solve` asks at a terminal before replacing results (`--overwrite`: without asking; no
+  terminal: it stops). The record keeps its input SHA-256 in the header.
+- **The object is the section or the file**, not Response's menus: the nouns' descriptions say
+  what they set (`long`: longitudinal reinforcement layers), and the help, the banner and the
+  README follow. The questions keep Response's own field labels.
+
+### Not done (later, each planned on its own)
+
+Materials' Detailed pages and Rebar Details; circular and distributed bar patterns; standard
+and user-defined shapes; shrinkage and thermal strains; a live container if steps feel slow; a
+file with several sections (Response asks which to load: r2x stops with its question).
+
+### Reference cases
+
+`tests/reference/define`: thirteen cases, each made by hand in Response on Windows
+(`hand.r2t`, steps in its `README.md`) and by r2x from the same answers (`session.txt`, an r2x
+session). `check.ps1` runs them on Windows and compares; `tests/test_define_cases_wine.py`
+does the same under Wine. `cases.json` holds the answers by field, and
+`tools/define_cases.py` writes each case's `session.txt` and `README.md` from it. The three
+Quick Define cases are compared but for the date.
+
+## Linking and parking (0.5.0)
+
+**Decided 2026-10-28:** finish a short list of work, then set r2x down and move on: an
+interface review for structural engineers, documentation by reader, a consistent disclaimer, a
+first pass of systematic verification (completed in the clone project, where it matters most),
+and parking. r2x is good enough on speed; running fast and reliably in the long term goes
+through a clone. Users link their own copy of Response; r2x does not bundle it.
+
+**Decided 2026-11-07** (Jamie's review of Claude's proposals):
+
+- **The image is published** on GitHub's registry (`ghcr.io/maczout/r2x:VERSION`), pushed from
+  the Framework after it has been checked there, so the image users pull is the one checked.
+  It doubles as insurance against a rebuild drifting.
+- **Another build of `r2k.exe` is refused**, at `r2x setup` and on every run, unless linked
+  with `--allow-unverified`; every record then says `response-verified: no`.
+- **The report after a solve:** a page cannot bring its own window forward, so the guide says
+  to put the terminal and the browser side by side, and a page that reloads out of sight flags
+  its title (`● Solved`, `● Updated`) until it is looked at.
+- **The first verification pass:** a risk register (`docs/risk-register.md`), a few hand
+  captures on Windows aimed at errors the engineer cannot see, and a small prototype of checks
+  on records alone; the eight define cases not yet made cut to a few short ones; no comparison
+  of r2x's worker on Windows against Wine.
+- Taken as proposed: `r2x setup --response FOLDER` with an environment variable to override
+  it; one disclaimer kept in the code and shown in the help, `r2x health`, the session's
+  banner, the report and the record header; the documents split by reader.
+
+**Built and found, 2026-11-07:**
+
+- **Only the files Response reads** (`.exe`, `.dll`, `.dat`, `.dtd`, `.r2k`) are hashed and
+  copied into each job, not the whole program folder: Jamie's folder has `Response.ini`
+  (Response's recent-files list, rewritten by every session on Windows) and a `Newbeam.r2t`
+  edited after installing, which would change a whole-folder hash with ordinary use. The Wine
+  suite passes from such a copy, byte for byte. `shape.dat`, the standard shapes, is a live
+  input as `rebar.dat` is.
+- **Going back a question** (`<`): within a page the worker asks the previous field again as
+  the dialog now shows it; at the first question of a Quick Define page it presses the
+  wizard's Back and starts at that page's last question. Going back to the shape on page 2,
+  changing it and answering page 3 again gives the same file, byte for byte, as answering
+  straight; so does going back within a page. Response's own questions cannot be gone back
+  from: they are asked again.
+- **What the input screen shows** is more than the earlier notes said: a tendon's prestrain
+  (`Δεp = 6.50 mm/m`), crack spacing when set, and a moment axis away from the centroid are all
+  on it. Bar and tendon depths as numbers, a tendon's slope and the material factors are not
+  (`docs/risk-register.md`, *What the report leaves out*).
+- **In the cloud environment** Docker Hub and PyPI cannot be reached from a build, so the
+  image was checked there on an Ubuntu 24.04 base made with `debootstrap` and with wheels
+  fetched beforehand: `r2x setup`, `r2x health`, a solve (Newbeam's 23 reference exports at
+  the peak, byte for byte, 7.3 s) and a define step, through the real command line and
+  docker. The Framework's build is the one released.

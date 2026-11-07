@@ -63,7 +63,7 @@ def test_catalogue_is_complete_and_consistent():
         if d.kind == "wizard":
             assert [p.title for p in d.pages] == [f"Quick Define - Step {i} of 4"
                                                    for i in range(1, 5)]
-    # the menu commands of docs/define.md
+    # the menu commands of docs/dialogs.md
     assert {d.noun: d.menu for d in catalogue.DIALOGS} == {
         "quick": 150, "general": 103, "materials": 117, "section": 153, "long": 156,
         "trans": 154, "tendons": 5098, "loads": 152, "units": 321, "factors": 321}

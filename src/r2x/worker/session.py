@@ -53,7 +53,7 @@ CONTROL_CHARTS = (
     Chart("control_bottom", None, None, 1),
 )
 # Control-chart titles r2x knows, and the record section each becomes (views.json). Which two
-# Response shows depends on the increment (docs/cli.md): with shear in it, Shear-γxy on top and
+# Response shows depends on the increment (docs/history.md, Shear and More Detail): with shear in it, Shear-γxy on top and
 # below it Moment-φ (with a moment), Axial Load-εx (with an axial load) or Shear-εx (shear
 # alone); without, Moment-εx and Moment-φ, or Axial Load-εx in both places (axial alone).
 CONTROL_KEYS = {c.title: c.key for c in CONTROLS}

@@ -1,7 +1,8 @@
 """r2x command line: solves each input in the r2x container and keeps its raw record.
 
-The interface is specified in docs/cli.md. The container runs once per input: in Docker inside
-WSL on Windows (`wsl --exec docker ...`), with `docker` directly elsewhere. Standard library only.
+Using it is in docs/guide.md, and the decisions behind it in docs/history.md. The container
+runs once per input: in Docker inside WSL on Windows (`wsl --exec docker ...`), with `docker`
+directly elsewhere. Standard library only.
 
 Response-2000 is the user's own: `r2x setup --response FOLDER` links its program folder once
 (r2x/config.py), and every run mounts it read-only at /opt/response.
@@ -511,7 +512,7 @@ Examples:
 
 
 class HelpFormatter(argparse.RawTextHelpFormatter):
-    """Help laid out as in docs/cli.md: `-p, --parallel N`, `INPUT ...`, on any Python 3.10+."""
+    """Help laid out as in docs/guide.md: `-p, --parallel N`, `INPUT ...`, on any Python 3.10+."""
 
     def __init__(self, prog):
         super().__init__(prog, max_help_position=24, width=80)

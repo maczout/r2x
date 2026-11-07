@@ -35,7 +35,7 @@ time); **B**, r2x's worker run natively on Windows against Wine (not in the firs
 
 | # | Risk | Seen? | Covered today | First pass |
 |---|---|---|---|---|
-| D1 | A field set in the wrong control, or not set | Partly: the input screen (see *What the report leaves out*) | Wine: every dialog lands where Response saves it; Windows: five cases | Short Tier A cases aimed at what the screen does not show |
+| D1 | A field set in the wrong control, or not set | Mostly: the input screen shows most fields (see *What the report leaves out*) | Wine: every dialog lands where Response saves it; Windows: five cases | Short Tier A cases aimed at what the screen does not show |
 | D2 | Response reacting differently as values go in (fields enabled by shape, bars checked, Modify's precision) | Sometimes: Response's messages come through | The five Windows cases; Modify's precision known (63.90 becomes 64.00) | The other eight define cases cut to two or three short ones |
 | D3 | A new section's layers in another order | No, and harmless: same section, same record | Matched by solving (`compare.py`) | Nothing new |
 
@@ -55,14 +55,23 @@ time); **B**, r2x's worker run natively on Windows against Wine (not in the firs
 
 ## What the report leaves out
 
-To fill in from a report's input screen before deciding whether inspection is enough for v1.0
-(D1, and Jamie's idea under item 2). Known so far:
+For deciding whether inspection is enough for v1.0 (D1, and Jamie's idea under item 2).
+Response's input screen, checked on 2026-11-07 with Newbeam and with Newbeam plus a tendon
+layer, crack spacing set and the moment axis moved, shows: section properties; each layer's
+bars (`3 - 25M`) and a tendon's prestrain (`Δεp = 6.50 mm/m`); stirrups and spacing; clear
+cover; crack spacing (the formula, or `sx = 300.0`); a moment axis away from the centroid
+(`Axial load applied 250 mm from bottom`); the loads, constant and increment; units; and the
+materials' key values (f'c, ft, fu, fy of each type, fpu). Earlier notes had the prestrain as
+not shown; it is.
 
-- Bar depths as numbers (layers are drawn, not dimensioned).
-- A tendon's prestrain.
+It does not show:
+
+- Bar and tendon depths as numbers (the layers are drawn to scale; the cover is given).
+- A tendon's slope.
 - The material factors, in a define's report (the solve report shows them in Preferences).
-- Stages other than the peak.
-- How the stage was identified (the record says which stage, not why).
+- Title comments and Analysis By (only the title).
+- Stages other than the peak, and how the stage was identified (the record says which stage,
+  not why).
 
 ## First pass, in short
 

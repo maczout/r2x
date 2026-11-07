@@ -28,7 +28,7 @@ r2x 0.3.0 under Wine 9.0 (2026-10-27) gives every file byte for byte, except two
 stage 20 that differ only in the sign of a zero: Shear Strain at −274.35 mm is `-0.0000` under
 Wine and `0.0000` here, and Shear Stress at −300 mm is `0.0000` under Wine and `-0.0000` here.
 That is floating-point noise around zero, near the bottom of the section where shear is nil;
-the Wine tests allow it for those two exports only (docs/cli.md, *Shear and More Detail*).
+the Wine tests allow it for those two exports only (docs/history.md, *Shear and More Detail*).
 
 ## `saved.r2t`
 

@@ -2,7 +2,7 @@
   "about": [
     "Response-2000's dialogs that r2x define drives, field by field, in each dialog's own order.",
     "Read by r2x (src/r2x/catalogue.py) for the questions, the help, the worker and the tests;",
-    "docs/define.md has the findings behind it. Found under Wine on 2026-10-27 (Response 1.9.7).",
+    "docs/dialogs.md lists it; docs/history.md has the findings behind it. Found under Wine on 2026-10-27 (Response 1.9.7).",
     "noun: the word after define. menu: Response's main-menu command (RT_MENU of r2k.exe).",
     "title: the dialog's window title; a wizard's pages have their own titles.",
     "kind: wizard (Next, Finish), sheet (a property sheet; r2x uses the page named), dialog, or",

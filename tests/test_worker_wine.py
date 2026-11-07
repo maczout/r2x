@@ -60,7 +60,7 @@ def solve(tmp_path, stages, name="Newbeam", report=None, views=ALL_VIEWS, settin
 
 # A number that rounds to zero can print with a minus sign under Wine and without one on Windows,
 # or the other way round: floating-point noise in the last bit. Found in two exports of
-# newbeam-shear at stage 20 (docs/cli.md, *Shear and More Detail*); allowed only where listed.
+# newbeam-shear at stage 20 (docs/history.md, *Shear and More Detail*); allowed only where listed.
 SIGNED_ZERO = re.compile(rb"-(?=0\.0+\s)")
 
 

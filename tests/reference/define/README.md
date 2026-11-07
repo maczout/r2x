@@ -6,7 +6,7 @@ three Quick Define cases but for the date, since Response dates a new section wi
 is made), or else when they are the same section with the longitudinal layers in another order
 and solve to the same record: Response keeps a new section's layers in the order it made them,
 which differed between the hand-made Quick Define sections and r2x's, and sorts them by depth
-whenever it opens the file (`compare.py`; `docs/define.md`, *Findings*). Cases starting from
+whenever it opens the file (`compare.py`; `docs/history.md`, *Defining a section*, *Findings*). Cases starting from
 Newbeam open `..\newbeam\input.r2t`, so its layers are sorted by depth as in r2x's file chain.
 
 Made by hand so far: `quick-tbeam`, `quick-column`, `quick-ibeam-strands` (2026-10-28),

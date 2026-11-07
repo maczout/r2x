@@ -4,7 +4,7 @@ For every field in r2x's catalogue (src/r2x/dialogs.json): its control ID, the f
 and the label the dialog shows, the value Response shows for Newbeam (Quick Define's defaults
 for quick; tests/reference/newbeam/input.r2t for the others, each item of a list dialog in
 turn), the precision the dialog shows it with, and where Response saves it. Every question is
-answered with Enter, so nothing is saved. Prints a Markdown table (docs/define.md has its
+answered with Enter, so nothing is saved. Prints a Markdown table (docs/dialogs.md has its
 output) and the time each step took. Needs what the Wine tests need ($R2X_RESPONSE_DIR, wine,
 Xvfb, mingw-w64).
 """
