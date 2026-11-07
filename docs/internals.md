@@ -201,21 +201,25 @@ R2X_RESPONSE_DIR=$PWD/Response pytest   # everything, under Wine (about 10 min)
 
 ## Releasing
 
-On the Framework, from the repo in WSL:
+On the Framework, from the repo in WSL (Docker is in WSL Ubuntu, not Windows):
 
-1. `git pull`, and the version in `pyproject.toml` and `src/r2x/__init__.py`.
+1. `git fetch` and check out the branch to release; the version is in `pyproject.toml` and
+   `src/r2x/__init__.py`.
 2. `docker build -t ghcr.io/maczout/r2x:VERSION .`
-3. Check it: `py -m pip install --force-reinstall --no-cache-dir
-   https://github.com/maczout/r2x/archive/BRANCH.zip` in Windows, then `r2x health` (client and
+3. In Windows: `py -m pip install --force-reinstall --no-cache-dir
+   https://github.com/maczout/r2x/archive/refs/heads/BRANCH.zip` (without the two flags pip
+   keeps the old client), then `r2x setup --response FOLDER` once, `r2x health` (client and
    image versions), `check.ps1` in `tests/reference/define`, and a solve or two.
-4. Tag and push from Jamie's machine (`git tag vVERSION && git push origin vVERSION`; a cloud
-   session cannot push tags).
-5. `docker push ghcr.io/maczout/r2x:VERSION`. The image pushed is the one checked. `gh auth
-   refresh -s write:packages` once, then `gh auth token | docker login ghcr.io -u maczout
-   --password-stdin`. The first push makes the package private: set it to public in the
-   package's settings on GitHub.
+4. Merge into `main` (fast-forward), tag and push from Jamie's machine: `git tag vVERSION &&
+   git push origin main vVERSION` (a cloud session cannot push tags).
+5. `docker push ghcr.io/maczout/r2x:VERSION`, the image just checked. Once: `gh auth refresh -s
+   write:packages`, then `gh auth token | docker login ghcr.io -u maczout --password-stdin`.
+   The first push makes the package private: set it to public in the package's settings on
+   GitHub, so `r2x setup` can pull it.
+6. Reinstall the client from the tag, as the README says.
 
 `docker save ghcr.io/maczout/r2x:VERSION | gzip > r2x-VERSION.tar.gz` keeps a copy offline.
+For a local build under another name, set `R2X_IMAGE` to it.
 
 ## Server (optional, not used by the command line)
 
