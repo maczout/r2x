@@ -3,6 +3,7 @@
 answers: {key: answer} for the questions to answer, by the field's key in dialogs.json (or
 "name", "action", "response" for Response's own Yes/No questions, "bar" for its bar list); a
 list of answers for a key asked more than once. Every other question is answered with Enter.
+"<" goes back to the previous question, as typed at the command line.
 """
 
 from __future__ import annotations
@@ -67,7 +68,8 @@ def define(words: list[str], answers: dict | None = None, input_file: Path | Non
             if a is None and not q["keep"]:
                 proc.stdin.close()     # no answer for a question that needs one: give up
                 continue
-            proc.stdin.write(json.dumps({"answer": a}) + "\n")
+            reply = {"back": True} if a == "<" else {"answer": a}
+            proc.stdin.write(json.dumps(reply) + "\n")
             proc.stdin.flush()
         elif "say" in msg:
             result.said.append(msg["say"])

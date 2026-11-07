@@ -10,6 +10,7 @@ reads one JSON line of answer on stdin:
     {"done": {...}}                    the step's outcome (saved file, title)
 
     stdin: {"answer": "text"}  or  {"answer": null}  (Enter: keep the value the dialog has)
+           or {"back": true}  (back to the previous question: typed as <)
 
 End of input on stdin means the person gave up: the worker stops without saving. Progress and
 errors still go to stderr in the form of r2x.progress. Standard library only.
@@ -23,6 +24,16 @@ from dataclasses import asdict, dataclass, field, fields
 from typing import IO
 
 YES, NO = "y", "n"
+
+TYPED_BACK = "<"          # typed at a question: back to the previous one (\< for a literal <)
+
+
+class _Back:
+    def __repr__(self):
+        return "BACK"
+
+
+BACK = _Back()            # the answer that means: back to the previous question
 
 
 @dataclass

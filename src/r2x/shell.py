@@ -15,6 +15,7 @@ kept in the session for undo; nothing else is written. Standard library only.
 from __future__ import annotations
 
 import os
+import textwrap
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +24,7 @@ from typing import Callable
 from r2x import catalogue
 from r2x.ask import Question
 from r2x.catalogue import CatalogueError, parse_step
+from r2x.notice import DISCLAIMER
 from r2x.define import (SECTION_SUFFIXES, Prompter, StepResult, file_name_from, report_for,
                         run_step, set_line, today)
 from r2x.progress import SOLVED
@@ -34,7 +36,8 @@ UNITS = {"SI Metric": "si", "US Customary": "us", "kg/cm Metric": "kgcm"}
 HELP = """\
 Commands:
   define NOUN ...      set part of the section, question by question; Enter keeps the value
-                       shown (help define lists the nouns)
+                       shown, < goes back a question, Ctrl+C stops the step with nothing
+                       saved (help define lists the nouns)
   open FILE            work on this file (.r2t or .rsp)
   solve [OPTIONS]      solve the file and update its report (r2x solve --help for OPTIONS)
   undo                 put the file back as it was before the last step
@@ -89,6 +92,7 @@ class Shell:
     # -- the loop -------------------------------------------------------------------------------
     def run(self) -> int:
         self.p.print("r2x session: define a section, then solve it. help lists the commands.")
+        self.p.print(textwrap.fill(DISCLAIMER, 78))
         while True:
             line = self.p.line("r2x> ")
             if line is None:

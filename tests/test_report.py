@@ -1,4 +1,5 @@
 """The HTML report, the BMP-to-PNG conversion and the Symbol font fix (no Wine needed)."""
+import html
 import io
 import struct
 import zlib
@@ -110,6 +111,13 @@ def test_report_reloads_itself_when_rewritten():
     head = page[:page.index("<title>")]
     assert "postMessage({r2xStamp: R2X_STAMP}" in head and "window.stop()" in head
     assert "location.reload()" in page and "setInterval" in page
+
+
+def test_the_footer_carries_the_disclaimer():
+    from r2x.notice import DISCLAIMER
+    for page in (build(), report.build_define("x.r2t", "define quick", {})):
+        footer = page[page.index("<footer>"):]
+        assert html.escape(DISCLAIMER) in footer
 
 
 def test_a_reload_out_of_sight_flags_the_title():

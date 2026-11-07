@@ -26,6 +26,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import textwrap
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path, PureWindowsPath
 
@@ -35,6 +36,7 @@ from r2x.catalogue import CatalogueError, parse_step
 from r2x.define import (SECTION_SUFFIXES, Prompter, record_for, report_for, run_step, set_line,
                         today, worker_command)
 from r2x.display import Display, Job
+from r2x.notice import DISCLAIMER
 from r2x.progress import FAILED, OUT_OF_SCOPE, SOLVED, USAGE
 from r2x.response import (ALLOW_ENV, Program, ResponseError, read_program,
                           unverified_message)
@@ -323,6 +325,7 @@ def describe_link() -> list[str]:
 
 def cmd_health(a) -> int:
     print(f"r2x client {__version__}; image {a.image}; docker: {' '.join(docker_command())}")
+    print(textwrap.fill(DISCLAIMER, 78))
     mounts = describe_link()
     cmd = docker_command() + ["run", "--rm", "--pull", "never", "--network", "none", *mounts,
                               a.image, "python", "-m", "r2x.worker.info"]
@@ -502,7 +505,9 @@ Examples:
   r2x solve beam.r2t --increment 0,1,1 --more-detail 2
   r2x solve col.rsp --units si --initial -2000,0,0 --increment 0,1,0
   r2x solve cases\\*.r2t --out results --parallel 4
-  r2x solve beam.r2t --stdout | py parse.py"""
+  r2x solve beam.r2t --stdout | py parse.py
+
+""" + textwrap.fill(DISCLAIMER, 78)
 
 
 class HelpFormatter(argparse.RawTextHelpFormatter):
@@ -624,7 +629,8 @@ def add_solve_options(s: argparse.ArgumentParser):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(prog="r2x", description="Run Response-2000 from the command line.")
+    p = argparse.ArgumentParser(prog="r2x", description="Run Response-2000 from the command line.",
+                                epilog=DISCLAIMER)
     p.add_argument("--version", action="version", version=f"r2x {__version__}")
     p.add_argument("--image", default=os.environ.get("R2X_IMAGE", DEFAULT_IMAGE),
                    help=f"container image (default: $R2X_IMAGE or {DEFAULT_IMAGE})")

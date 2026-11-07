@@ -86,8 +86,9 @@ class Prompter:
             self.out.write(text + "\n")    # piped: show the answer as if typed
         return text
 
-    def answer(self, q: Question) -> tuple[bool, str | None]:
-        """(answered, the answer to send); not answered: the input ended or no answer came."""
+    def answer(self, q: Question, back: bool = False) -> tuple[bool, str | ask._Back | None]:
+        """(answered, the answer to send); not answered: the input ended or no answer came.
+        With back, < typed alone is ask.BACK (\\< for a literal <)."""
         indent = "  "
         if q.frame:
             if q.frame != self.frame:
@@ -107,6 +108,10 @@ class Prompter:
             text = self.line(prompt)
             if text is None:
                 return (True, None) if q.keep else (False, None)
+            if back and text.strip() == ask.TYPED_BACK:
+                return True, ask.BACK
+            if back and text.strip() == "\\" + ask.TYPED_BACK:
+                text = ask.TYPED_BACK
             try:
                 return True, ask.check_answer(q, text)
             except AnswerError as e:
@@ -191,11 +196,12 @@ def run_step(cmd: list[str], prompter: Prompter,
                 other.append(line.rstrip())
                 continue
             if "ask" in msg:
-                ok, answer = prompter.answer(ask.read_question(msg["ask"]))
+                ok, answer = prompter.answer(ask.read_question(msg["ask"]), back=True)
                 if not ok:
                     proc.stdin.close()      # the worker stops without saving
                     continue
-                proc.stdin.write(f'{{"answer": {json.dumps(answer)}}}\n')
+                reply = {"back": True} if answer is ask.BACK else {"answer": answer}
+                proc.stdin.write(json.dumps(reply) + "\n")
                 proc.stdin.flush()
             elif "say" in msg:
                 prompter.print(f"  {msg['say']}")

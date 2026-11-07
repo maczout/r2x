@@ -79,8 +79,9 @@ def test_usage_errors_exit_2(argv, message, capsys):
 
 
 def test_help_matches_spec(capsys):
-    """`r2x solve --help` is the text agreed in docs/cli.md, plus a note of its own."""
-    spec = (HERE.parent / "docs" / "cli.md").read_text(encoding="utf-8")
+    """`r2x solve --help` is the text in the user guide (docs/guide.md), plus a note of its
+    own."""
+    spec = (HERE.parent / "docs" / "guide.md").read_text(encoding="utf-8")
     spec = spec[spec.index("```\nusage: r2x solve") + 4:]
     spec = spec[:spec.index("```")]
     with pytest.raises(SystemExit):
@@ -332,6 +333,7 @@ def test_health(cases):
     code, out, _ = r2x("health")
     assert code == 0 and b"r2x client" in out and b'"r2x_version": "fake"' in out
     assert b"Response-2000: " in out and b'"response_dir": "' in out    # mounted
+    assert b"r2x is unofficial automation of Response-2000" in out      # the disclaimer
 
 
 # -- linking Response-2000 (r2x setup) ----------------------------------------------------------

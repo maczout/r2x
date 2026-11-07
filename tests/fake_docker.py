@@ -157,11 +157,19 @@ def define_worker(mounts: dict[str, str], args: list[str]) -> int:
     print(json.dumps({"ask": {"key": "title", "text": "Title", "kind": "text",
                               "value": "fake", "unit": "", "choices": [], "keep": True,
                               "frame": ""}}), flush=True)
-    line = sys.stdin.readline()
-    if not line:
-        print("r2x: failed: stopped without an answer; nothing saved", file=sys.stderr)
-        return 1
-    answer = json.loads(line)["answer"]
+    while True:
+        line = sys.stdin.readline()
+        if not line:
+            print("r2x: failed: stopped without an answer; nothing saved", file=sys.stderr)
+            return 1
+        if json.loads(line).get("back"):            # the first question: asked again
+            print(json.dumps({"say": "this is the first question"}), flush=True)
+            print(json.dumps({"ask": {"key": "title", "text": "Title", "kind": "text",
+                                      "value": "fake", "unit": "", "choices": [],
+                                      "keep": True, "frame": ""}}), flush=True)
+            continue
+        answer = json.loads(line)["answer"]
+        break
     body = Path(inp).read_bytes() if inp else b"<section/>\r\n"
     if out:
         if answer is not None:

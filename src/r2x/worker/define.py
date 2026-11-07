@@ -51,6 +51,10 @@ NEW_SECTION = "Do you wish to create a new section?"
 SHAPE_SUFFIX = " Section"      # list view items are "Rectangle Section" ...
 
 
+class BackOut(Exception):
+    """< at a page's first question: back to the previous page."""
+
+
 class Abort(R2xError):
     """The person stopped answering (end of input): nothing is saved."""
 
@@ -62,15 +66,23 @@ class Asker:
     def __init__(self, out: IO[str] = sys.stdout, inp: IO[str] = sys.stdin):
         self.out, self.inp = out, inp
 
-    def ask(self, q: Question) -> str | None:
-        ask.write(self.out, **ask.question_message(q))
-        line = self.inp.readline()
-        if not line:
-            raise Abort("stopped without an answer; nothing saved")
-        data = ask.read_line(line)
-        if "answer" not in data:
-            raise R2xError(f"expected an answer, got {line[:80]!r}")
-        return data["answer"]
+    def ask(self, q: Question, back: bool = False):
+        """The answer: text, None (Enter) or, with back, ask.BACK. Response's own questions
+        (back False) are asked again: there is no question before them to go back to."""
+        while True:
+            ask.write(self.out, **ask.question_message(q))
+            line = self.inp.readline()
+            if not line:
+                raise Abort("stopped without an answer; nothing saved")
+            data = ask.read_line(line)
+            if data.get("back") is True:
+                if back:
+                    return ask.BACK
+                self.say("this is Response's own question: answer it to go on")
+                continue
+            if "answer" not in data:
+                raise R2xError(f"expected an answer, got {line[:80]!r}")
+            return data["answer"]
 
     def say(self, text: str):
         ask.write(self.out, say=text)
@@ -250,23 +262,55 @@ class Driver:
             self.interruptions(wait=2.0)
 
     # fields -------------------------------------------------------------------------------
-    def ask_fields(self, container: str, fields: tuple[Field, ...]) -> int:
-        """Ask each field in order and set the answers; return how many changed."""
+    def shown(self, container: str, f: Field, frames: dict[str, str]) -> Shown | None:
+        """The field as the dialog shows it, or None if it is not asked: disabled, or behind a
+        ticked Automatic box."""
+        if f.unless is not None and self.h.ask(
+                f"getcheck {self.ctl(container, f.unless)}") == "1":
+            return None
+        sh = self.read(container, f, frames)
+        return sh if sh.enabled else None
+
+    def ask_fields(self, container: str, fields: tuple[Field, ...], start_last: bool = False,
+                   can_leave: bool = False) -> int:
+        """Ask each field in order and set the answers; return how many were set.
+
+        < (ask.BACK) asks the previous question again, as the dialog now shows it, and the
+        answer replaces the one given. At the first question it leaves the page (BackOut) if
+        can_leave, else asks again. start_last: begin at the last question, as on coming back
+        to a page.
+        """
         n = 0
         frames = self.frames(container)
-        for f in fields:
-            if f.unless is not None and self.h.ask(
-                    f"getcheck {self.ctl(container, f.unless)}") == "1":
+        asked: list[int] = []                  # questions asked so far, for going back
+        i = 0
+        if start_last:
+            shown = [k for k, f in enumerate(fields) if self.shown(container, f, frames)]
+            if shown:
+                asked, i = shown[:-1], shown[-1]
+        while i < len(fields):
+            f = fields[i]
+            sh = self.shown(container, f, frames)
+            if sh is None:
+                i += 1
                 continue
-            sh = self.read(container, f, frames)
-            if not sh.enabled:
+            answer = self.asker.ask(self.question(sh), back=True)
+            if answer is ask.BACK:
+                if asked:
+                    i = asked.pop()
+                elif can_leave:
+                    raise BackOut()
+                else:
+                    self.asker.say("this is the first question")
                 continue
-            answer = self.asker.ask(self.question(sh))
+            asked.append(i)
+            i += 1
             if answer is None or self.same(sh, answer):
                 continue
             self.put(container, sh, answer)
             self.changed.append((f, sh.label, answer))
             if f.kind == "bar":
+                self.pending_bars = [b for b in self.pending_bars if b[0] != f.key]
                 self.pending_bars.append((f.key, sh.label, answer, sh.frame))
             n += 1
         return n
@@ -468,25 +512,37 @@ def quick(d: Driver, dialog: Dialog, date: str | None) -> Outcome:
     first = dialog.pages[0].title
     wizard = d.open(dialog.menu, first)
     own = {wizard}
-    read = []
-    for k, page in enumerate(dialog.pages):
+    reads: dict[int, list] = {}       # each page's read-back, as it was left last
+
+    def show(title: str) -> Callable[[], bool]:
+        return lambda: any(w.hwnd == wizard and w.text == title
+                           for w in d.h.windows("dialogs"))
+
+    k, coming_back = 0, False
+    while k < len(dialog.pages):
+        page = dialog.pages[k]
         container = d.h.ask(f"psget {wizard}").split()[1]
         d.pending_bars = []
-        d.ask_fields(container, page.fields)
-        read += d.readback(container, page.fields)
-        last = k == len(dialog.pages) - 1
-        if last:
+        try:
+            d.ask_fields(container, page.fields, start_last=coming_back, can_leave=k > 0)
+        except BackOut:               # < at the page's first question: the wizard's Back
+            prev = dialog.pages[k - 1].title
+            d.press(wizard, WIZARD_BACK, show(prev), f"show {prev!r}", own)
+            k, coming_back = k - 1, True
+            continue
+        coming_back = False
+        reads[k] = d.readback(container, page.fields)
+        if k == len(dialog.pages) - 1:
             d.press(wizard, WIZARD_FINISH, lambda: d.h.ask(f"alive {wizard}") == "0",
                     "finish Quick Define", own)
         else:
             nxt = dialog.pages[k + 1].title
-            d.press(wizard, WIZARD_NEXT,
-                    lambda: any(w.hwnd == wizard and w.text == nxt
-                                for w in d.h.windows("dialogs")), f"show {nxt!r}", own)
+            d.press(wizard, WIZARD_NEXT, show(nxt), f"show {nxt!r}", own)
+        k += 1
     d.interruptions(0.5, set())       # View Data, if Response found errors in the section
     if date:
         set_date(d, date)
-    return Outcome(True, d.changes(read))
+    return Outcome(True, d.changes([r for k in sorted(reads) for r in reads[k]]))
 
 
 def set_date(d: Driver, date: str):

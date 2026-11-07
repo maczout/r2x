@@ -76,6 +76,48 @@ def test_quick_every_default_is_newbeam(tmp_path):
     assert "Outputs" not in page and "R2X_STAMP" in page
 
 
+def test_back_a_question_within_a_page(tmp_path):
+    """< asks the previous question again, and its new answer is the one kept."""
+    out = tmp_path / "back.r2t"
+    r = define(["quick"], {"top-number": ["4", "6"], "top-by-area": ["<", None]}, out=out,
+               date=NEWBEAM_DATE)
+    assert r.status == 0, r.stderr
+    keys = [q["key"] for q in r.questions]
+    assert keys[9:13] == ["top-number", "top-by-area", "top-number", "top-by-area"]
+    assert r.asked("top-number")[1]["value"] == "4"           # as the dialog now shows it
+    straight = tmp_path / "straight.r2t"
+    assert define(["quick"], {"top-number": "6"}, out=straight, date=NEWBEAM_DATE).status == 0
+    assert out.read_bytes() == straight.read_bytes()
+    assert r.setting("Number of Bars", "Top Non-Prestressed Reinforcement") == "6"
+
+
+def test_back_across_quick_defines_pages(tmp_path):
+    """< at a page's first question goes back to the previous page (the wizard's Back), at its
+    last question; going back to the shape and changing it gives the section answered
+    straight."""
+    out = tmp_path / "back.r2t"
+    r = define(["quick"], {"shape": [None, "T-Beam"], "dim1": [None, "<", None],
+                           "dim2": [None, "<"], "top-number": ["<", "4"]},
+               out=out, date=NEWBEAM_DATE)
+    assert r.status == 0, r.stderr
+    keys = [q["key"] for q in r.questions]
+    assert keys[6:16] == ["shape", "dim1", "dim2", "top-number", "dim2", "dim1", "shape",
+                          "dim1", "dim2", "dim3"]
+    straight = tmp_path / "straight.r2t"
+    assert define(["quick"], {"shape": "T-Beam", "top-number": "4"}, out=straight,
+                  date=NEWBEAM_DATE).status == 0
+    assert out.read_bytes() == straight.read_bytes()
+
+
+def test_back_at_the_first_question_asks_it_again(tmp_path, resaved):
+    f = copy(resaved, tmp_path)
+    r = define(["loads"], {"axial": ["<", "-100"]}, input_file=f, out=f)
+    assert r.status == 0, r.stderr
+    assert [q["key"] for q in r.asked("axial")] == ["axial", "axial"]
+    assert "this is the first question" in r.said
+    assert attrs(f.read_text(errors="replace"), "sectloading")[0]["BN"].startswith("-100")
+
+
 def test_quick_circular_asks_for_rings(tmp_path):
     """The frames carry the meaning: a circle's reinforcement is rings, not top and bottom
     layers, and the questions say so (Jamie's review, 2026-10-28)."""

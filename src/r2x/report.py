@@ -35,6 +35,7 @@ import base64
 import hashlib
 import html
 
+from r2x.notice import DISCLAIMER
 from r2x.record import Record
 from r2x.views import parse_views
 
@@ -110,7 +111,8 @@ def _page(name: str, sub: str, groups, made: str = "", flag: str = "Updated") ->
         body.append(f'<section id="{anchor}"><h2>{html.escape(heading)}</h2>')
         body += [_shot(a, t, c, png) for a, t, c, png in items]
         body.append("</section>")
-    body.append('<footer><p>Drawn under Wine; fonts and line weights can differ slightly from '
+    body.append(f'<footer><p class="disclaimer">{html.escape(DISCLAIMER)}</p>'
+                '<p>Drawn under Wine; fonts and line weights can differ slightly from '
                 f"Windows.{' ' + html.escape(made) + '.' if made else ''} This page reloads "
                 "itself when r2x rewrites it.</p></footer>")
     body.append("</main></div>" + _RELOAD.replace("{flag}", flag) + "</body></html>\n")

@@ -194,6 +194,14 @@ def test_prompter_with_piped_answers():
     assert "'abc' is not a number" in out.getvalue()
 
 
+def test_prompter_goes_back_only_where_asked_to():
+    q = Question("title", "Title", "text", "New Cross Section")
+    p = Prompter(io.StringIO("<\n\\<\n<\n"), io.StringIO())
+    assert p.answer(q, back=True) == (True, ask.BACK)   # < alone: back a question
+    assert p.answer(q, back=True) == (True, "<")        # \< for a literal <
+    assert p.answer(q) == (True, "<")                   # r2x's own questions: just text
+
+
 def test_file_names_and_set_lines():
     assert file_name_from("New Cross Section") == "new-cross-section.r2t"
     assert file_name_from("Pier cap (north)") == "pier-cap-north.r2t"
@@ -257,6 +265,13 @@ def test_define_on_the_command_line(tmp_path):
     code, out, err = r2x("define", "general", "pier-cap.r2t", cwd=tmp_path, stdin="\n")
     assert code == 0, err
     assert "set: nothing" in out
+
+
+def test_back_goes_to_the_worker(tmp_path):
+    code, out, err = r2x("define", "quick", "x.r2t", cwd=tmp_path, stdin="<\nPier cap\n")
+    assert code == 0, err
+    assert out.count("Title [fake]: ") == 2 and "this is the first question" in out
+    assert (tmp_path / "x.r2t").read_bytes() == b"<section/>\r\ntitle Pier cap\r\n"
 
 
 def test_define_quick_asks_before_replacing_a_file(tmp_path):

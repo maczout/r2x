@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Callable, Iterator
 
 from r2x import __version__, record, report as html_report
+from r2x.notice import DISCLAIMER
 from r2x.progress import Event, note
 from r2x.response import ALLOW_ENV, Program, ResponseError, read_program, unverified_message
 from r2x.settings import Settings
@@ -197,6 +198,7 @@ def run_job(input_file: Path | None, out: Path, response_dir: Path, prefix: Path
     wine_version = subprocess.run(["wine", "--version"], capture_output=True, text=True).stdout.strip()
     header = {
         "r2x-version": __version__,
+        "disclaimer": DISCLAIMER,
         "response-exe-sha256": sha256(exe),
         "response-files-sha256": program.files_sha256,
         "response-verified": "yes" if program.verified else "no",

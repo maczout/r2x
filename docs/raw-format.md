@@ -62,7 +62,10 @@ end                                          end of record
 | Key | Example | Meaning |
 |---|---|---|
 | `r2x-version` | `0.3.0` | r2x version that wrote the record |
+| `disclaimer` | `r2x is unofficial automation of Response-2000, …` | r2x's disclaimer (`src/r2x/notice.py`); from r2x 0.5.0 |
 | `response-exe-sha256` | `bbf4bc59…` | SHA-256 of `r2k.exe` |
+| `response-files-sha256` | `b2b38803…` | one hash for the files Response reads in the linked program folder (`docs/internals.md`, *Response's program folder*); from r2x 0.5.0 |
+| `response-verified` | `yes` | `yes` if `r2k.exe` is a build r2x has been checked against on Windows, `no` if it ran with `--allow-unverified`; from r2x 0.5.0 |
 | `wine-version` | `wine-9.0 (Ubuntu 9.0~repack-4build3)` | output of `wine --version` |
 | `input-name` | `Newbeam.r2t` | input file name, or `File > New` when there is no input |
 | `input-sha256` | `036440c7…` | SHA-256 of the input file's bytes; absent with no input |
