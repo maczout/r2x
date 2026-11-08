@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from r2x.notice import DISCLAIMER
 from r2x import record
 from r2x.settings import Settings
 from r2x.stages import ALL, PEAK, parse_stages
@@ -101,6 +102,7 @@ def report_pictures(path: Path) -> list[tuple[int, int]]:
 def test_newbeam_peak_matches_references(tmp_path):
     rec = solve(tmp_path, PEAK)
     assert rec.header["stage-count"] == "60" and rec.header["peak-stage"] == "56"
+    assert rec.header["disclaimer"] == DISCLAIMER and rec.header["response-verified"] == "yes"
     assert rec.header["views"] == "general,cracking,reinforcement,no-shear"
     assert_matches(rec, "newbeam")
     assert len(rec.sections) == 2 + CHARTS

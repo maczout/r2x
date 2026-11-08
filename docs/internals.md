@@ -147,6 +147,31 @@ reload.
 waits 2 s for one whenever a dialog closes otherwise) and adds a copy of Wine's Symbol font with
 a Windows symbol map, so Response's εx and φ draw in the pictures.
 
+## What r2x says, and where
+
+For changing r2x's wording (messages, help, the disclaimer). The command line's text runs on
+the user's machine; the worker's runs in the image, so changing it means rebuilding the image.
+
+| Text | Where | Runs in |
+|---|---|---|
+| The disclaimer (short form) | `src/r2x/notice.py` | both: help, `health`, banner (client); record header, report footer (image) |
+| `r2x --help`, `r2x solve --help` (`SOLVE_HELP`), subcommand help | `src/r2x/cli.py`, `build_parser` | client |
+| `setup`, `health`, overwrite prompt, solve failures | `src/r2x/cli.py` (`cmd_setup`, `describe_link`, `cmd_health`, `replace_ok`, `run_container`) | client |
+| Linked folder lines, unverified build | `src/r2x/response.py` (`describe`, `unverified_message`); `NOT_LINKED` in `cli.py` | client and image |
+| Solve progress (`[Newbeam] solved: ...`) | `src/r2x/display.py` | client |
+| Session banner, `help`, `help define`, session messages | `src/r2x/shell.py` | client |
+| Questions' layout (headings, choices, `> `), the `set:` line | `src/r2x/define.py` (`Prompter`, `set_line`) | client |
+| Question labels and units | read from Response's dialogs as asked; the fields are `src/r2x/dialogs.json` | image |
+| Answer errors | `src/r2x/ask.py` | client |
+| Response's own questions and messages | passed on word for word by `src/r2x/worker/define.py` | image |
+| The report page | `src/r2x/report.py` | image |
+
+Tests pin much of it: `tests/test_cli.py` (and `r2x solve --help` against the block in
+`docs/guide.md`, *Solving*), `tests/test_define.py`, `tests/test_report.py`, and the Wine
+tests. **Changing the disclaimer:** edit `notice.py`; paste the last paragraph of `r2x solve
+--help` over the one in `docs/guide.md`'s help block; change the long form in README.md and
+`docs/guide.md`, *Disclaimer*, by hand; rebuild the image for the record and report.
+
 ## Running without Docker
 
 Ubuntu 24.04 (or WSL) with:

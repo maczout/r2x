@@ -36,7 +36,8 @@ already there, so it can be rerun to fill gaps.
 ## Adding a case
 
 1. Make a folder here named for the case (e.g. `newbeam-us`) and copy the input into it as
-   `input.r2t` (or `input.rsp`).
+   `input.r2t` (or `input.rsp`). Response's own examples (`Marshall.rsp`, `Cm4.rsp`) are not
+   copied: they are part of Response, and the tests read them from the linked folder.
 2. In Response on Windows: open that input, apply the case's settings through the dialogs,
    **Save As** `saved.r2t` somewhere outside the case folder, and run **Solve → Sectional
    Response** without changing the load stage. Screenshot the window, status bar included.

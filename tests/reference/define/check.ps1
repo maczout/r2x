@@ -12,7 +12,7 @@
 # longitudinal layers (Response sorts them by depth when it opens a file) are the same section
 # if solving both gives the same record (compare.py; the records go in solved\). The session's
 # output is kept in r2x-session.log. Needs py with r2x installed (as for the client).
-# Needs r2x installed and its image built (r2x health).
+# Needs r2x installed and set up: r2x setup --response FOLDER (r2x health shows it).
 param(
     [string[]]$Cases = @(),
     [switch]$All

@@ -367,6 +367,8 @@ def test_ctrl_c_at_the_prompt_gives_a_new_prompt(tmp_path):
                   browser=False)
     assert shell.run() == 0
     assert "(quit leaves the session)" in out.getvalue()
+    from r2x.notice import DISCLAIMER
+    assert " ".join(DISCLAIMER.split()[:4]) in out.getvalue()            # in the banner
     assert out.getvalue().count("r2x> ") == 2 and "Traceback" not in out.getvalue()
 
 

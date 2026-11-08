@@ -10,6 +10,7 @@ from pathlib import Path
 import pytest
 
 from r2x import __version__, cli, record, response
+from r2x.notice import DISCLAIMER
 from r2x.settings import Settings
 from r2x.cli import (build_parser, expand_inputs, join_pair_values, main, overall_status,
                      record_path, report_path, UsageError, windows_to_wsl)
@@ -333,7 +334,7 @@ def test_health(cases):
     code, out, _ = r2x("health")
     assert code == 0 and b"r2x client" in out and b'"r2x_version": "fake"' in out
     assert b"Response-2000: " in out and b'"response_dir": "' in out    # mounted
-    assert b"r2x is unofficial automation of Response-2000" in out      # the disclaimer
+    assert " ".join(DISCLAIMER.split()[:4]).encode() in out           # the disclaimer
 
 
 # -- linking Response-2000 (r2x setup) ----------------------------------------------------------

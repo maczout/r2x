@@ -601,6 +601,15 @@ through a clone. Users link their own copy of Response; r2x does not bundle it.
   (`Δεp = 6.50 mm/m`), crack spacing when set, and a moment axis away from the centroid are all
   on it. Bar and tendon depths as numbers, a tendon's slope and the material factors are not
   (`docs/risk-register.md`, *What the report leaves out*).
+- **Ctrl+C at the session's prompt** (Jamie, on Windows, 2026-11-08) gave a Python traceback:
+  the prompt loop caught Ctrl+C in a command but not at the prompt itself, and on Windows a
+  Ctrl+C reaches every process on the console, so one can also arrive late at the prompt
+  after a step has stopped. Now it gives a new prompt (`quit` leaves), and anywhere else on
+  the command line it stops with `r2x: stopped (Ctrl+C)` and status 1. Ctrl+C mid-step was
+  already handled (nothing saved); on Windows it is still to be tried after the fix.
+- **The squash load** (Tier C, `docs/risk-register.md`): a first reading that Newbeam's
+  concrete carried 0.90 f'c at its axial-only peak assumed a uniform strain; the exports show
+  a gradient. Withdrawn on 2026-11-08; the tool prints the stresses at the peak instead.
 - **In the cloud environment** Docker Hub and PyPI cannot be reached from a build, so the
   image was checked there on an Ubuntu 24.04 base made with `debootstrap` and with wheels
   fetched beforehand: `r2x setup`, `r2x health`, a solve (Newbeam's 23 reference exports at
