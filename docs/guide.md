@@ -263,8 +263,9 @@ What a `define` sets:
 - **Repeated steps and solves overwrite** the file, its report and its record, as saving does
   in Response. To keep a version, copy the file. `undo` goes back one step (except a step that
   made a new file).
-- **Stopping mid-step:** Ctrl+C stops the step and nothing is saved. A wrong answer can also be
-  fixed by finishing the step and running the define again, or with `undo`.
+- **Stopping mid-step:** Ctrl+C stops the step and nothing is saved; at the `r2x>` prompt it
+  just gives a new prompt (`quit` leaves). A wrong answer can also be fixed with `<`, by
+  finishing the step and running the define again, or with `undo`.
 - **On the command line**, each define names its file last: `r2x define quick pier-cap.r2t`
   makes it (asking first if it exists), `r2x define long add web pier-cap.r2t` opens it, asks
   and saves it back. Answers can be piped, one per line; that is for tests, not automation

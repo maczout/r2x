@@ -94,7 +94,14 @@ class Shell:
         self.p.print("r2x session: define a section, then solve it. help lists the commands.")
         self.p.print(textwrap.fill(DISCLAIMER, 78))
         while True:
-            line = self.p.line("r2x> ")
+            try:
+                line = self.p.line("r2x> ")
+            except KeyboardInterrupt:
+                # Ctrl+C at the prompt, or one that arrives late after stopping a step (on
+                # Windows it reaches every process on the console): a new prompt, as in a shell.
+                self.p.print("")
+                self.p.print("  (quit leaves the session)")
+                continue
             if line is None:
                 return SOLVED
             try:

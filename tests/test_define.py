@@ -345,3 +345,37 @@ def test_session_solve_options(tmp_path):
     # a session's solves replace the record and the report beside the file, without asking
     assert err.count("[x] solved: 10 stages, peak 7 -> x.r2x.txt, x.r2x.html") == 2
     assert "replace" not in out + err
+
+
+class InterruptedOnce(io.StringIO):
+    """Input whose first read is a Ctrl+C, as a console gives it to Python."""
+    def __init__(self, text: str):
+        super().__init__(text)
+        self.interrupted = False
+
+    def readline(self, *args):
+        if not self.interrupted:
+            self.interrupted = True
+            raise KeyboardInterrupt
+        return super().readline(*args)
+
+
+def test_ctrl_c_at_the_prompt_gives_a_new_prompt(tmp_path):
+    from r2x.shell import Shell
+    out = io.StringIO()
+    shell = Shell(None, None, Prompter(InterruptedOnce("quit\n"), out), cwd=tmp_path,
+                  browser=False)
+    assert shell.run() == 0
+    assert "(quit leaves the session)" in out.getvalue()
+    assert out.getvalue().count("r2x> ") == 2 and "Traceback" not in out.getvalue()
+
+
+def test_ctrl_c_on_the_command_line_stops_without_a_traceback(monkeypatch, capsys):
+    from r2x import cli
+
+    def interrupted(a):
+        raise KeyboardInterrupt
+    monkeypatch.setattr(cli, "cmd_health", interrupted)
+    assert cli.main(["health"]) == 1
+    assert "r2x: stopped (Ctrl+C)" in capsys.readouterr().err
+

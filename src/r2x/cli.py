@@ -697,6 +697,11 @@ def main(argv: list[str] | None = None) -> int:
     except UsageError as e:
         print(f"r2x: {e}", file=sys.stderr)
         return USAGE
+    except KeyboardInterrupt:
+        # Ctrl+C: no traceback. A record is written under a temporary name until it is
+        # complete, and a define step saves only at its end, so nothing is left half done.
+        print("\nr2x: stopped (Ctrl+C)", file=sys.stderr)
+        return FAILED
 
 
 if __name__ == "__main__":
