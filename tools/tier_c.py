@@ -16,7 +16,9 @@ from Response on Windows. A prototype: plain reinforced sections (no tendons), S
   (the gross section's centroid) to its M. N and M at a stage
   come from the control chart and the header's loads.
 - **Squash load** (S11): with an axial increment alone, the largest compression against
-  f'c (Ag − As) + fy As, as a ratio for judging, not a pass or fail.
+  f'c (Ag − As) + fy As, as a ratio, with the stresses at the peak beside it: the closed form
+  assumes a uniform strain, which an unsymmetrically reinforced section loaded at its gross
+  centroid does not have. For judging, not a pass or fail.
 - **Repeat** (S4): `--same A B` says whether two records of one solve have the same sections.
 
 The section's file is read for the widths (sectionSOLID: height and width, from the bottom) and
@@ -225,10 +227,14 @@ def check_record(path: Path, section: Path) -> bool:
         p0 = (sec.fc * (ag - as_) + sec.fy * as_) / 1000
         peak = int(rec.header["peak-stage"])
         npeak = loads[peak][0]
-        fc_eff = (abs(npeak) - sec.fy * as_ / 1000) * 1000 / (ag - as_)
         print(f"  squash load: {npeak:.1f} kN at the peak against f'c (Ag - As) + fy As = "
-              f"{-p0:.1f} kN: ratio {abs(npeak) / p0:.3f}; with the bars at fy, the "
-              f"concrete carries {fc_eff:.1f} MPa = {fc_eff / sec.fc:.3f} f'c")
+              f"{-p0:.1f} kN: ratio {abs(npeak) / p0:.3f}")
+        conc = [s for s, _ in export_points(rec.stage(peak, "longitudinal_concrete_stress"))]
+        bars = export_points(rec.stage(peak, "long_reinforcement_stress"))
+        bands = sorted({(round((y0 + y1) / 2, 1), s0) for (s0, y0), (s1, y1)
+                        in zip(bars, bars[1:]) if s0 == s1 and s0 and y0 != y1}, reverse=True)
+        print(f"    at the peak: concrete {min(conc):.1f} to {max(conc):.1f} MPa; bars "
+              + ", ".join(f"{s:.1f} MPa at y = {y:g} mm" for y, s in bands))
     return ok
 
 

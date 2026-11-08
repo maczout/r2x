@@ -98,9 +98,12 @@ Status on 2026-11-07:
   - *Stage order* (S7): the bottom chart's deformation moves one way up to the peak. εx at the
     centroid reverses early as a section cracks, and shear failures unload after their peak,
     so only the bottom chart, and only up to the peak, is checked.
-  - *Squash load* (S11), for judgment: Newbeam's axial peak is 0.912 of f'c (Ag − As) + fy As;
-    with the bars at fy, the concrete carries 0.899 f'c. Whether that is what Response intends
-    is Jamie's call.
+  - *Squash load* (S11), for judgment: Newbeam's axial-only peak is 0.912 of f'c (Ag − As) +
+    fy As. The closed form assumes a uniform strain, and Response's exports at the peak show
+    none: concrete from −35.0 to −27.8 MPa, the top 20M at −400 MPa and the bottom 3–25M at
+    −253.6 MPa. (A first reading on 2026-11-07, that the concrete carried 0.90 f'c with the
+    bars at fy, assumed the uniform strain and was wrong.) The tool now prints the stresses at
+    the peak beside the ratio.
   - *Repeat* (S4): Newbeam solved twice gives the same sections, at the peak in the container
     against the host, and at every stage on the host.
 - **Not now:** Tier B; kg/cm units and two settings combined (S1 is visible); a cracking-moment
