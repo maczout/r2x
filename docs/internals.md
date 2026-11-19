@@ -226,7 +226,7 @@ R2X_RESPONSE_DIR=$PWD/Response pytest   # everything, under Wine (about 10 min)
 
 ## Releasing
 
-On the Framework, from the repo in WSL (Docker is in WSL Ubuntu, not Windows):
+On a Windows machine with Docker in WSL (as the client expects), from the repo in WSL:
 
 1. `git fetch` and check out the branch to release; the version is in `pyproject.toml` and
    `src/r2x/__init__.py`.
@@ -235,8 +235,8 @@ On the Framework, from the repo in WSL (Docker is in WSL Ubuntu, not Windows):
    https://github.com/maczout/r2x/archive/refs/heads/BRANCH.zip` (without the two flags pip
    keeps the old client), then `r2x setup --response FOLDER` once, `r2x health` (client and
    image versions), `check.ps1` in `tests/reference/define`, and a solve or two.
-4. Merge into `main` (fast-forward), tag and push from Jamie's machine: `git tag vVERSION &&
-   git push origin main vVERSION` (a cloud session cannot push tags).
+4. Merge into `main` (fast-forward), tag and push: `git tag vVERSION && git push origin main
+   vVERSION`. Tags and images are pushed by the owner.
 5. `docker push ghcr.io/maczout/r2x:VERSION`, the image just checked. Once: `gh auth refresh -s
    write:packages`, then `gh auth token | docker login ghcr.io -u maczout --password-stdin`.
    The first push makes the package private: set it to public in the package's settings on

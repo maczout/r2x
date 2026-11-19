@@ -27,7 +27,7 @@ Shear) at two stages:
 | Date | October 24 2026 |
 | Windows version | Windows 11 Pro |
 | Response version (Help → About) | 1.9.7 |
-| By | Jamie McIntyre |
+| By | the owner |
 
 ## The other views (r2x 0.2.0)
 
@@ -50,7 +50,7 @@ Shear) at two stages:
 | Windows version | Windows 11 Pro (as on 2026-10-24) |
 | Response version (Help → About) | 1.9.7 (as on 2026-10-24) |
 | Status bar at peak-20 (M) | 305.6 kNm: stage 36 |
-| By | Jamie McIntyre |
+| By | the owner |
 
 All 37 files matched r2x 0.2.0's record of `--stage all` byte for byte, and the record from the
-Framework's container matched the cloud's (SHA-256 `8f94ae63…31a0`).
+container on Windows matched the cloud environment's (SHA-256 `8f94ae63…31a0`).

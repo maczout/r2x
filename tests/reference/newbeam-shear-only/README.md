@@ -42,4 +42,4 @@ The routine in `../README.md`, *Adding a case*, with every view.
 | Date | October 27, 2026 |
 | Windows version | Windows 11 Pro |
 | Response | 1.9.7, `r2k.exe` SHA-256 `bbf4bc59…4e74` |
-| By | Jamie McIntyre |
+| By | the owner |

@@ -95,8 +95,8 @@ def test_help_matches_spec(capsys):
 
 
 def test_windows_to_wsl():
-    assert windows_to_wsl(r"C:\Users\maczo\cases\Liping LB1.rsp") == \
-        "/mnt/c/Users/maczo/cases/Liping LB1.rsp"
+    assert windows_to_wsl(r"C:\Users\someone\cases\Liping LB1.rsp") == \
+        "/mnt/c/Users/someone/cases/Liping LB1.rsp"
     assert windows_to_wsl(r"D:\x") == "/mnt/d/x"
     with pytest.raises(UsageError):
         windows_to_wsl(r"\\wsl$\Ubuntu\home\x.r2t")

@@ -83,7 +83,7 @@ given the stage count. With several inputs, the exit status is the most serious 
 
 ### Confirmed in Response-2000 on Windows
 
-Checked by hand on 2026-10-25 (Phase 0). Screenshots are in Jamie's `_archive/phase0`; the
+Checked by hand on 2026-10-25 (Phase 0). Screenshots were kept outside the repository; the
 reference cases are in `tests/reference/`.
 
 - **Units.** Options > Preferences ("Response-2000 Preferences") offers SI Metric, US Customary
@@ -217,7 +217,7 @@ Found under Wine on 2026-10-26, with Newbeam at its peak; how r2x 0.2.0 follows 
   Shear alone (0.1.0: 9.5 s), in the cloud environment.
 - **Checked on Windows** (2026-10-26). All four views' 21 charts, captured by hand at stage 56
   and at stage 36 (`tests/reference/newbeam`), match r2x's record byte for byte. The report
-  matched Response by eye, and the Framework's container wrote the same record as the cloud's.
+  matched Response by eye, and the container on Windows (Docker in WSL) wrote the same record as the cloud environment's.
 
 ## Shear and More Detail (0.3.0)
 
@@ -318,14 +318,14 @@ how r2x 0.3.0 follows from it. Checked on Windows on 2026-10-27 with three hand-
 ## Defining a section (0.4.0)
 
 **Status:** released in r2x 0.4.0 (2026-11-07). Built under Wine on 2026-10-27/28 from the
-plan (the Claude Doc "r2x define and the r2x session — plan", phases D0, D1 and D2), with
-Jamie's review changes of 2026-10-28 built on 2026-11-03 (*Review changes*, below). On
+plan ("r2x define and the r2x session — plan", kept outside the repository; phases D0, D1 and
+D2), with the owner's review changes of 2026-10-28 built on 2026-11-03 (*Review changes*, below). On
 Windows the smoke test, the report's reload and the three Quick Define reference cases passed
 on 2026-10-28; after the review changes, on 2026-11-07, the five reference cases made by hand
 (the three Quick Define ones, `add-delete` and `long-modify`) matched and a session was
-smoke-tested again on the Framework.
+smoke-tested again on Windows.
 
-Planned in the Claude Doc "r2x define and the r2x session — plan" (2026-10-27); built under
+Planned in "r2x define and the r2x session — plan" (2026-10-27, outside the repository); built under
 Wine on 2026-10-28. How a step works, every dialog's fields and what was found in Response are
 in `docs/define.md` (since 0.5.0, `docs/internals.md` and `docs/dialogs.md`). The decisions:
 
@@ -451,7 +451,7 @@ meaning of the fields in it: Quick Define's third page has "Top Non-Prestressed 
 and "Bottom Non-Prestressed Reinforcement" for a rectangle, T or I, but "Outer Non-Prestressed
 Reinforcement Ring" and "Inner Non-Prestressed Reinforcement Ring" for a circle, around the
 same controls. Before the review r2x put "Top, " and "Bottom, " before the labels from the
-catalogue, so a circle read as linear layers (found by Jamie on Windows, 2026-10-28).
+catalogue, so a circle read as linear layers (found by the owner on Windows, 2026-10-28).
 
 So a field's frame is read from the dialog as its question is asked, never fixed in the
 catalogue: the worker lists the page's windows (`kids`, with their rectangles) and takes the
@@ -478,13 +478,13 @@ page opened from disk (`file://`) cannot read files, but it can frame one and be
 it: every 1.5 s it loads itself, hidden, in a frame; that copy posts its stamp (a hash of the
 page, at the top) to the page and stops loading there (`window.stop()`). A different stamp
 means the file has changed: the page reloads, which keeps the place on it. Checked in
-Chromium from `file://` (scroll position kept), and on the Framework (2026-10-28). The
+Chromium from `file://` (scroll position kept), and on Windows (2026-10-28). The
 pictures are inside the page, as before.
 
 ### Time per step
 
 Under Wine in the cloud environment, the worker's time (Response starting, the dialog, Save
-As, the input screen's picture; the container adds about a second on the Framework). Measured
+As, the input screen's picture; the container adds about a second on Windows). Measured
 with four dialog pictures per Quick Define before 2026-11-03; a step now takes one picture.
 
 | Step | Seconds |
@@ -497,7 +497,7 @@ with four dialog pictures per Quick Define before 2026-11-03; a step now takes o
 
 ### Decisions taken in building it
 
-Confirmed by Jamie on 2026-11-03 ("good enough for now"); the plan's settled points are kept as
+Confirmed by the owner on 2026-11-03 ("good enough for now"); the plan's settled points are kept as
 they were:
 
 - **The file name is asked by every `define quick` in a session**, defaulting to the
@@ -519,7 +519,7 @@ they were:
 - **Response's View Data errors after Finish** are shown, not asked again: the wizard has
   closed, and the section is as Response made it.
 
-### Review changes (Jamie's review of 2026-10-28, decided 2026-11-03)
+### Review changes (the owner's review of 2026-10-28, decided 2026-11-03)
 
 - **The report's inputs are the input screen only** (above, *The report reloads itself*).
 - **Frames are headings.** A field's frame text is read from the dialog as the question is
@@ -565,10 +565,10 @@ first pass of systematic verification (completed in the clone project, where it 
 and parking. r2x is good enough on speed; running fast and reliably in the long term goes
 through a clone. Users link their own copy of Response; r2x does not bundle it.
 
-**Decided 2026-11-07** (Jamie's review of Claude's proposals):
+**Decided 2026-11-07** (the owner's review of the developer's proposals):
 
 - **The image is published** on GitHub's registry (`ghcr.io/maczout/r2x:VERSION`), pushed from
-  the Framework after it has been checked there, so the image users pull is the one checked.
+  the release machine after it has been checked there, so the image users pull is the one checked.
   It doubles as insurance against a rebuild drifting.
 - **Another build of `r2k.exe` is refused**, at `r2x setup` and on every run, unless linked
   with `--allow-unverified`; every record then says `response-verified: no`.
@@ -586,7 +586,7 @@ through a clone. Users link their own copy of Response; r2x does not bundle it.
 **Built and found, 2026-11-07:**
 
 - **Only the files Response reads** (`.exe`, `.dll`, `.dat`, `.dtd`, `.r2k`) are hashed and
-  copied into each job, not the whole program folder: Jamie's folder has `Response.ini`
+  copied into each job, not the whole program folder: the owner's folder had `Response.ini`
   (Response's recent-files list, rewritten by every session on Windows) and a `Newbeam.r2t`
   edited after installing, which would change a whole-folder hash with ordinary use. The Wine
   suite passes from such a copy, byte for byte. `shape.dat`, the standard shapes, is a live
@@ -601,7 +601,7 @@ through a clone. Users link their own copy of Response; r2x does not bundle it.
   (`Δεp = 6.50 mm/m`), crack spacing when set, and a moment axis away from the centroid are all
   on it. Bar and tendon depths as numbers, a tendon's slope and the material factors are not
   (`docs/risk-register.md`, *What the report leaves out*).
-- **Ctrl+C at the session's prompt** (Jamie, on Windows, 2026-11-08) gave a Python traceback:
+- **Ctrl+C at the session's prompt** (the owner, on Windows, 2026-11-08) gave a Python traceback:
   the prompt loop caught Ctrl+C in a command but not at the prompt itself, and on Windows a
   Ctrl+C reaches every process on the console, so one can also arrive late at the prompt
   after a step has stopped. Now it gives a new prompt (`quit` leaves), and anywhere else on
@@ -614,4 +614,4 @@ through a clone. Users link their own copy of Response; r2x does not bundle it.
   image was checked there on an Ubuntu 24.04 base made with `debootstrap` and with wheels
   fetched beforehand: `r2x setup`, `r2x health`, a solve (Newbeam's 23 reference exports at
   the peak, byte for byte, 7.3 s) and a define step, through the real command line and
-  docker. The Framework's build is the one released.
+  docker. The release machine's build is the one released.
