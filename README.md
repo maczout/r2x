@@ -58,6 +58,8 @@ r2x> solve --increment 0,1,1
   Response on Windows.
 - [`docs/history.md`](docs/history.md): the decisions behind r2x and what was found in
   Response along the way. [`docs/dialogs.md`](docs/dialogs.md): every field `define` asks.
+- [`docs/status.md`](docs/status.md): where r2x stands and what is left;
+  [`CLAUDE.md`](CLAUDE.md): how work on r2x is done, for people and coding agents.
 
 ## Response-2000
 

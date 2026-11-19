@@ -1,0 +1,23 @@
+# The tests that need no Wine (the command line against a fake docker) and the record checks,
+# on every push and pull request. The Wine suite needs Response-2000, which is never in the
+# repository: it is run by hand on a machine that has it (docs/internals.md, Tests).
+name: tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python: ["3.10", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+      - run: pip install -e '.[dev,server]'
+      - run: pytest -q
+      - run: python tools/check.py
