@@ -120,7 +120,7 @@ def test_back_at_the_first_question_asks_it_again(tmp_path, resaved):
 
 def test_quick_circular_asks_for_rings(tmp_path):
     """The frames carry the meaning: a circle's reinforcement is rings, not top and bottom
-    layers, and the questions say so (Jamie's review, 2026-10-28)."""
+    layers, and the questions say so (the owner's review, 2026-10-28)."""
     out = tmp_path / "column.r2t"
     r = define(["quick"], {"shape": "Circular", "dim1": "500", "top-number": "12",
                            "top-bar": "25M"}, out=out, date=NEWBEAM_DATE)

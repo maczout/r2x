@@ -11,7 +11,7 @@ before trusting the output, so the report must show it. An error the engineer ca
 wrong stage, a solve read early, a digit off under Wine) needs a mechanical check against an
 independent oracle, and only hand captures on Windows are independent of r2x.
 
-Tiers, cheapest last: **A**, hand captures on Windows (the only independent oracle; Jamie's
+Tiers, cheapest last: **A**, hand captures on Windows (the only independent oracle; the owner's
 time); **B**, r2x's worker run natively on Windows against Wine (not in the first pass);
 **C**, checks on records alone, at scale, no oracle.
 
@@ -55,7 +55,7 @@ time); **B**, r2x's worker run natively on Windows against Wine (not in the firs
 
 ## What the report leaves out
 
-For deciding whether inspection is enough for v1.0 (D1, and Jamie's idea under item 2).
+For deciding whether inspection is enough for v1.0 (D1, and the owner's idea in `docs/status.md`).
 Response's input screen, checked on 2026-11-07 with Newbeam and with Newbeam plus a tendon
 layer, crack spacing set and the moment axis moved, shows: section properties; each layer's
 bars (`3 - 25M`) and a tendon's prestrain (`Δεp = 6.50 mm/m`); stirrups and spacing; clear

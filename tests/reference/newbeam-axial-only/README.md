@@ -43,4 +43,4 @@ chart as unchanged since the first, and it was skipped.
 | Date | October 25 2026 |
 | Windows version | Windows 11 Pro |
 | Response | `r2k.exe` SHA-256 `bbf4bc59…4e74` (see `../../docs/wine-spike.md`) |
-| By | Jamie McIntyre |
+| By | the owner |
